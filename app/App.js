@@ -1,20 +1,289 @@
+import React, { useState, useRef } from 'react';
+import { Button, StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView } from 'react-native';
+import { Audio } from 'expo-av';
 import { StatusBar } from 'expo-status-bar';
-import { StyleSheet, Text, View } from 'react-native';
+import * as FileSystem from 'expo-file-system';
+import Constants from 'expo-constants';
+import * as Speech from 'expo-speech';
 
 export default function App() {
+  const [recording, setRecording] = useState(null);
+  const [recordedUri, setRecordedUri] = useState(null);
+  const [isRecording, setIsRecording] = useState(false);
+  const [sound, setSound] = useState(null);
+  const [transcription, setTranscription] = useState('');
+  const [isTranscribing, setIsTranscribing] = useState(false);
+  const [chatResponse, setChatResponse] = useState('');
+  const [isChatLoading, setIsChatLoading] = useState(false);
+
+  // Use EAS Build env var
+  const OPENAI_API_KEY = process.env.OPENAI_API_KEY;
+  const MAIN_HEADING = Constants.expoConfig.extra.mainHeading;
+
+  const startRecording = async () => {
+    try {
+      const permission = await Audio.requestPermissionsAsync();
+      if (permission.status !== 'granted') {
+        alert('Permission to access microphone is required!');
+        return;
+      }
+      await Audio.setAudioModeAsync({
+        allowsRecordingIOS: true,
+        playsInSilentModeIOS: true,
+      });
+      const { recording } = await Audio.Recording.createAsync(
+        Audio.RecordingOptionsPresets.HIGH_QUALITY
+      );
+      setRecording(recording);
+      setIsRecording(true);
+    } catch (err) {
+      console.error('Failed to start recording', err);
+    }
+  };
+
+  const stopRecording = async () => {
+    try {
+      setIsRecording(false);
+      await recording.stopAndUnloadAsync();
+      const uri = recording.getURI();
+      setRecordedUri(uri);
+      setRecording(null);
+      setTranscription('');
+      setChatResponse('');
+      // Auto-transcribe after recording
+      setTimeout(() => {
+        transcribeRecording();
+      }, 500); // slight delay to ensure file is ready
+    } catch (err) {
+      console.error('Failed to stop recording', err);
+    }
+  };
+
+  const playRecording = async () => {
+    if (!recordedUri) return;
+    try {
+      const { sound } = await Audio.Sound.createAsync({ uri: recordedUri });
+      setSound(sound);
+      await sound.playAsync();
+      sound.setOnPlaybackStatusUpdate((status) => {
+        if (status.didJustFinish) {
+          sound.unloadAsync();
+          setSound(null);
+        }
+      });
+    } catch (err) {
+      console.error('Failed to play recording', err);
+    }
+  };
+
+  // Send transcription to OpenAI Chat API
+  const sendToChat = async (text) => {
+    setIsChatLoading(true);
+    setChatResponse('');
+    try {
+      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'gpt-3.5-turbo',
+          messages: [
+            { role: 'system', content: 'You are a helpful assistant.' },
+            { role: 'user', content: text },
+          ],
+        }),
+      });
+      if (!response.ok) throw new Error('Chat failed');
+      const data = await response.json();
+      setChatResponse(data.choices?.[0]?.message?.content || 'No response.');
+    } catch (err) {
+      setChatResponse('Chat failed.');
+      console.error('Chat error:', err);
+    } finally {
+      setIsChatLoading(false);
+    }
+  };
+
+  // Modified transcription to auto-send to chat
+  const transcribeRecording = async () => {
+    if (!recordedUri) return;
+    setIsTranscribing(true);
+    setTranscription('');
+    setChatResponse('');
+    try {
+      const fileUri = recordedUri;
+      const fileInfo = await FileSystem.getInfoAsync(fileUri);
+      if (!fileInfo.exists) throw new Error('File does not exist');
+      const formData = new FormData();
+      formData.append('file', {
+        uri: fileUri,
+        name: getFileName(fileUri),
+        type: 'audio/m4a',
+      });
+      formData.append('model', 'whisper-1');
+      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${OPENAI_API_KEY}`,
+          'Content-Type': 'multipart/form-data',
+        },
+        body: formData,
+      });
+      if (!response.ok) throw new Error('Transcription failed');
+      const data = await response.json();
+      setTranscription(data.text || 'No transcription found.');
+      if (data.text) {
+        await sendToChat(data.text);
+      }
+    } catch (err) {
+      setTranscription('Transcription failed.');
+      setChatResponse('');
+      console.error('Transcription error:', err);
+    } finally {
+      setIsTranscribing(false);
+    }
+  };
+
+  // Helper to get file name from URI
+  const getFileName = (uri) => {
+    if (!uri) return '';
+    return uri.split('/').pop();
+  };
+
+  // Add a function to reset the recording and transcription
+  const resetRecording = () => {
+    setRecordedUri(null);
+    setTranscription('');
+    setSound(null);
+  };
+
+  // Play chat response as speech
+  const speakChatResponse = () => {
+    if (chatResponse) {
+      Speech.speak(chatResponse, { language: 'en' });
+    }
+  };
+
   return (
-    <View style={styles.container}>
-      <Text>Hello, world!</Text>
-      <StatusBar style="auto" />
-    </View>
+    <SafeAreaView style={styles.safeArea}>
+      <View style={styles.container}>
+        <Text style={{ marginBottom: 20 }}>{MAIN_HEADING}</Text>
+        <ScrollView contentContainerStyle={styles.scrollContent} style={styles.scrollView}>
+          {!recordedUri ? (
+            <TouchableOpacity
+              style={styles.recordButton}
+              onPress={isRecording ? stopRecording : startRecording}
+              disabled={isRecording && !recording}
+            >
+              <Text style={styles.buttonText}>
+                {isRecording ? 'Stop Recording' : 'Start Recording'}
+              </Text>
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={styles.recordButton}
+                onPress={playRecording}
+                disabled={isRecording}
+              >
+                <Text style={styles.buttonText}>Play Recording</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.transcribeButton}
+                onPress={transcribeRecording}
+                disabled={isTranscribing}
+              >
+                <Text style={styles.buttonText}>{isTranscribing ? 'Transcribing...' : 'Transcribe Audio'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.newRecordingButton}
+                onPress={resetRecording}
+                disabled={isRecording}
+              >
+                <Text style={styles.buttonText}>New Recording</Text>
+              </TouchableOpacity>
+            </>
+          )}
+          {recordedUri && (
+            <Text style={{ marginTop: 20 }}>Recorded file: {getFileName(recordedUri)}</Text>
+          )}
+          {transcription ? (
+            <Text style={{ marginTop: 16, color: '#333', fontStyle: 'italic' }}>{transcription}</Text>
+          ) : null}
+          {isChatLoading ? (
+            <Text style={{ marginTop: 16, color: '#007AFF' }}>Loading chat response...</Text>
+          ) : chatResponse ? (
+            <>
+              <Text style={{ marginTop: 16, color: '#222' }}>{chatResponse}</Text>
+              <TouchableOpacity
+                style={styles.speakButton}
+                onPress={speakChatResponse}
+              >
+                <Text style={styles.buttonText}>🔊 Play Response</Text>
+              </TouchableOpacity>
+            </>
+          ) : null}
+        </ScrollView>
+        <StatusBar style="auto" />
+      </View>
+    </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
   container: {
     flex: 1,
     backgroundColor: '#fff',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  recordButton: {
+    backgroundColor: '#007AFF',
+    paddingVertical: 14,
+    paddingHorizontal: 32,
+    borderRadius: 8,
+    marginBottom: 10,
+  },
+  transcribeButton: {
+    backgroundColor: '#34C759',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  newRecordingButton: {
+    backgroundColor: '#FF9500',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  speakButton: {
+    backgroundColor: '#5856D6',
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginTop: 10,
+  },
+  buttonText: {
+    color: '#fff',
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  scrollView: {
+    flex: 1,
+    width: '100%',
+    marginTop: 0,
+  },
+  scrollContent: {
+    alignItems: 'center',
+    paddingBottom: 40,
+    paddingHorizontal: 16,
   },
 });
