@@ -15,6 +15,13 @@ export class DocumentService {
       throw new Error('User must be authenticated to upload documents');
     }
 
+    console.log('Starting document upload for user:', this.userId);
+    console.log('File details:', {
+      name: file.name,
+      size: file.size,
+      type: file.type
+    });
+
     // Validate file type
     const allowedTypes = [
       'application/pdf',
@@ -40,16 +47,21 @@ export class DocumentService {
       const fileName = `${timestamp}_${file.name}`;
       const filePath = `documents/${this.userId}/${fileName}`;
 
+      console.log('Upload path:', filePath);
+
       // Upload file to Firebase Storage
       const storageRef = ref(storage, filePath);
       
+      console.log('Starting upload to Firebase Storage...');
       const uploadTask = uploadBytes(storageRef, file);
       
       // Wait for upload to complete
       const snapshot = await uploadTask;
+      console.log('Upload completed, getting download URL...');
       
       // Get download URL
       const downloadURL = await getDownloadURL(snapshot.ref);
+      console.log('Download URL obtained:', downloadURL);
 
       // Save document metadata to Firestore
       const docData = {
@@ -66,7 +78,9 @@ export class DocumentService {
         processingError: null
       };
 
+      console.log('Saving metadata to Firestore...');
       const docRef = await addDoc(this.documentsRef, docData);
+      console.log('Metadata saved with ID:', docRef.id);
 
       // Start text extraction in the background
       this.extractTextFromDocument(docRef.id, downloadURL, file.type);
@@ -78,8 +92,19 @@ export class DocumentService {
       };
 
     } catch (error) {
-      console.error('Document upload error:', error);
-      throw new Error(`Upload failed: ${error.message}`);
+      console.error('Document upload error details:', error);
+      console.error('Error code:', error.code);
+      console.error('Error message:', error.message);
+      
+      if (error.code === 'storage/unauthorized') {
+        throw new Error('Upload failed: Firebase Storage permission denied. Please check your storage security rules.');
+      } else if (error.code === 'storage/canceled') {
+        throw new Error('Upload was canceled.');
+      } else if (error.code === 'storage/unknown') {
+        throw new Error('Upload failed due to an unknown error. Please try again.');
+      } else {
+        throw new Error(`Upload failed: ${error.message}`);
+      }
     }
   }
 
@@ -145,31 +170,57 @@ export class DocumentService {
   // Get user's documents with real-time updates
   subscribeToDocuments(callback) {
     if (!this.userId) {
+      console.log('No userId provided for document subscription');
       callback([]);
       return () => {};
     }
 
-    const q = query(
-      this.documentsRef,
-      where('uid', '==', this.userId),
-      orderBy('uploadedAt', 'desc')
-    );
+    console.log('Setting up document subscription for user:', this.userId);
 
-    return onSnapshot(q, (querySnapshot) => {
-      const documents = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        documents.push({
-          id: doc.id,
-          ...data,
-          uploadedAt: data.uploadedAt?.toDate() || new Date()
+    try {
+      // Try simple query first (without orderBy to avoid index issues)
+      const q = query(
+        this.documentsRef,
+        where('uid', '==', this.userId)
+      );
+
+      return onSnapshot(q, (querySnapshot) => {
+        console.log('Document snapshot received, size:', querySnapshot.size);
+        const documents = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          console.log('Document data:', { id: doc.id, fileName: data.fileName, uploadedAt: data.uploadedAt });
+          documents.push({
+            id: doc.id,
+            ...data,
+            uploadedAt: data.uploadedAt?.toDate() || new Date()
+          });
         });
+        
+        // Sort documents by upload date manually (descending)
+        documents.sort((a, b) => b.uploadedAt - a.uploadedAt);
+        
+        console.log('Processed documents:', documents.length);
+        callback(documents);
+      }, (error) => {
+        console.error('Error fetching documents:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        
+        if (error.code === 'failed-precondition') {
+          console.error('This might be a missing Firestore index. Check the Firebase console for index requirements.');
+          console.error('Try creating a composite index for: collection: documents, fields: uid (Ascending), uploadedAt (Descending)');
+        } else if (error.code === 'permission-denied') {
+          console.error('Permission denied. Check your Firestore security rules.');
+        }
+        
+        callback([]);
       });
-      callback(documents);
-    }, (error) => {
-      console.error('Error fetching documents:', error);
+    } catch (error) {
+      console.error('Error setting up document subscription:', error);
       callback([]);
-    });
+      return () => {};
+    }
   }
 
   // Delete document

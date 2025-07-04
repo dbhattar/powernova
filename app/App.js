@@ -10,6 +10,8 @@ import { auth, db, storage } from './firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from 'firebase/auth';
 import { collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot, updateDoc, doc } from 'firebase/firestore';
 import { DocumentService, formatFileSize, getFileIcon } from './documentService';
+import { testStoragePermissions } from './storageTest';
+import { checkDocumentsInFirestore } from './firestoreTest';
 
 // Document Upload Component
 const DocumentUpload = ({ onUpload, isUploading }) => {
@@ -118,6 +120,25 @@ const DocumentManagement = ({ documents, onUpload, onDelete, onClose, isUploadin
       </View>
 
       <DocumentUpload onUpload={onUpload} isUploading={isUploading} />
+
+      {/* Debug: Storage permission test button */}
+      <View style={styles.debugContainer}>
+        <TouchableOpacity
+          style={styles.testButton}
+          onPress={() => testStoragePermissions()}
+        >
+          <Ionicons name="shield-checkmark-outline" size={16} color="#FF9500" />
+          <Text style={styles.testButtonText}>Test Storage Permissions</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.testButton, { marginTop: 8 }]}
+          onPress={() => checkDocumentsInFirestore()}
+        >
+          <Ionicons name="documents-outline" size={16} color="#007AFF" />
+          <Text style={[styles.testButtonText, { color: '#007AFF' }]}>Check Documents in DB</Text>
+        </TouchableOpacity>
+      </View>
 
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
@@ -736,14 +757,26 @@ export default function App() {
 
   // Initialize document service when user changes
   React.useEffect(() => {
+    console.log('User effect triggered, user:', user?.uid || 'none');
+    
     if (user) {
+      console.log('Creating document service for user:', user.uid);
       const service = new DocumentService(user.uid);
       setDocumentService(service);
       
       // Subscribe to user's documents
-      const unsubscribe = service.subscribeToDocuments(setDocuments);
-      return unsubscribe;
+      console.log('Setting up document subscription...');
+      const unsubscribe = service.subscribeToDocuments((docs) => {
+        console.log('Documents updated in App:', docs.length);
+        setDocuments(docs);
+      });
+      
+      return () => {
+        console.log('Cleaning up document subscription');
+        if (unsubscribe) unsubscribe();
+      };
     } else {
+      console.log('No user, clearing document service and documents');
       setDocumentService(null);
       setDocuments([]);
     }
@@ -1330,6 +1363,29 @@ const styles = StyleSheet.create({
     color: '#fff',
     fontSize: 16,
     fontWeight: '600',
+  },
+  debugContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+    alignItems: 'center',
+  },
+  testButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#fff3cd',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#FF9500',
+  },
+  testButtonText: {
+    color: '#856404',
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 4,
   },
   searchContainer: {
     flexDirection: 'row',
