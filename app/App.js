@@ -8,10 +8,11 @@ import * as Speech from 'expo-speech';
 import { Ionicons } from '@expo/vector-icons';
 import { auth, db, storage } from './firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot, updateDoc, doc } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot, updateDoc, doc, getDocs } from 'firebase/firestore';
 import { DocumentService, formatFileSize, getFileIcon } from './documentService';
 import { testStoragePermissions } from './storageTest';
 import { checkDocumentsInFirestore } from './firestoreTest';
+import { testConversations, testSaveConversation } from './conversationTest';
 
 // Document Upload Component
 const DocumentUpload = ({ onUpload, isUploading }) => {
@@ -138,6 +139,22 @@ const DocumentManagement = ({ documents, onUpload, onDelete, onClose, isUploadin
           <Ionicons name="documents-outline" size={16} color="#007AFF" />
           <Text style={[styles.testButtonText, { color: '#007AFF' }]}>Check Documents in DB</Text>
         </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.testButton, { marginTop: 8 }]}
+          onPress={() => testConversations()}
+        >
+          <Ionicons name="chatbubbles-outline" size={16} color="#28a745" />
+          <Text style={[styles.testButtonText, { color: '#28a745' }]}>Check Conversations</Text>
+        </TouchableOpacity>
+        
+        <TouchableOpacity
+          style={[styles.testButton, { marginTop: 8 }]}
+          onPress={() => testSaveConversation()}
+        >
+          <Ionicons name="add-circle-outline" size={16} color="#DC3545" />
+          <Text style={[styles.testButtonText, { color: '#DC3545' }]}>Test Save Conversation</Text>
+        </TouchableOpacity>
       </View>
 
       <View style={styles.searchContainer}>
@@ -233,13 +250,21 @@ const ConversationItem = ({ conversation, onPress }) => {
             size={14} 
             color="#007AFF" 
           />
+          {conversation.isFollowUp && (
+            <Ionicons 
+              name="arrow-forward" 
+              size={12} 
+              color="#FF6B35" 
+              style={styles.followUpIcon}
+            />
+          )}
           <Text style={styles.conversationTimestamp}>
             {conversation.formatTimestamp ? conversation.formatTimestamp() : 'Recent'}
           </Text>
         </View>
       </View>
       <Text style={styles.conversationPrompt} numberOfLines={2}>
-        {conversation.prompt}
+        {conversation.isFollowUp ? '↳ ' : ''}{conversation.prompt}
       </Text>
       <Text style={styles.conversationResponse} numberOfLines={2}>
         {conversation.response}
@@ -302,10 +327,14 @@ export default function App() {
   const [conversations, setConversations] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
   const [currentConversation, setCurrentConversation] = useState(null);
+  const [conversationThread, setConversationThread] = useState([]); // New: stores the current conversation thread
+  const [threadId, setThreadId] = useState(null); // New: current thread ID
   const [documents, setDocuments] = useState([]);
   const [showDocuments, setShowDocuments] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
   const [documentService, setDocumentService] = useState(null);
+  const [showFollowUpInput, setShowFollowUpInput] = useState(false); // New: show follow-up input
+  const [followUpText, setFollowUpText] = useState(''); // New: follow-up question text
 
   // Initialize Google Auth Provider
   const googleProvider = new GoogleAuthProvider();
@@ -410,19 +439,27 @@ export default function App() {
     }
   };
 
-  // Send transcription to OpenAI Chat API with document context
-  const sendToChat = async (text) => {
+  // Send transcription to OpenAI Chat API with document context and conversation history
+  const sendToChat = async (text, isFollowUp = false) => {
     setIsChatLoading(true);
     setChatResponse('');
+    
+    // Generate or use existing thread ID
+    const currentThreadId = threadId || Date.now().toString();
+    if (!threadId) {
+      setThreadId(currentThreadId);
+    }
     
     // Create a new conversation entry
     const newConversation = {
       id: Date.now().toString(),
+      threadId: currentThreadId,
       prompt: text,
       response: '',
       timestamp: new Date(),
       type: transcription ? 'voice' : 'text',
       isLoading: true,
+      isFollowUp: isFollowUp,
     };
     
     setCurrentConversation(newConversation);
@@ -438,10 +475,19 @@ export default function App() {
         }
       }
 
-      const messages = [
-        { role: 'system', content: SYSTEM_PROMPT },
-        { role: 'user', content: text + documentContext }
-      ];
+      // Build conversation history for context
+      const messages = [{ role: 'system', content: SYSTEM_PROMPT }];
+      
+      // Add previous conversation context if this is a follow-up
+      if (isFollowUp && conversationThread.length > 0) {
+        conversationThread.forEach(msg => {
+          messages.push({ role: 'user', content: msg.prompt });
+          messages.push({ role: 'assistant', content: msg.response });
+        });
+      }
+      
+      // Add current user message
+      messages.push({ role: 'user', content: text + documentContext });
 
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
@@ -473,9 +519,17 @@ export default function App() {
       };
       setCurrentConversation(updatedConversation);
       
+      // Add to conversation thread
+      setConversationThread(prev => [...prev, {
+        prompt: text,
+        response: responseText,
+        timestamp: new Date(),
+        id: updatedConversation.id
+      }]);
+      
       // Save to Firestore if user is signed in
       if (user) {
-        await saveToFirestore(recordedUri, transcription, text, responseText);
+        await saveToFirestore(recordedUri, transcription, text, responseText, currentThreadId, isFollowUp);
       }
       
     } catch (err) {
@@ -613,27 +667,43 @@ export default function App() {
   };
 
   // Save chat/audio to Firestore if signed in
-  const saveToFirestore = async (audioUri, transcription, prompt, response) => {
+  const saveToFirestore = async (audioUri, transcription, prompt, response, threadId, isFollowUp = false) => {
     if (!user) {
       console.log('No user signed in, skipping Firestore save');
       return;
     }
     try {
       console.log('Attempting to save to Firestore for user:', user.uid);
+      console.log('Conversation data:', {
+        uid: user.uid,
+        threadId: threadId,
+        prompt: prompt.substring(0, 100) + '...',
+        response: response.substring(0, 100) + '...',
+        type: transcription ? 'voice' : 'text',
+        isFollowUp: isFollowUp,
+      });
+      
       const docRef = await addDoc(collection(db, 'conversations'), {
         uid: user.uid,
+        threadId: threadId,
         audioUri: audioUri || null,
         transcription: transcription || null,
         prompt,
         response,
         type: transcription ? 'voice' : 'text',
+        isFollowUp: isFollowUp,
         createdAt: serverTimestamp(),
       });
-      console.log('Conversation saved to Firestore successfully:', docRef.id);
+      console.log('✅ Conversation saved to Firestore successfully:', docRef.id);
     } catch (e) {
-      console.error('Error saving to Firestore:', e);
+      console.error('❌ Error saving to Firestore:', e);
       console.error('Error code:', e.code);
       console.error('Error message:', e.message);
+      
+      if (e.code === 'permission-denied') {
+        console.error('🔒 Firestore permission denied for conversations collection');
+        console.error('Check your Firestore security rules for the conversations collection');
+      }
       // Continue without blocking the UI
     }
   };
@@ -648,33 +718,49 @@ export default function App() {
 
     try {
       console.log('Loading conversation history for user:', userId);
+      // Use simple query without orderBy to avoid index requirement initially
       const q = query(
         collection(db, 'conversations'),
-        where('uid', '==', userId),
-        orderBy('createdAt', 'desc')
+        where('uid', '==', userId)
       );
 
       const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        console.log('Received conversation snapshot, size:', querySnapshot.size);
+        console.log('📞 Received conversation snapshot, size:', querySnapshot.size);
         const loadedConversations = [];
         querySnapshot.forEach((doc) => {
           const data = doc.data();
+          console.log('📄 Conversation doc:', {
+            id: doc.id,
+            prompt: data.prompt?.substring(0, 50) + '...',
+            threadId: data.threadId,
+            type: data.type,
+            isFollowUp: data.isFollowUp,
+            createdAt: data.createdAt
+          });
           loadedConversations.push({
             id: doc.id,
             ...data,
             timestamp: data.createdAt?.toDate() || new Date(),
           });
         });
-        console.log('Loaded conversations:', loadedConversations.length);
+        
+        // Sort conversations manually by creation date (descending)
+        loadedConversations.sort((a, b) => b.timestamp - a.timestamp);
+        
+        console.log('📋 Loaded conversations for state:', loadedConversations.length);
         setConversations(loadedConversations);
       }, (error) => {
-        console.error('Error loading conversations:', error);
+        console.error('❌ Error loading conversations:', error);
         console.error('Error code:', error.code);
         console.error('Error message:', error.message);
         
         if (error.code === 'permission-denied') {
-          console.error('Firestore permission denied. Please check your security rules.');
+          console.error('🔒 Firestore permission denied for conversations collection');
+          console.error('Check your Firestore security rules for the conversations collection');
           console.error('See FIRESTORE_SETUP.md for instructions.');
+        } else if (error.code === 'failed-precondition') {
+          console.error('📊 Missing Firestore index for conversations query');
+          console.error('Go to Firebase console and create the required index');
         }
         
         // Set empty array on error to prevent infinite loading
@@ -685,6 +771,42 @@ export default function App() {
     } catch (error) {
       console.error('Error setting up conversation listener:', error);
       setConversations([]);
+    }
+  };
+
+  // Load conversation thread from Firestore
+  const loadConversationThread = async (threadId) => {
+    if (!user || !threadId) return;
+    
+    try {
+      console.log('Loading conversation thread:', threadId);
+      // Use simple query without orderBy to avoid index requirement
+      const q = query(
+        collection(db, 'conversations'),
+        where('uid', '==', user.uid),
+        where('threadId', '==', threadId)
+      );
+
+      const querySnapshot = await getDocs(q);
+      const threadMessages = [];
+      querySnapshot.forEach((doc) => {
+        const data = doc.data();
+        threadMessages.push({
+          id: doc.id,
+          prompt: data.prompt,
+          response: data.response,
+          timestamp: data.createdAt?.toDate() || new Date(),
+        });
+      });
+      
+      // Sort manually by creation date (ascending for thread)
+      threadMessages.sort((a, b) => a.timestamp - b.timestamp);
+      
+      setConversationThread(threadMessages);
+      setThreadId(threadId);
+      console.log('Loaded thread messages:', threadMessages.length);
+    } catch (error) {
+      console.error('Error loading conversation thread:', error);
     }
   };
 
@@ -705,8 +827,29 @@ export default function App() {
     setCurrentConversation(null);
     setTranscription('');
     setChatResponse('');
-    setInputText('');
     setRecordedUri(null);
+    setSound(null);
+    clearConversationThread();
+  };
+
+  // Handle follow-up question
+  const handleFollowUpSend = async () => {
+    if (!followUpText.trim() || isChatLoading) return;
+    
+    const followUpQuestion = followUpText.trim();
+    setFollowUpText('');
+    setShowFollowUpInput(false);
+    
+    // Send as follow-up question
+    await sendToChat(followUpQuestion, true);
+  };
+
+  // Clear conversation thread
+  const clearConversationThread = () => {
+    setConversationThread([]);
+    setThreadId(null);
+    setShowFollowUpInput(false);
+    setFollowUpText('');
   };
 
   // Document upload handler
@@ -925,6 +1068,11 @@ export default function App() {
               setChatResponse(conversation.response);
               setCurrentConversation(conversation);
               setShowHistory(false);
+              
+              // Load conversation thread if it exists
+              if (conversation.threadId) {
+                loadConversationThread(conversation.threadId);
+              }
             }}
             formatTimestamp={formatTimestamp}
           />
@@ -970,9 +1118,68 @@ export default function App() {
                   <View style={styles.messageContainer}>
                     <View style={styles.assistantMessage}>
                       <Text style={styles.chatResponse}>{chatResponse}</Text>
+                      {/* Follow-up question section */}
+                      <View style={styles.followUpContainer}>
+                        <TouchableOpacity 
+                          style={styles.followUpButton}
+                          onPress={() => setShowFollowUpInput(true)}
+                        >
+                          <Ionicons name="chatbubbles-outline" size={16} color="#007AFF" />
+                          <Text style={styles.followUpButtonText}>Ask Follow-up</Text>
+                        </TouchableOpacity>
+                      </View>
                     </View>
                   </View>
                 ) : null}
+                
+                {/* Follow-up input section */}
+                {showFollowUpInput && (
+                  <View style={styles.followUpInputContainer}>
+                    <TextInput
+                      style={styles.followUpInput}
+                      value={followUpText}
+                      onChangeText={setFollowUpText}
+                      placeholder="Ask a follow-up question..."
+                      multiline
+                      autoFocus
+                    />
+                    <View style={styles.followUpActions}>
+                      <TouchableOpacity
+                        style={styles.followUpCancelButton}
+                        onPress={() => {
+                          setShowFollowUpInput(false);
+                          setFollowUpText('');
+                        }}
+                      >
+                        <Text style={styles.followUpCancelText}>Cancel</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.followUpSendButton, (!followUpText.trim() || isChatLoading) && styles.followUpSendButtonDisabled]}
+                        onPress={handleFollowUpSend}
+                        disabled={!followUpText.trim() || isChatLoading}
+                      >
+                        <Text style={styles.followUpSendText}>Send</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                )}
+                
+                {/* Conversation thread display */}
+                {conversationThread.length > 0 && (
+                  <View style={styles.threadContainer}>
+                    <Text style={styles.threadTitle}>Conversation History</Text>
+                    {conversationThread.map((message, index) => (
+                      <View key={message.id || index} style={styles.threadMessage}>
+                        <View style={styles.threadUserMessage}>
+                          <Text style={styles.threadUserText}>{message.prompt}</Text>
+                        </View>
+                        <View style={styles.threadAssistantMessage}>
+                          <Text style={styles.threadAssistantText}>{message.response}</Text>
+                        </View>
+                      </View>
+                    ))}
+                  </View>
+                )}
                 
                 {/* Welcome message for new users */}
                 {!currentConversation && !transcription && !chatResponse && (
@@ -1277,6 +1484,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
+  },
+  followUpIcon: {
+    marginLeft: 2,
   },
   conversationTimestamp: {
     fontSize: 12,
@@ -1785,5 +1995,116 @@ const styles = StyleSheet.create({
   },
   statusProcessingText: {
     color: '#856404',
+  },
+  
+  // Follow-up styles
+  followUpContainer: {
+    marginTop: 12,
+    alignItems: 'flex-start',
+  },
+  followUpButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 16,
+    gap: 6,
+  },
+  followUpButtonText: {
+    fontSize: 14,
+    color: '#007AFF',
+    fontWeight: '500',
+  },
+  followUpInputContainer: {
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    margin: 16,
+    padding: 12,
+  },
+  followUpInput: {
+    backgroundColor: '#fff',
+    borderWidth: 1,
+    borderColor: '#ddd',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    minHeight: 40,
+    maxHeight: 120,
+    textAlignVertical: 'top',
+  },
+  followUpActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 8,
+    marginTop: 12,
+  },
+  followUpCancelButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#f0f0f0',
+    borderRadius: 8,
+  },
+  followUpCancelText: {
+    color: '#666',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  followUpSendButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    backgroundColor: '#007AFF',
+    borderRadius: 8,
+  },
+  followUpSendButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  followUpSendText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  
+  // Conversation thread styles
+  threadContainer: {
+    marginTop: 20,
+    padding: 16,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    marginHorizontal: 16,
+  },
+  threadTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 12,
+  },
+  threadMessage: {
+    marginBottom: 12,
+  },
+  threadUserMessage: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#007AFF',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 4,
+    maxWidth: '80%',
+  },
+  threadUserText: {
+    color: '#fff',
+    fontSize: 14,
+  },
+  threadAssistantMessage: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#e9ecef',
+    borderRadius: 12,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    maxWidth: '80%',
+  },
+  threadAssistantText: {
+    color: '#333',
+    fontSize: 14,
   },
 });
