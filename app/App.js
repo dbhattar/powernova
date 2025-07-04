@@ -1,14 +1,156 @@
 import React, { useState, useRef } from 'react';
-import { Button, StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, TextInput, Platform, Image } from 'react-native';
+import { Button, StyleSheet, Text, View, TouchableOpacity, ScrollView, SafeAreaView, TextInput, Platform, Image, FlatList, Alert } from 'react-native';
 import { Audio } from 'expo-av';
 import { StatusBar } from 'expo-status-bar';
 import * as FileSystem from 'expo-file-system';
 import Constants from 'expo-constants';
 import * as Speech from 'expo-speech';
 import { Ionicons } from '@expo/vector-icons';
-import { auth, db } from './firebase';
+import { auth, db, storage } from './firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot, updateDoc, doc } from 'firebase/firestore';
+import { DocumentService, formatFileSize, getFileIcon } from './documentService';
+
+// Document Upload Component
+const DocumentUpload = ({ onUpload, isUploading }) => {
+  const fileInputRef = useRef(null);
+
+  const handleFileSelect = (event) => {
+    const file = event.target.files[0];
+    if (file) {
+      onUpload(file);
+    }
+  };
+
+  return (
+    <View style={styles.documentUploadContainer}>
+      <input
+        ref={fileInputRef}
+        type="file"
+        accept=".pdf,.doc,.docx,.txt"
+        style={{ display: 'none' }}
+        onChange={handleFileSelect}
+      />
+      <TouchableOpacity
+        style={[styles.uploadButton, isUploading && styles.uploadButtonDisabled]}
+        onPress={() => fileInputRef.current?.click()}
+        disabled={isUploading}
+      >
+        <Ionicons name="cloud-upload-outline" size={20} color="#fff" />
+        <Text style={styles.uploadButtonText}>
+          {isUploading ? 'Uploading...' : 'Upload Document'}
+        </Text>
+      </TouchableOpacity>
+    </View>
+  );
+};
+
+// Document List Item Component
+const DocumentItem = ({ document, onDelete, onSelect }) => {
+  const formatDate = (date) => {
+    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  };
+
+  return (
+    <TouchableOpacity style={styles.documentItem} onPress={() => onSelect(document)}>
+      <View style={styles.documentItemHeader}>
+        <Ionicons name={getFileIcon(document.fileType)} size={24} color="#007AFF" />
+        <View style={styles.documentItemInfo}>
+          <Text style={styles.documentItemName} numberOfLines={1}>
+            {document.fileName}
+          </Text>
+          <Text style={styles.documentItemMeta}>
+            {formatFileSize(document.fileSize)} • {formatDate(document.uploadedAt)}
+          </Text>
+        </View>
+        <TouchableOpacity
+          style={styles.deleteButton}
+          onPress={() => onDelete(document)}
+        >
+          <Ionicons name="trash-outline" size={18} color="#FF3B30" />
+        </TouchableOpacity>
+      </View>
+      <View style={styles.documentItemStatus}>
+        {document.isProcessed ? (
+          <View style={styles.statusBadge}>
+            <Ionicons name="checkmark-circle" size={16} color="#28a745" />
+            <Text style={styles.statusText}>Ready for Q&A</Text>
+          </View>
+        ) : document.processingError ? (
+          <View style={[styles.statusBadge, styles.statusError]}>
+            <Ionicons name="alert-circle" size={16} color="#FF3B30" />
+            <Text style={[styles.statusText, styles.statusErrorText]}>Processing Error</Text>
+          </View>
+        ) : (
+          <View style={[styles.statusBadge, styles.statusProcessing]}>
+            <Ionicons name="hourglass-outline" size={16} color="#FF9500" />
+            <Text style={[styles.statusText, styles.statusProcessingText]}>Processing...</Text>
+          </View>
+        )}
+      </View>
+    </TouchableOpacity>
+  );
+};
+
+// Document Management Component
+const DocumentManagement = ({ documents, onUpload, onDelete, onClose, isUploading }) => {
+  const [searchTerm, setSearchTerm] = useState('');
+  
+  const filteredDocuments = documents.filter(doc =>
+    doc.fileName.toLowerCase().includes(searchTerm.toLowerCase())
+  );
+
+  const renderDocumentItem = ({ item }) => (
+    <DocumentItem
+      document={item}
+      onDelete={onDelete}
+      onSelect={(doc) => console.log('Selected document:', doc)}
+    />
+  );
+
+  return (
+    <View style={styles.documentManagementContainer}>
+      <View style={styles.documentHeader}>
+        <Text style={styles.documentTitle}>Document Library</Text>
+        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+          <Ionicons name="close" size={24} color="#007AFF" />
+        </TouchableOpacity>
+      </View>
+
+      <DocumentUpload onUpload={onUpload} isUploading={isUploading} />
+
+      <View style={styles.searchContainer}>
+        <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search documents..."
+          value={searchTerm}
+          onChangeText={setSearchTerm}
+        />
+      </View>
+
+      {filteredDocuments.length === 0 ? (
+        <View style={styles.emptyDocumentsContainer}>
+          <Ionicons name="document-outline" size={48} color="#ccc" />
+          <Text style={styles.emptyDocumentsText}>
+            {documents.length === 0 ? 'No documents uploaded yet' : 'No documents match your search'}
+          </Text>
+          <Text style={styles.emptyDocumentsSubtext}>
+            Upload PDF, DOC, DOCX, or TXT files to get started
+          </Text>
+        </View>
+      ) : (
+        <FlatList
+          data={filteredDocuments}
+          renderItem={renderDocumentItem}
+          keyExtractor={(item) => item.id}
+          style={styles.documentList}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+    </View>
+  );
+};
 
 // ProfilePicture component for displaying user's profile picture with fallback
 const ProfilePicture = ({ user }) => {
@@ -59,6 +201,71 @@ const ProfilePicture = ({ user }) => {
   );
 };
 
+// Conversation History Item Component
+const ConversationItem = ({ conversation, onPress }) => {
+  return (
+    <TouchableOpacity style={styles.conversationItem} onPress={onPress}>
+      <View style={styles.conversationHeader}>
+        <View style={styles.conversationTypeContainer}>
+          <Ionicons 
+            name={conversation.type === 'voice' ? 'mic' : 'chatbox-ellipses'} 
+            size={14} 
+            color="#007AFF" 
+          />
+          <Text style={styles.conversationTimestamp}>
+            {conversation.formatTimestamp ? conversation.formatTimestamp() : 'Recent'}
+          </Text>
+        </View>
+      </View>
+      <Text style={styles.conversationPrompt} numberOfLines={2}>
+        {conversation.prompt}
+      </Text>
+      <Text style={styles.conversationResponse} numberOfLines={2}>
+        {conversation.response}
+      </Text>
+    </TouchableOpacity>
+  );
+};
+
+// Conversation History Component
+const ConversationHistory = ({ conversations, onClose, onConversationSelect, formatTimestamp }) => {
+  const renderConversationItem = ({ item }) => (
+    <ConversationItem 
+      conversation={{
+        ...item,
+        formatTimestamp: () => formatTimestamp(item.timestamp)
+      }}
+      onPress={() => onConversationSelect(item)}
+    />
+  );
+
+  return (
+    <View style={styles.historyContainer}>
+      <View style={styles.historyHeader}>
+        <Text style={styles.historyTitle}>Conversation History</Text>
+        <TouchableOpacity onPress={onClose} style={styles.historyCloseButton}>
+          <Ionicons name="close" size={24} color="#007AFF" />
+        </TouchableOpacity>
+      </View>
+      {conversations.length === 0 ? (
+        <View style={styles.emptyHistoryContainer}>
+          <Ionicons name="chatbox-outline" size={48} color="#ccc" />
+          <Text style={styles.emptyHistoryText}>No conversations yet</Text>
+          <Text style={styles.emptyHistorySubtext}>Start a conversation to see your history</Text>
+        </View>
+      ) : (
+        <FlatList
+          data={conversations}
+          renderItem={renderConversationItem}
+          keyExtractor={(item) => item.id}
+          style={styles.conversationList}
+          showsVerticalScrollIndicator={false}
+        />
+      )}
+    </View>
+  );
+};
+
 export default function App() {
   const [recording, setRecording] = useState(null);
   const [recordedUri, setRecordedUri] = useState(null);
@@ -71,6 +278,13 @@ export default function App() {
   const [inputText, setInputText] = useState('');
   const [isMicActive, setIsMicActive] = useState(false);
   const [user, setUser] = useState(null);
+  const [conversations, setConversations] = useState([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [currentConversation, setCurrentConversation] = useState(null);
+  const [documents, setDocuments] = useState([]);
+  const [showDocuments, setShowDocuments] = useState(false);
+  const [isUploading, setIsUploading] = useState(false);
+  const [documentService, setDocumentService] = useState(null);
 
   // Initialize Google Auth Provider
   const googleProvider = new GoogleAuthProvider();
@@ -87,7 +301,7 @@ export default function App() {
     }
     // Expo web (dev): Constants.manifest.extra
     if (typeof Constants?.manifest?.extra?.openaiApiKey === 'string') {
-      confirm.log("Using OpenAI API key from Constants.manifest.extra");
+      console.log("Using OpenAI API key from Constants.manifest.extra");
       return Constants.manifest.extra.openaiApiKey;
     }
     // EAS env (native): process.env
@@ -175,11 +389,39 @@ export default function App() {
     }
   };
 
-  // Send transcription to OpenAI Chat API
+  // Send transcription to OpenAI Chat API with document context
   const sendToChat = async (text) => {
     setIsChatLoading(true);
     setChatResponse('');
+    
+    // Create a new conversation entry
+    const newConversation = {
+      id: Date.now().toString(),
+      prompt: text,
+      response: '',
+      timestamp: new Date(),
+      type: transcription ? 'voice' : 'text',
+      isLoading: true,
+    };
+    
+    setCurrentConversation(newConversation);
+    
     try {
+      // Get document context if available
+      let documentContext = '';
+      if (documentService && documents.length > 0) {
+        const relevantDocs = documentService.getDocumentContext(documents, text);
+        if (relevantDocs.length > 0) {
+          documentContext = '\n\nRelevant documents:\n' + 
+            relevantDocs.map(doc => `File: ${doc.fileName}\nContent: ${doc.content}`).join('\n\n');
+        }
+      }
+
+      const messages = [
+        { role: 'system', content: SYSTEM_PROMPT },
+        { role: 'user', content: text + documentContext }
+      ];
+
       const response = await fetch('https://api.openai.com/v1/chat/completions', {
         method: 'POST',
         headers: {
@@ -188,21 +430,42 @@ export default function App() {
         },
         body: JSON.stringify({
           model: 'gpt-3.5-turbo',
-          messages: [
-            { role: 'system', content: SYSTEM_PROMPT },
-            { role: 'user', content: text },
-          ],
+          messages: messages,
         }),
       });
+
       if (!response.ok) {
         const errorText = await response.text();
         console.error('OpenAI API error:', errorText);
         throw new Error('Chat failed');
       }
+
       const data = await response.json();
-      setChatResponse(data.choices?.[0]?.message?.content || 'No response.');
+      const responseText = data.choices?.[0]?.message?.content || 'No response.';
+      setChatResponse(responseText);
+      
+      // Update the conversation with response
+      const updatedConversation = {
+        ...newConversation,
+        response: responseText,
+        isLoading: false,
+      };
+      setCurrentConversation(updatedConversation);
+      
+      // Save to Firestore if user is signed in
+      if (user) {
+        await saveToFirestore(recordedUri, transcription, text, responseText);
+      }
+      
     } catch (err) {
-      setChatResponse('Chat failed.');
+      const errorMessage = 'Chat failed.';
+      setChatResponse(errorMessage);
+      const updatedConversation = {
+        ...newConversation,
+        response: errorMessage,
+        isLoading: false,
+      };
+      setCurrentConversation(updatedConversation);
       console.error('Chat error:', err);
     } finally {
       setIsChatLoading(false);
@@ -315,9 +578,10 @@ export default function App() {
     if (e.nativeEvent.key === 'Enter' && !e.nativeEvent.shiftKey && !e.nativeEvent.ctrlKey) {
       // Only submit if input is not empty and not loading
       if (inputText.trim() && !isChatLoading && !isRecording && !isMicActive) {
-        sendToChat(inputText.trim());
-        setTranscription('');
+        const prompt = inputText.trim();
         setInputText('');
+        setTranscription('');
+        sendToChat(prompt);
       }
       // Prevent default newline
       e.preventDefault && e.preventDefault();
@@ -329,33 +593,194 @@ export default function App() {
 
   // Save chat/audio to Firestore if signed in
   const saveToFirestore = async (audioUri, transcription, prompt, response) => {
-    if (!user) return;
+    if (!user) {
+      console.log('No user signed in, skipping Firestore save');
+      return;
+    }
     try {
-      await addDoc(collection(db, 'conversations'), {
+      console.log('Attempting to save to Firestore for user:', user.uid);
+      const docRef = await addDoc(collection(db, 'conversations'), {
         uid: user.uid,
-        audioUri,
-        transcription,
+        audioUri: audioUri || null,
+        transcription: transcription || null,
         prompt,
         response,
+        type: transcription ? 'voice' : 'text',
         createdAt: serverTimestamp(),
       });
+      console.log('Conversation saved to Firestore successfully:', docRef.id);
     } catch (e) {
       console.error('Error saving to Firestore:', e);
+      console.error('Error code:', e.code);
+      console.error('Error message:', e.message);
+      // Continue without blocking the UI
     }
   };
+
+  // Load conversation history from Firestore
+  const loadConversationHistory = (userId) => {
+    if (!userId) {
+      console.log('No user ID provided, clearing conversations');
+      setConversations([]);
+      return;
+    }
+
+    try {
+      console.log('Loading conversation history for user:', userId);
+      const q = query(
+        collection(db, 'conversations'),
+        where('uid', '==', userId),
+        orderBy('createdAt', 'desc')
+      );
+
+      const unsubscribe = onSnapshot(q, (querySnapshot) => {
+        console.log('Received conversation snapshot, size:', querySnapshot.size);
+        const loadedConversations = [];
+        querySnapshot.forEach((doc) => {
+          const data = doc.data();
+          loadedConversations.push({
+            id: doc.id,
+            ...data,
+            timestamp: data.createdAt?.toDate() || new Date(),
+          });
+        });
+        console.log('Loaded conversations:', loadedConversations.length);
+        setConversations(loadedConversations);
+      }, (error) => {
+        console.error('Error loading conversations:', error);
+        console.error('Error code:', error.code);
+        console.error('Error message:', error.message);
+        
+        if (error.code === 'permission-denied') {
+          console.error('Firestore permission denied. Please check your security rules.');
+          console.error('See FIRESTORE_SETUP.md for instructions.');
+        }
+        
+        // Set empty array on error to prevent infinite loading
+        setConversations([]);
+      });
+
+      return unsubscribe;
+    } catch (error) {
+      console.error('Error setting up conversation listener:', error);
+      setConversations([]);
+    }
+  };
+
+  // Format timestamp for display
+  const formatTimestamp = (timestamp) => {
+    const now = new Date();
+    const date = timestamp instanceof Date ? timestamp : new Date(timestamp);
+    const diffInMinutes = Math.floor((now - date) / (1000 * 60));
+    
+    if (diffInMinutes < 1) return 'Just now';
+    if (diffInMinutes < 60) return `${diffInMinutes}m ago`;
+    if (diffInMinutes < 1440) return `${Math.floor(diffInMinutes / 60)}h ago`;
+    return date.toLocaleDateString();
+  };
+
+  // Clear current conversation
+  const clearCurrentConversation = () => {
+    setCurrentConversation(null);
+    setTranscription('');
+    setChatResponse('');
+    setInputText('');
+    setRecordedUri(null);
+  };
+
+  // Document upload handler
+  const handleDocumentUpload = async (file) => {
+    if (!user || !documentService) {
+      Alert.alert('Error', 'Please sign in to upload documents');
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const uploadedDoc = await documentService.uploadDocument(file);
+      console.log('Document uploaded successfully:', uploadedDoc);
+      Alert.alert('Success', 'Document uploaded successfully!');
+    } catch (error) {
+      console.error('Upload error:', error);
+      Alert.alert('Upload Error', error.message);
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  // Document deletion handler
+  const handleDocumentDelete = async (document) => {
+    if (!documentService) return;
+
+    Alert.alert(
+      'Delete Document',
+      `Are you sure you want to delete "${document.fileName}"?`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            try {
+              await documentService.deleteDocument(document.id, document.filePath);
+              console.log('Document deleted successfully');
+            } catch (error) {
+              console.error('Delete error:', error);
+              Alert.alert('Delete Error', error.message);
+            }
+          }
+        }
+      ]
+    );
+  };
+
+  // Initialize document service when user changes
+  React.useEffect(() => {
+    if (user) {
+      const service = new DocumentService(user.uid);
+      setDocumentService(service);
+      
+      // Subscribe to user's documents
+      const unsubscribe = service.subscribeToDocuments(setDocuments);
+      return unsubscribe;
+    } else {
+      setDocumentService(null);
+      setDocuments([]);
+    }
+  }, [user]);
 
   // Call saveToFirestore after chat response
   React.useEffect(() => {
     if (user && chatResponse && (transcription || inputText)) {
-      saveToFirestore(recordedUri, transcription, transcription || inputText, chatResponse);
+      // Don't save again if already saved in sendToChat
+      // This effect is kept for backward compatibility
     }
     // eslint-disable-next-line
   }, [chatResponse]);
 
+  // Load conversation history when user signs in/out
   React.useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, setUser);
-    return unsubscribe;
-  }, []);
+    let unsubscribe;
+    console.log('User state changed:', user?.uid || 'signed out');
+    
+    if (user) {
+      try {
+        unsubscribe = loadConversationHistory(user.uid);
+      } catch (error) {
+        console.error('Failed to load conversation history:', error);
+        setConversations([]);
+      }
+    } else {
+      setConversations([]);
+    }
+    
+    return () => {
+      if (unsubscribe) {
+        console.log('Cleaning up conversation listener');
+        unsubscribe();
+      }
+    };
+  }, [user]);
 
   // Google Sign-In Function
   const handleGoogleSignIn = async () => {
@@ -377,76 +802,186 @@ export default function App() {
     }
   };
 
+  // Setup auth state listener
   React.useEffect(() => {
+    console.log('Setting up auth state listener');
     const unsubscribe = onAuthStateChanged(auth, (user) => {
-      console.log('Auth state changed:', user);
+      console.log('Auth state changed:', user ? {
+        uid: user.uid,
+        email: user.email,
+        displayName: user.displayName,
+        photoURL: user.photoURL
+      } : 'null');
       setUser(user);
+    }, (error) => {
+      console.error('Auth state change error:', error);
     });
-    return unsubscribe;
+    
+    return () => {
+      console.log('Cleaning up auth listener');
+      unsubscribe();
+    };
   }, []);
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.outerContainer}>
         <View style={styles.headerRow}>
-          <Text style={styles.heading}>{MAIN_HEADING}</Text>
-          {user ? (
-            <View style={styles.userInfoRow}>
-              <ProfilePicture user={user} />
-              <View style={styles.userNameContainer}>
-                <Text style={styles.userName}>{user.displayName || 'User'}</Text>
-                <Text style={styles.userStatus}>Signed in</Text>
+          <View style={styles.headerLeft}>
+            <Text style={styles.heading}>{MAIN_HEADING}</Text>
+          </View>
+          <View style={styles.headerRight}>
+            {user && (
+              <>
+                <TouchableOpacity
+                  style={styles.historyButton}
+                  onPress={() => setShowHistory(true)}
+                >
+                  <Ionicons name="time-outline" size={20} color="#007AFF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.documentsButton}
+                  onPress={() => setShowDocuments(true)}
+                >
+                  <Ionicons name="document-text-outline" size={20} color="#007AFF" />
+                  {documents.length > 0 && (
+                    <View style={styles.documentBadge}>
+                      <Text style={styles.documentBadgeText}>{documents.length}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </>
+            )}
+            {user ? (
+              <View style={styles.userInfoRow}>
+                <ProfilePicture user={user} />
+                <View style={styles.userNameContainer}>
+                  <Text style={styles.userName}>{user.displayName || 'User'}</Text>
+                  <Text style={styles.userStatus}>Signed in</Text>
+                </View>
+                <TouchableOpacity
+                  style={styles.signOutButton}
+                  onPress={() => {
+                    signOut(auth);
+                    clearCurrentConversation();
+                  }}
+                >
+                  <Ionicons name="log-out-outline" size={16} color="#fff" style={styles.signOutIcon} />
+                  <Text style={styles.signOutText}>Sign Out</Text>
+                </TouchableOpacity>
               </View>
+            ) : (
               <TouchableOpacity
-                style={styles.signOutButton}
-                onPress={() => signOut(auth)}
+                style={styles.signInButton}
+                onPress={handleGoogleSignIn}
               >
-                <Ionicons name="log-out-outline" size={16} color="#fff" style={styles.signOutIcon} />
-                <Text style={styles.signOutText}>Sign Out</Text>
+                <Ionicons name="logo-google" size={20} color="#fff" style={styles.googleIcon} />
+                <Text style={styles.signInText}>Sign in with Google</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        </View>
+        
+        {/* Show conversation history, document management, or main chat */}
+        {showHistory ? (
+          <ConversationHistory 
+            conversations={conversations}
+            onClose={() => setShowHistory(false)}
+            onConversationSelect={(conversation) => {
+              setTranscription(conversation.transcription || '');
+              setChatResponse(conversation.response);
+              setCurrentConversation(conversation);
+              setShowHistory(false);
+            }}
+            formatTimestamp={formatTimestamp}
+          />
+        ) : showDocuments ? (
+          <DocumentManagement
+            documents={documents}
+            onUpload={handleDocumentUpload}
+            onDelete={handleDocumentDelete}
+            onClose={() => setShowDocuments(false)}
+            isUploading={isUploading}
+          />
+        ) : (
+          <>
+            <View style={styles.middleSection}>
+              <ScrollView style={styles.middleScroll} contentContainerStyle={styles.middleScrollContent}>
+                {/* Clear conversation button */}
+                {(currentConversation || transcription || chatResponse) && (
+                  <TouchableOpacity style={styles.clearButton} onPress={clearCurrentConversation}>
+                    <Ionicons name="refresh-outline" size={18} color="#007AFF" />
+                    <Text style={styles.clearButtonText}>New Conversation</Text>
+                  </TouchableOpacity>
+                )}
+                
+                {/* Current conversation display */}
+                {transcription ? (
+                  <View style={styles.messageContainer}>
+                    <View style={styles.userMessage}>
+                      <Text style={styles.transcriptionText}>{transcription}</Text>
+                      {currentConversation?.type === 'voice' && (
+                        <Ionicons name="mic" size={16} color="#007AFF" style={styles.messageIcon} />
+                      )}
+                    </View>
+                  </View>
+                ) : null}
+                
+                {isChatLoading ? (
+                  <View style={styles.messageContainer}>
+                    <View style={styles.assistantMessage}>
+                      <Text style={styles.chatLoading}>PowerNOVA is thinking...</Text>
+                    </View>
+                  </View>
+                ) : chatResponse ? (
+                  <View style={styles.messageContainer}>
+                    <View style={styles.assistantMessage}>
+                      <Text style={styles.chatResponse}>{chatResponse}</Text>
+                    </View>
+                  </View>
+                ) : null}
+                
+                {/* Welcome message for new users */}
+                {!currentConversation && !transcription && !chatResponse && (
+                  <View style={styles.welcomeContainer}>
+                    <Text style={styles.welcomeText}>Welcome to PowerNOVA!</Text>
+                    <Text style={styles.welcomeSubtext}>
+                      I'm here to help with power systems and electrical engineering questions.
+                      You can type your question or use the microphone to speak.
+                    </Text>
+                    {user && documents.length > 0 && (
+                      <Text style={styles.documentHintText}>
+                        💡 You have {documents.length} document{documents.length > 1 ? 's' : ''} uploaded. 
+                        Ask questions about your documents for more detailed answers!
+                      </Text>
+                    )}
+                  </View>
+                )}
+              </ScrollView>
+            </View>
+            
+            <View style={styles.inputSection}>
+              <TextInput
+                style={styles.textInput}
+                value={inputText}
+                onChangeText={handleInputChange}
+                placeholder="Ask about power systems..."
+                editable={!isRecording && !isMicActive}
+                multiline
+                blurOnSubmit={false}
+                onKeyPress={handleTextInputKeyPress}
+              />
+              <TouchableOpacity
+                style={[styles.micButton, isMicActive && styles.micActive]}
+                onPress={handleMicPress}
+                disabled={isTranscribing || isChatLoading}
+              >
+                <Ionicons name={isMicActive ? 'mic-off' : 'mic'} size={28} color="#fff" />
               </TouchableOpacity>
             </View>
-          ) : (
-            <TouchableOpacity
-              style={styles.signInButton}
-              onPress={handleGoogleSignIn}
-            >
-              <Ionicons name="logo-google" size={20} color="#fff" style={styles.googleIcon} />
-              <Text style={styles.signInText}>Sign in with Google</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-        <View style={styles.middleSection}>
-          <ScrollView style={styles.middleScroll} contentContainerStyle={styles.middleScrollContent}>
-            {transcription ? (
-              <Text style={styles.transcriptionText}>{transcription}</Text>
-            ) : null}
-            {isChatLoading ? (
-              <Text style={styles.chatLoading}>Loading chat response...</Text>
-            ) : chatResponse ? (
-              <Text style={styles.chatResponse}>{chatResponse}</Text>
-            ) : null}
-          </ScrollView>
-        </View>
-        <View style={styles.inputSection}>
-          <TextInput
-            style={styles.textInput}
-            value={inputText}
-            onChangeText={handleInputChange}
-            placeholder="Type a message..."
-            editable={!isRecording && !isMicActive}
-            multiline
-            blurOnSubmit={false}
-            onKeyPress={handleTextInputKeyPress}
-            // Optionally, autoFocus for better UX
-          />
-          <TouchableOpacity
-            style={[styles.micButton, isMicActive && styles.micActive]}
-            onPress={handleMicPress}
-            disabled={isTranscribing || isChatLoading}
-          >
-            <Ionicons name={isMicActive ? 'mic-off' : 'mic'} size={28} color="#fff" />
-          </TouchableOpacity>
-        </View>
+          </>
+        )}
+        
         <StatusBar style="auto" />
       </View>
     </SafeAreaView>
@@ -465,10 +1000,69 @@ const styles = StyleSheet.create({
   heading: {
     fontSize: 24,
     fontWeight: 'bold',
-    textAlign: 'center',
+    color: '#222',
+  },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    paddingHorizontal: 16,
     marginTop: 8,
     marginBottom: 8,
-    color: '#222',
+    minHeight: 60,
+  },
+  headerLeft: {
+    flex: 1,
+  },
+  headerRight: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  historyButton: {
+    backgroundColor: '#f0f0f0',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  documentsButton: {
+    backgroundColor: '#f0f0f0',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+    position: 'relative',
+  },
+  documentBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: '#FF3B30',
+    borderRadius: 8,
+    minWidth: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  documentBadgeText: {
+    color: '#fff',
+    fontSize: 10,
+    fontWeight: 'bold',
   },
   middleSection: {
     flex: 1,
@@ -486,6 +1080,76 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
     paddingBottom: 20,
+  },
+  welcomeContainer: {
+    alignItems: 'center',
+    padding: 32,
+    marginTop: 60,
+  },
+  welcomeText: {
+    fontSize: 24,
+    fontWeight: 'bold',
+    color: '#222',
+    textAlign: 'center',
+    marginBottom: 12,
+  },
+  welcomeSubtext: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    lineHeight: 24,
+  },
+  documentHintText: {
+    fontSize: 14,
+    color: '#007AFF',
+    textAlign: 'center',
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#f0f8ff',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: '#007AFF',
+  },
+  messageContainer: {
+    width: '100%',
+    marginVertical: 8,
+  },
+  userMessage: {
+    alignSelf: 'flex-end',
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    maxWidth: '80%',
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  assistantMessage: {
+    alignSelf: 'flex-start',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 20,
+    maxWidth: '80%',
+  },
+  messageIcon: {
+    marginLeft: 8,
+  },
+  clearButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f0f0f0',
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderRadius: 20,
+    marginBottom: 16,
+    alignSelf: 'center',
+  },
+  clearButtonText: {
+    color: '#007AFF',
+    fontSize: 14,
+    fontWeight: '500',
+    marginLeft: 6,
   },
   inputSection: {
     flexDirection: 'row',
@@ -517,68 +1181,269 @@ const styles = StyleSheet.create({
   micActive: {
     backgroundColor: '#FF3B30',
   },
-  recordButton: {
-    backgroundColor: '#007AFF',
-    paddingVertical: 14,
-    paddingHorizontal: 32,
-    borderRadius: 8,
-    marginBottom: 10,
-  },
-  transcribeButton: {
-    backgroundColor: '#34C759',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    marginTop: 10,
-  },
-  newRecordingButton: {
-    backgroundColor: '#FF9500',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    marginTop: 10,
-  },
-  speakButton: {
-    backgroundColor: '#5856D6',
-    paddingVertical: 12,
-    paddingHorizontal: 24,
-    borderRadius: 8,
-    marginTop: 10,
-  },
-  buttonText: {
-    color: '#fff',
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
   transcriptionText: {
-    marginTop: 16,
-    color: '#333',
-    fontStyle: 'italic',
+    color: '#fff',
     fontSize: 16,
-    textAlign: 'center',
+    lineHeight: 22,
   },
   chatResponse: {
-    marginTop: 16,
     color: '#222',
-    fontSize: 18,
-    textAlign: 'center',
+    fontSize: 16,
+    lineHeight: 22,
   },
   chatLoading: {
-    marginTop: 16,
     color: '#007AFF',
     fontSize: 16,
-    textAlign: 'center',
+    fontStyle: 'italic',
   },
-  headerRow: {
+  // History styles
+  historyContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  historyHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    width: '100%',
     paddingHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 8,
-    minHeight: 60,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
   },
+  historyTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#222',
+  },
+  historyCloseButton: {
+    backgroundColor: '#f0f0f0',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  conversationList: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  conversationItem: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    marginVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  conversationHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  conversationTypeContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  conversationTimestamp: {
+    fontSize: 12,
+    color: '#666',
+  },
+  conversationPrompt: {
+    fontSize: 14,
+    color: '#222',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  conversationResponse: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 20,
+  },
+  emptyHistoryContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyHistoryText: {
+    fontSize: 18,
+    color: '#666',
+    fontWeight: '500',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptyHistorySubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  
+  // Document management styles
+  documentManagementContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+  },
+  documentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  documentTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#222',
+  },
+  closeButton: {
+    backgroundColor: '#f0f0f0',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  documentUploadContainer: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  uploadButton: {
+    backgroundColor: '#007AFF',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 8,
+    gap: 8,
+  },
+  uploadButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  uploadButtonText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#e0e0e0',
+  },
+  searchIcon: {
+    position: 'absolute',
+    left: 28,
+    zIndex: 1,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    borderColor: '#ddd',
+    borderWidth: 1,
+    borderRadius: 20,
+    paddingHorizontal: 16,
+    paddingLeft: 48,
+    fontSize: 16,
+    backgroundColor: '#f9f9f9',
+  },
+  documentList: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  documentItem: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    marginVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  documentItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  documentItemInfo: {
+    flex: 1,
+    marginLeft: 12,
+  },
+  documentItemName: {
+    fontSize: 16,
+    fontWeight: '500',
+    color: '#222',
+    marginBottom: 4,
+  },
+  documentItemMeta: {
+    fontSize: 12,
+    color: '#666',
+  },
+  deleteButton: {
+    backgroundColor: '#ffebee',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  documentItemStatus: {
+    marginTop: 8,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    backgroundColor: '#e8f5e8',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+    gap: 4,
+  },
+  statusProcessing: {
+    backgroundColor: '#fff3cd',
+  },
+  statusError: {
+    backgroundColor: '#f8d7da',
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#28a745',
+    fontWeight: '500',
+  },
+  statusProcessingText: {
+    color: '#856404',
+  },
+  statusErrorText: {
+    color: '#721c24',
+  },
+  emptyDocumentsContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyDocumentsText: {
+    fontSize: 18,
+    color: '#666',
+    fontWeight: '500',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptyDocumentsSubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  // Auth and profile styles
   signInButton: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -703,14 +1568,166 @@ const styles = StyleSheet.create({
     color: '#28a745',
     fontWeight: '500',
   },
-  profilePicLoader: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    bottom: 0,
+  // Document management styles
+  documentManagementContainer: {
+    flex: 1,
+    backgroundColor: '#fff',
+    padding: 16,
+  },
+  documentHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 16,
+  },
+  documentTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#222',
+  },
+  closeButton: {
+    backgroundColor: '#f0f0f0',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: 'rgba(255, 255, 255, 0.8)',
+  },
+  documentUploadContainer: {
+    marginBottom: 16,
+    alignItems: 'center',
+  },
+  uploadButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#007AFF',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  uploadButtonDisabled: {
+    backgroundColor: '#ccc',
+  },
+  uploadButtonText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 8,
+  },
+  searchContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f9f9f9',
+    borderRadius: 24,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    marginBottom: 16,
+  },
+  searchIcon: {
+    marginRight: 8,
+  },
+  searchInput: {
+    flex: 1,
+    height: 40,
+    borderColor: '#ccc',
+    borderWidth: 1,
+    borderRadius: 24,
+    paddingHorizontal: 16,
+    fontSize: 16,
+    backgroundColor: '#fff',
+  },
+  emptyDocumentsContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 32,
+  },
+  emptyDocumentsText: {
+    fontSize: 18,
+    color: '#666',
+    fontWeight: '500',
+    marginTop: 16,
+    textAlign: 'center',
+  },
+  emptyDocumentsSubtext: {
+    fontSize: 14,
+    color: '#999',
+    marginTop: 8,
+    textAlign: 'center',
+  },
+  documentList: {
+    flex: 1,
+    paddingHorizontal: 16,
+  },
+  documentItem: {
+    backgroundColor: '#f8f9fa',
+    padding: 16,
+    marginVertical: 6,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  documentItemHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  documentItemInfo: {
+    flex: 1,
+    marginLeft: 8,
+  },
+  documentItemName: {
+    fontSize: 14,
+    color: '#222',
+    fontWeight: '500',
+    marginBottom: 4,
+  },
+  documentItemMeta: {
+    fontSize: 12,
+    color: '#666',
+  },
+  deleteButton: {
+    backgroundColor: '#f0f0f0',
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  documentItemStatus: {
+    marginTop: 8,
+  },
+  statusBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#e0f7fa',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  statusText: {
+    fontSize: 12,
+    color: '#007AFF',
+    marginLeft: 4,
+  },
+  statusError: {
+    backgroundColor: '#f8d7da',
+  },
+  statusErrorText: {
+    color: '#c82333',
+  },
+  statusProcessing: {
+    backgroundColor: '#fff3cd',
+  },
+  statusProcessingText: {
+    color: '#856404',
   },
 });
