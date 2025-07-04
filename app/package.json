@@ -10,13 +10,17 @@
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.4",
+    "@google-cloud/firestore": "^7.11.2",
     "expo": "~53.0.13",
     "expo-av": "~15.1.7",
+    "expo-random": "^14.0.1",
     "expo-speech": "~13.1.7",
     "expo-status-bar": "~2.2.3",
+    "firebase": "^11.10.0",
     "react": "19.0.0",
     "react-dom": "19.0.0",
     "react-native": "0.79.4",
+    "react-native-dotenv": "^3.4.11",
     "react-native-web": "^0.20.0"
   },
   "devDependencies": {
