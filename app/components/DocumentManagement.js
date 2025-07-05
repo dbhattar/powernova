@@ -3,9 +3,6 @@ import { View, Text, TouchableOpacity, TextInput, FlatList, StyleSheet } from 'r
 import { Ionicons } from '@expo/vector-icons';
 import DocumentUpload from './DocumentUpload';
 import DocumentItem from './DocumentItem';
-import { testStoragePermissions } from '../storageTest';
-import { checkDocumentsInFirestore } from '../firestoreTest';
-import { testConversations, testSaveConversation } from '../conversationTest';
 
 const DocumentManagement = ({ documents, onUpload, onDelete, onClose, isUploading }) => {
   const [searchTerm, setSearchTerm] = useState('');
@@ -32,57 +29,6 @@ const DocumentManagement = ({ documents, onUpload, onDelete, onClose, isUploadin
       </View>
 
       <DocumentUpload onUpload={onUpload} isUploading={isUploading} />
-
-      {/* Debug: Storage permission test button */}
-      <View style={styles.debugContainer}>
-        <TouchableOpacity
-          style={styles.testButton}
-          onPress={() => testStoragePermissions()}
-        >
-          <Ionicons name="shield-checkmark-outline" size={16} color="#FF9500" />
-          <Text style={styles.testButtonText}>Test Storage Permissions</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.testButton, { marginTop: 8 }]}
-          onPress={() => checkDocumentsInFirestore()}
-        >
-          <Ionicons name="documents-outline" size={16} color="#007AFF" />
-          <Text style={[styles.testButtonText, { color: '#007AFF' }]}>Check Documents in DB</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.testButton, { marginTop: 8 }]}
-          onPress={() => testConversations()}
-        >
-          <Ionicons name="chatbubbles-outline" size={16} color="#28a745" />
-          <Text style={[styles.testButtonText, { color: '#28a745' }]}>Check Conversations</Text>
-        </TouchableOpacity>
-        
-        <TouchableOpacity
-          style={[styles.testButton, { marginTop: 8 }]}
-          onPress={() => testSaveConversation()}
-        >
-          <Ionicons name="add-circle-outline" size={16} color="#DC3545" />
-          <Text style={[styles.testButtonText, { color: '#DC3545' }]}>Test Save Conversation</Text>
-        </TouchableOpacity>
-        
-        {/* Debug: Test delete function */}
-        {documents.length > 0 && (
-          <TouchableOpacity
-            style={[styles.testButton, { marginTop: 8, backgroundColor: '#FF3B30' }]}
-            onPress={() => {
-              console.log('🧪 Debug: Testing delete function with first document');
-              const firstDoc = documents[0];
-              console.log('🧪 First document:', firstDoc);
-              onDelete(firstDoc);
-            }}
-          >
-            <Ionicons name="trash-outline" size={16} color="white" />
-            <Text style={[styles.testButtonText, { color: 'white' }]}>🧪 Test Delete (Debug)</Text>
-          </TouchableOpacity>
-        )}
-      </View>
 
       <View style={styles.searchContainer}>
         <Ionicons name="search" size={20} color="#666" style={styles.searchIcon} />
@@ -138,28 +84,6 @@ const styles = StyleSheet.create({
     padding: 8,
     borderRadius: 20,
     backgroundColor: '#f0f0f0',
-  },
-  debugContainer: {
-    marginBottom: 20,
-    padding: 16,
-    backgroundColor: '#f8f9fa',
-    borderRadius: 8,
-  },
-  testButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 10,
-    backgroundColor: '#fff',
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: '#FF9500',
-    gap: 8,
-  },
-  testButtonText: {
-    fontSize: 14,
-    fontWeight: '500',
-    color: '#FF9500',
   },
   searchContainer: {
     flexDirection: 'row',
