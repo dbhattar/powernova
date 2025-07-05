@@ -548,49 +548,94 @@ export default function App() {
     console.log('🗑️  Backend API URL:', BACKEND_API_URL);
     console.log('🗑️  User authenticated:', !!user);
     console.log('🗑️  User UID:', user?.uid);
+    console.log('🗑️  Platform:', Platform.OS);
+    console.log('🗑️  Alert function available:', typeof Alert.alert);
     
-    Alert.alert(
-      'Delete Document',
-      `Are you sure you want to delete "${document.fileName}"?`,
-      [
-        { text: 'Cancel', style: 'cancel', onPress: () => console.log('🗑️  Delete cancelled by user') },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            console.log('🗑️  User confirmed deletion - starting deletion process...');
-            try {
-              console.log('🗑️  Starting deletion for document ID:', document.id);
-              console.log('🗑️  Document owner (userId):', document.userId);
-              console.log('🗑️  Document owner (uid):', document.uid);
-              console.log('🗑️  Current user:', user?.uid);
-              
-              console.log('🗑️  About to call apiCall with endpoint:', `/documents/${document.id}`);
-              
-              // Use backend API for deletion to ensure proper cleanup
-              const response = await apiCall(`/documents/${document.id}`, {
-                method: 'DELETE'
-              });
-              
-              console.log('✅ Document deleted successfully, response:', response);
-              Alert.alert('Success', 'Document deleted successfully!');
-              
-              // Refresh documents list
-              console.log('🔄 Refreshing documents list...');
-              loadUserDocuments();
-            } catch (error) {
-              console.error('❌ Delete error:', error);
-              console.error('❌ Delete error details:', {
-                message: error.message,
-                stack: error.stack,
-                name: error.name
-              });
-              Alert.alert('Delete Error', error.message || 'Failed to delete document');
-            }
-          }
+    // Test if Alert works at all
+    try {
+      console.log('🗑️  Attempting to show alert...');
+      
+      // For web platform, use window.confirm as fallback
+      if (Platform.OS === 'web') {
+        console.log('🗑️  Using web confirm dialog');
+        const confirmed = window.confirm(`Are you sure you want to delete "${document.fileName}"?`);
+        console.log('🗑️  Web confirm result:', confirmed);
+        
+        if (confirmed) {
+          console.log('🗑️  User confirmed deletion via web dialog - starting deletion process...');
+          await performDeletion(document);
+        } else {
+          console.log('🗑️  Delete cancelled by user via web dialog');
         }
-      ]
-    );
+      } else {
+        console.log('🗑️  Using React Native Alert');
+        Alert.alert(
+          'Delete Document',
+          `Are you sure you want to delete "${document.fileName}"?`,
+          [
+            { text: 'Cancel', style: 'cancel', onPress: () => console.log('🗑️  Delete cancelled by user') },
+            {
+              text: 'Delete',
+              style: 'destructive',
+              onPress: async () => {
+                console.log('🗑️  User confirmed deletion - starting deletion process...');
+                await performDeletion(document);
+              }
+            }
+          ]
+        );
+      }
+    } catch (error) {
+      console.error('❌ Error showing alert:', error);
+      // Fallback to direct deletion with console confirmation
+      console.log('🗑️  Alert failed, proceeding with deletion (development mode)');
+      await performDeletion(document);
+    }
+  };
+
+  // Separate function to perform the actual deletion
+  const performDeletion = async (document) => {
+    try {
+      console.log('🗑️  Starting deletion for document ID:', document.id);
+      console.log('🗑️  Document owner (userId):', document.userId);
+      console.log('🗑️  Document owner (uid):', document.uid);
+      console.log('🗑️  Current user:', user?.uid);
+      
+      console.log('🗑️  About to call apiCall with endpoint:', `/documents/${document.id}`);
+      
+      // Use backend API for deletion to ensure proper cleanup
+      const response = await apiCall(`/documents/${document.id}`, {
+        method: 'DELETE'
+      });
+      
+      console.log('✅ Document deleted successfully, response:', response);
+      
+      // Show success message
+      if (Platform.OS === 'web') {
+        window.alert('Document deleted successfully!');
+      } else {
+        Alert.alert('Success', 'Document deleted successfully!');
+      }
+      
+      // Refresh documents list
+      console.log('🔄 Refreshing documents list...');
+      loadUserDocuments();
+    } catch (error) {
+      console.error('❌ Delete error:', error);
+      console.error('❌ Delete error details:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      
+      // Show error message
+      const errorMessage = error.message || 'Failed to delete document';
+      if (Platform.OS === 'web') {
+        window.alert(`Delete Error: ${errorMessage}`);
+      } else {
+        Alert.alert('Delete Error', errorMessage);
+      }
+    }
   };
 
   // Load documents when user changes

@@ -66,6 +66,22 @@ const DocumentManagement = ({ documents, onUpload, onDelete, onClose, isUploadin
           <Ionicons name="add-circle-outline" size={16} color="#DC3545" />
           <Text style={[styles.testButtonText, { color: '#DC3545' }]}>Test Save Conversation</Text>
         </TouchableOpacity>
+        
+        {/* Debug: Test delete function */}
+        {documents.length > 0 && (
+          <TouchableOpacity
+            style={[styles.testButton, { marginTop: 8, backgroundColor: '#FF3B30' }]}
+            onPress={() => {
+              console.log('🧪 Debug: Testing delete function with first document');
+              const firstDoc = documents[0];
+              console.log('🧪 First document:', firstDoc);
+              onDelete(firstDoc);
+            }}
+          >
+            <Ionicons name="trash-outline" size={16} color="white" />
+            <Text style={[styles.testButtonText, { color: 'white' }]}>🧪 Test Delete (Debug)</Text>
+          </TouchableOpacity>
+        )}
       </View>
 
       <View style={styles.searchContainer}>
