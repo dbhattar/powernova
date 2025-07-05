@@ -1406,9 +1406,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderRadius: 24,
     paddingHorizontal: 16,
+    paddingVertical: 12,
     fontSize: 16,
     backgroundColor: '#f9f9f9',
     marginRight: 12,
+    textAlignVertical: 'center',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   micButton: {
     backgroundColor: '#007AFF',
