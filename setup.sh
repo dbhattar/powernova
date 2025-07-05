@@ -302,7 +302,9 @@ print_setup_instructions() {
     
     echo -e "${YELLOW}1. Backend Configuration:${NC}"
     echo "   - Edit backend/.env with your API keys"
-    echo "   - Required: OPENAI_API_KEY, PINECONE_API_KEY, Firebase credentials"
+    echo "   - Required: OPENAI_API_KEY, PINECONE_API_KEY"
+    echo "   - Download Firebase service account key and save as backend/firebase-service-account.json"
+    echo "   - Or set Firebase environment variables in backend/.env"
     echo ""
     
     echo -e "${YELLOW}2. Frontend Configuration:${NC}"
@@ -350,6 +352,16 @@ main() {
     setup_frontend
     create_dev_scripts
     create_config_templates
+    
+    # Setup Firebase
+    print_header "Firebase Service Account Setup"
+    print_status "Checking Firebase configuration..."
+    if [ -f "setup-firebase.sh" ]; then
+        ./setup-firebase.sh
+    else
+        print_warning "Firebase setup script not found"
+    fi
+    
     print_setup_instructions
     
     print_success "Setup complete! 🎉"

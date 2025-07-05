@@ -5,6 +5,7 @@
   "private": true,
   "scripts": {
     "setup": "chmod +x setup.sh && ./setup.sh",
+    "setup:firebase": "chmod +x setup-firebase.sh && ./setup-firebase.sh",
     "install:backend": "cd backend && npm install",
     "install:frontend": "cd app && npm install",
     "install:all": "npm run install:backend && npm run install:frontend",
