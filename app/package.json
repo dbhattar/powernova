@@ -3,15 +3,17 @@
   "version": "1.0.0",
   "main": "index.js",
   "scripts": {
-    "start": "expo start",
-    "android": "expo start --android",
-    "ios": "expo start --ios",
-    "web": "expo start --web"
+    "start": "npx expo start",
+    "android": "npx expo start --android",
+    "ios": "npx expo start --ios",
+    "web": "npx expo start --web",
+    "dev": "npx expo start",
+    "build": "npx expo export"
   },
   "dependencies": {
     "@expo/metro-runtime": "~5.0.4",
     "@google-cloud/firestore": "^7.11.2",
-    "expo": "~53.0.13",
+    "expo": "53.0.17",
     "expo-av": "~15.1.7",
     "expo-random": "^14.0.1",
     "expo-speech": "~13.1.7",
@@ -20,12 +22,13 @@
     "pdfjs-dist": "^5.3.31",
     "react": "19.0.0",
     "react-dom": "19.0.0",
-    "react-native": "0.79.4",
+    "react-native": "0.79.5",
     "react-native-dotenv": "^3.4.11",
     "react-native-web": "^0.20.0"
   },
   "devDependencies": {
-    "@babel/core": "^7.20.0"
+    "@babel/core": "^7.20.0",
+    "@expo/cli": "^0.24.17"
   },
   "private": true
 }

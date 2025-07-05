@@ -57,13 +57,21 @@ check_requirements() {
     NPM_VERSION=$(npm --version)
     print_success "npm version: $NPM_VERSION"
     
-    # Check if Expo CLI is installed
-    if ! command -v expo &> /dev/null; then
-        print_warning "Expo CLI not found. Installing globally..."
-        npm install -g @expo/cli
+    # Check if Expo CLI is available
+    if ! command -v npx &> /dev/null; then
+        print_error "npx is not available. Please install npm properly."
+        exit 1
     fi
     
-    EXPO_VERSION=$(expo --version)
+    # Check if @expo/cli is available
+    if ! npx expo --version &> /dev/null; then
+        print_warning "Expo CLI not found. Installing locally..."
+        cd app
+        npm install @expo/cli --save-dev
+        cd ..
+    fi
+    
+    EXPO_VERSION=$(npx expo --version)
     print_success "Expo CLI version: $EXPO_VERSION"
 }
 

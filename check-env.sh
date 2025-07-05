@@ -31,7 +31,7 @@ npm --version > /dev/null 2>&1
 check_item "npm installed" $?
 
 # Check Expo CLI
-expo --version > /dev/null 2>&1
+npx expo --version > /dev/null 2>&1
 check_item "Expo CLI installed" $?
 
 # Check backend dependencies
