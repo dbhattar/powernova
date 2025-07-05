@@ -44,42 +44,56 @@ export default function App() {
   googleProvider.addScope('profile');
   googleProvider.addScope('email');
 
-  // Use API key from env for EAS builds, or from app.json extra for local dev
-  // Robustly fetch OpenAI API key for all platforms (EAS env, app.json extra, web manifest, process.env)
-  function getOpenAIApiKey() {
-    // Expo Go and native: Constants.expoConfig.extra
-    if (typeof Constants?.expoConfig?.extra?.openaiApiKey === 'string') {
-      console.log("Using OpenAI API key from Constants.expoConfig.extra");
-      return Constants.expoConfig.extra.openaiApiKey;
+  // Backend API configuration
+  function getBackendApiUrl() {
+    // Development: local backend
+    if (__DEV__) {
+      return 'http://localhost:3001/api';
     }
-    // Expo web (dev): Constants.manifest.extra
-    if (typeof Constants?.manifest?.extra?.openaiApiKey === 'string') {
-      console.log("Using OpenAI API key from Constants.manifest.extra");
-      return Constants.manifest.extra.openaiApiKey;
-    }
-    // EAS env (native): process.env
-    if (typeof process !== 'undefined' && process.env && process.env.OPENAI_API_KEY) {
-      console.log("Using OpenAI API key from process.env");
-      return process.env.OPENAI_API_KEY;
-    }
-    // Fallback: window.__APP_CONFIG__ (for custom web injection)
-    if (typeof window !== 'undefined' && window.__APP_CONFIG__?.openaiApiKey) {
-      console.log("Using OpenAI API key from window.__APP_CONFIG__");
-      return window.__APP_CONFIG__.openaiApiKey;
-    }
-    return '';
+    // Production: deployed backend URL
+    return Constants.expoConfig.extra.backendUrl || 'https://your-backend-url.com/api';
   }
 
-  const OPENAI_API_KEY = getOpenAIApiKey();
-
-  if (!OPENAI_API_KEY) {
-    console.warn('OpenAI API key is not set. Please configure it in app.json extra, EAS env, or your web config.');
-  }
+  const BACKEND_API_URL = getBackendApiUrl();
+  console.log('Backend API URL:', BACKEND_API_URL);
 
   const MAIN_HEADING = Constants.expoConfig.extra.mainHeading;
 
+  // Helper function to get user's ID token for API calls
+  const getUserToken = async () => {
+    if (!user) {
+      throw new Error('User not authenticated');
+    }
+    return await user.getIdToken();
+  };
+
+  // Helper function for API calls
+  const apiCall = async (endpoint, options = {}) => {
+    try {
+      const token = await getUserToken();
+      const response = await fetch(`${BACKEND_API_URL}${endpoint}`, {
+        ...options,
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${token}`,
+          ...options.headers,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`API call to ${endpoint} failed:`, error);
+      throw error;
+    }
+  };
+
   // System prompt for PowerNOVA
-  const SYSTEM_PROMPT = "You are PowerNOVA, an expert assistant specialized in power systems, electrical engineering, and related topics such as power generation, transmission, distribution, grid operations, renewable energy, and power system analysis. If a user asks a question outside of these areas, politely respond: 'I'm here to help with power systems and related topics. Please ask a question about electrical power systems, engineering, or energy!'";
+  const SYSTEM_PROMPT = "You are PowerNOVA, an expert assistant specialized in power systems, electrical engineering, and related topics such as power generation, transmission, distribution, grid operations, renewable energy, and power system analysis. This includes the regulatory bodies in this area across different jurisdictions.  If a user asks a question outside of these areas, politely respond: 'I'm here to help with power systems and related topics. Please ask a question about electrical power systems, engineering, or energy!'";
 
   const startRecording = async () => {
     try {
@@ -142,7 +156,7 @@ export default function App() {
     }
   };
 
-  // Send transcription to OpenAI Chat API with document context and conversation history
+  // Send transcription to backend API with document context and conversation history
   const sendToChat = async (text, isFollowUp = false) => {
     setIsChatLoading(true);
     setChatResponse('');
@@ -168,50 +182,17 @@ export default function App() {
     setCurrentConversation(newConversation);
     
     try {
-      // Get document context if available
-      let documentContext = '';
-      if (documentService && documents.length > 0) {
-        const relevantDocs = documentService.getDocumentContext(documents, text);
-        if (relevantDocs.length > 0) {
-          documentContext = '\n\nRelevant documents:\n' + 
-            relevantDocs.map(doc => `File: ${doc.fileName}\nContent: ${doc.content}`).join('\n\n');
-        }
-      }
-
-      // Build conversation history for context
-      const messages = [{ role: 'system', content: SYSTEM_PROMPT }];
-      
-      // Add previous conversation context if this is a follow-up
-      if (isFollowUp && conversationThread.length > 0) {
-        conversationThread.forEach(msg => {
-          messages.push({ role: 'user', content: msg.prompt });
-          messages.push({ role: 'assistant', content: msg.response });
-        });
-      }
-      
-      // Add current user message
-      messages.push({ role: 'user', content: text + documentContext });
-
-      const response = await fetch('https://api.openai.com/v1/chat/completions', {
+      // Call backend API
+      const response = await apiCall('/chat/message', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'application/json',
-        },
         body: JSON.stringify({
-          model: 'gpt-3.5-turbo',
-          messages: messages,
+          message: text,
+          threadId: currentThreadId,
+          isFollowUp: isFollowUp,
         }),
       });
 
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error('OpenAI API error:', errorText);
-        throw new Error('Chat failed');
-      }
-
-      const data = await response.json();
-      const responseText = data.choices?.[0]?.message?.content || 'No response.';
+      const responseText = response.response;
       setChatResponse(responseText);
       
       // Update the conversation with response
@@ -230,13 +211,8 @@ export default function App() {
         id: updatedConversation.id
       }]);
       
-      // Save to Firestore if user is signed in
-      if (user) {
-        await saveToFirestore(recordedUri, transcription, text, responseText, currentThreadId, isFollowUp);
-      }
-      
     } catch (err) {
-      const errorMessage = 'Chat failed.';
+      const errorMessage = 'Chat failed. Please try again.';
       setChatResponse(errorMessage);
       const updatedConversation = {
         ...newConversation,
@@ -250,7 +226,7 @@ export default function App() {
     }
   };
 
-  // Modified transcription to auto-send to chat
+  // Modified transcription to use backend API
   const transcribeRecording = async () => {
     if (!recordedUri) {
       setTranscription('No audio file to transcribe.');
@@ -259,42 +235,63 @@ export default function App() {
     setIsTranscribing(true);
     setTranscription('');
     setChatResponse('');
+    
     try {
       if (Platform.OS === 'web') {
         setTranscription('Transcription is not supported on web.');
         setIsTranscribing(false);
         return;
       }
+
       const fileUri = recordedUri;
       const fileInfo = await FileSystem.getInfoAsync(fileUri);
       console.log('File info:', fileInfo);
+      
       if (!fileInfo.exists) throw new Error('File does not exist');
+
+      // Create FormData for audio upload
       const formData = new FormData();
-      formData.append('file', {
+      formData.append('audio', {
         uri: fileUri,
         name: getFileName(fileUri),
-        type: 'audio/mp4', // Use audio/mp4 for m4a files
+        type: 'audio/mp4',
       });
-      formData.append('model', 'whisper-1');
-      const response = await fetch('https://api.openai.com/v1/audio/transcriptions', {
+      formData.append('autoSend', 'true');
+
+      // Call backend transcription API
+      const token = await getUserToken();
+      const response = await fetch(`${BACKEND_API_URL}/chat/transcribe`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${OPENAI_API_KEY}`,
-          'Content-Type': 'multipart/form-data',
-          'Accept': 'application/json',
+          'Authorization': `Bearer ${token}`,
         },
         body: formData,
       });
+
       if (!response.ok) {
         const errorText = await response.text();
-        console.error('OpenAI API error:', errorText);
+        console.error('Backend transcription error:', errorText);
         throw new Error('Transcription failed');
       }
+
       const data = await response.json();
-      setTranscription(data.text || 'No transcription found.');
-      if (data.text) {
-        await sendToChat(data.text);
+      setTranscription(data.transcription || 'No transcription found.');
+      
+      if (data.response) {
+        setChatResponse(data.response);
+        
+        // Update conversation thread
+        if (data.threadId) {
+          setThreadId(data.threadId);
+          setConversationThread(prev => [...prev, {
+            prompt: data.transcription,
+            response: data.response,
+            timestamp: new Date(),
+            id: Date.now().toString()
+          }]);
+        }
       }
+      
     } catch (err) {
       if (Platform.OS === 'ios') {
         setTranscription('Transcription failed. Please check microphone permissions and try again.');
@@ -369,49 +366,7 @@ export default function App() {
     }
   };
 
-  // Save chat/audio to Firestore if signed in
-  const saveToFirestore = async (audioUri, transcription, prompt, response, threadId, isFollowUp = false) => {
-    if (!user) {
-      console.log('No user signed in, skipping Firestore save');
-      return;
-    }
-    try {
-      console.log('Attempting to save to Firestore for user:', user.uid);
-      console.log('Conversation data:', {
-        uid: user.uid,
-        threadId: threadId,
-        prompt: prompt.substring(0, 100) + '...',
-        response: response.substring(0, 100) + '...',
-        type: transcription ? 'voice' : 'text',
-        isFollowUp: isFollowUp,
-      });
-      
-      const docRef = await addDoc(collection(db, 'conversations'), {
-        uid: user.uid,
-        threadId: threadId,
-        audioUri: audioUri || null,
-        transcription: transcription || null,
-        prompt,
-        response,
-        type: transcription ? 'voice' : 'text',
-        isFollowUp: isFollowUp,
-        createdAt: serverTimestamp(),
-      });
-      console.log('✅ Conversation saved to Firestore successfully:', docRef.id);
-    } catch (e) {
-      console.error('❌ Error saving to Firestore:', e);
-      console.error('Error code:', e.code);
-      console.error('Error message:', e.message);
-      
-      if (e.code === 'permission-denied') {
-        console.error('🔒 Firestore permission denied for conversations collection');
-        console.error('Check your Firestore security rules for the conversations collection');
-      }
-      // Continue without blocking the UI
-    }
-  };
-
-  // Load conversation history from Firestore
+  // Load conversation history from backend API
   const loadConversationHistory = (userId) => {
     if (!userId) {
       console.log('No user ID provided, clearing conversations');
@@ -419,95 +374,36 @@ export default function App() {
       return;
     }
 
+    // For now, we'll fetch on demand rather than real-time
+    // You could implement WebSocket or polling for real-time updates
+    fetchConversationHistory(userId);
+  };
+
+  // Fetch conversation history from backend
+  const fetchConversationHistory = async (userId) => {
     try {
       console.log('Loading conversation history for user:', userId);
-      // Use simple query without orderBy to avoid index requirement initially
-      const q = query(
-        collection(db, 'conversations'),
-        where('uid', '==', userId)
-      );
-
-      const unsubscribe = onSnapshot(q, (querySnapshot) => {
-        console.log('📞 Received conversation snapshot, size:', querySnapshot.size);
-        const loadedConversations = [];
-        querySnapshot.forEach((doc) => {
-          const data = doc.data();
-          console.log('📄 Conversation doc:', {
-            id: doc.id,
-            prompt: data.prompt?.substring(0, 50) + '...',
-            threadId: data.threadId,
-            type: data.type,
-            isFollowUp: data.isFollowUp,
-            createdAt: data.createdAt
-          });
-          loadedConversations.push({
-            id: doc.id,
-            ...data,
-            timestamp: data.createdAt?.toDate() || new Date(),
-          });
-        });
-        
-        // Sort conversations manually by creation date (descending)
-        loadedConversations.sort((a, b) => b.timestamp - a.timestamp);
-        
-        console.log('📋 Loaded conversations for state:', loadedConversations.length);
-        setConversations(loadedConversations);
-      }, (error) => {
-        console.error('❌ Error loading conversations:', error);
-        console.error('Error code:', error.code);
-        console.error('Error message:', error.message);
-        
-        if (error.code === 'permission-denied') {
-          console.error('🔒 Firestore permission denied for conversations collection');
-          console.error('Check your Firestore security rules for the conversations collection');
-          console.error('See FIRESTORE_SETUP.md for instructions.');
-        } else if (error.code === 'failed-precondition') {
-          console.error('📊 Missing Firestore index for conversations query');
-          console.error('Go to Firebase console and create the required index');
-        }
-        
-        // Set empty array on error to prevent infinite loading
-        setConversations([]);
-      });
-
-      return unsubscribe;
+      const response = await apiCall('/chat/history?limit=50');
+      
+      console.log('📋 Loaded conversations from backend:', response.conversations.length);
+      setConversations(response.conversations);
     } catch (error) {
-      console.error('Error setting up conversation listener:', error);
+      console.error('❌ Error loading conversations from backend:', error);
       setConversations([]);
     }
   };
 
-  // Load conversation thread from Firestore
+  // Load conversation thread from backend API
   const loadConversationThread = async (threadId) => {
     if (!user || !threadId) return;
     
     try {
       console.log('Loading conversation thread:', threadId);
-      // Use simple query without orderBy to avoid index requirement
-      const q = query(
-        collection(db, 'conversations'),
-        where('uid', '==', user.uid),
-        where('threadId', '==', threadId)
-      );
-
-      const querySnapshot = await getDocs(q);
-      const threadMessages = [];
-      querySnapshot.forEach((doc) => {
-        const data = doc.data();
-        threadMessages.push({
-          id: doc.id,
-          prompt: data.prompt,
-          response: data.response,
-          timestamp: data.createdAt?.toDate() || new Date(),
-        });
-      });
+      const response = await apiCall(`/chat/thread/${threadId}`);
       
-      // Sort manually by creation date (ascending for thread)
-      threadMessages.sort((a, b) => a.timestamp - b.timestamp);
-      
-      setConversationThread(threadMessages);
+      setConversationThread(response.thread);
       setThreadId(threadId);
-      console.log('Loaded thread messages:', threadMessages.length);
+      console.log('Loaded thread messages:', response.thread.length);
     } catch (error) {
       console.error('Error loading conversation thread:', error);
     }
@@ -628,23 +524,13 @@ export default function App() {
     }
   }, [user]);
 
-  // Call saveToFirestore after chat response
-  React.useEffect(() => {
-    if (user && chatResponse && (transcription || inputText)) {
-      // Don't save again if already saved in sendToChat
-      // This effect is kept for backward compatibility
-    }
-    // eslint-disable-next-line
-  }, [chatResponse]);
-
   // Load conversation history when user signs in/out
   React.useEffect(() => {
-    let unsubscribe;
     console.log('User state changed:', user?.uid || 'signed out');
     
     if (user) {
       try {
-        unsubscribe = loadConversationHistory(user.uid);
+        loadConversationHistory(user.uid);
       } catch (error) {
         console.error('Failed to load conversation history:', error);
         setConversations([]);
@@ -652,13 +538,6 @@ export default function App() {
     } else {
       setConversations([]);
     }
-    
-    return () => {
-      if (unsubscribe) {
-        console.log('Cleaning up conversation listener');
-        unsubscribe();
-      }
-    };
   }, [user]);
 
   // Google Sign-In Function
