@@ -1,29 +1,31 @@
-import React, { useRef } from 'react';
-import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
+import React from 'react';
+import { View, TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import * as DocumentPicker from 'expo-document-picker';
 
 const DocumentUpload = ({ onUpload, isUploading }) => {
-  const fileInputRef = useRef(null);
+  const handleDocumentPick = async () => {
+    try {
+      const result = await DocumentPicker.getDocumentAsync({
+        type: ['application/pdf', 'application/msword', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document', 'text/plain'],
+        copyToCacheDirectory: false,
+      });
 
-  const handleFileSelect = (event) => {
-    const file = event.target.files[0];
-    if (file) {
-      onUpload(file);
+      if (!result.canceled && result.assets && result.assets.length > 0) {
+        const file = result.assets[0];
+        onUpload(file);
+      }
+    } catch (error) {
+      console.error('Error picking document:', error);
+      Alert.alert('Error', 'Failed to pick document');
     }
   };
 
   return (
     <View style={styles.documentUploadContainer}>
-      <input
-        ref={fileInputRef}
-        type="file"
-        accept=".pdf,.doc,.docx,.txt"
-        style={{ display: 'none' }}
-        onChange={handleFileSelect}
-      />
       <TouchableOpacity
         style={[styles.uploadButton, isUploading && styles.uploadButtonDisabled]}
-        onPress={() => fileInputRef.current?.click()}
+        onPress={handleDocumentPick}
         disabled={isUploading}
       >
         <Ionicons name="cloud-upload-outline" size={20} color="#fff" />

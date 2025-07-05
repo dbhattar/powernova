@@ -589,7 +589,7 @@ export default function App() {
             <Text style={styles.heading}>{MAIN_HEADING}</Text>
           </View>
           <View style={styles.headerRight}>
-            {user && (
+            {user ? (
               <>
                 <TouchableOpacity
                   style={styles.historyButton}
@@ -602,14 +602,14 @@ export default function App() {
                   onPress={() => setShowDocuments(true)}
                 >
                   <Ionicons name="document-text-outline" size={20} color="#007AFF" />
-                  {documents.length > 0 && (
+                  {documents.length > 0 ? (
                     <View style={styles.documentBadge}>
                       <Text style={styles.documentBadgeText}>{documents.length}</Text>
                     </View>
-                  )}
+                  ) : null}
                 </TouchableOpacity>
               </>
-            )}
+            ) : null}
             {user ? (
               <View style={styles.userInfoRow}>
                 <ProfilePicture user={user} />
@@ -671,21 +671,21 @@ export default function App() {
             <View style={styles.middleSection}>
               <ScrollView style={styles.middleScroll} contentContainerStyle={styles.middleScrollContent}>
                 {/* Clear conversation button */}
-                {(currentConversation || transcription || chatResponse) && (
+                {(currentConversation || transcription || chatResponse) ? (
                   <TouchableOpacity style={styles.clearButton} onPress={clearCurrentConversation}>
                     <Ionicons name="refresh-outline" size={18} color="#007AFF" />
                     <Text style={styles.clearButtonText}>New Conversation</Text>
                   </TouchableOpacity>
-                )}
+                ) : null}
                 
                 {/* Current conversation display */}
                 {transcription ? (
                   <View style={styles.messageContainer}>
                     <View style={styles.userMessage}>
                       <Text style={styles.transcriptionText}>{transcription}</Text>
-                      {currentConversation?.type === 'voice' && (
+                      {currentConversation?.type === 'voice' ? (
                         <Ionicons name="mic" size={16} color="#007AFF" style={styles.messageIcon} />
-                      )}
+                      ) : null}
                     </View>
                   </View>
                 ) : null}
@@ -715,7 +715,7 @@ export default function App() {
                 ) : null}
                 
                 {/* Follow-up input section */}
-                {showFollowUpInput && (
+                {showFollowUpInput ? (
                   <View style={styles.followUpInputContainer}>
                     <TextInput
                       style={styles.followUpInput}
@@ -744,10 +744,10 @@ export default function App() {
                       </TouchableOpacity>
                     </View>
                   </View>
-                )}
+                ) : null}
                 
                 {/* Conversation thread display */}
-                {conversationThread.length > 0 && (
+                {conversationThread.length > 0 ? (
                   <View style={styles.threadContainer}>
                     <Text style={styles.threadTitle}>Conversation History</Text>
                     {conversationThread.map((message, index) => (
@@ -761,24 +761,24 @@ export default function App() {
                       </View>
                     ))}
                   </View>
-                )}
+                ) : null}
                 
                 {/* Welcome message for new users */}
-                {!currentConversation && !transcription && !chatResponse && (
+                {!currentConversation && !transcription && !chatResponse ? (
                   <View style={styles.welcomeContainer}>
                     <Text style={styles.welcomeText}>Welcome to PowerNOVA!</Text>
                     <Text style={styles.welcomeSubtext}>
                       I'm here to help with power systems and electrical engineering questions.
                       You can type your question or use the microphone to speak.
                     </Text>
-                    {user && documents.length > 0 && (
+                    {user && documents.length > 0 ? (
                       <Text style={styles.documentHintText}>
-                        💡 You have {documents.length} document{documents.length > 1 ? 's' : ''} uploaded. 
+                        💡 You have {documents.length} document{documents.length > 1 ? 's' : ''} uploaded.
                         Ask questions about your documents for more detailed answers!
                       </Text>
-                    )}
+                    ) : null}
                   </View>
-                )}
+                ) : null}
               </ScrollView>
             </View>
             
