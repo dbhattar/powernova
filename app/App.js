@@ -6,10 +6,9 @@ import * as FileSystem from 'expo-file-system';
 import Constants from 'expo-constants';
 import * as Speech from 'expo-speech';
 import { Ionicons } from '@expo/vector-icons';
-import { auth, db, storage } from './firebase';
+import { auth } from './firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from 'firebase/auth';
-import { collection, addDoc, serverTimestamp, query, where, orderBy, onSnapshot, updateDoc, doc, getDocs } from 'firebase/firestore';
-import { DocumentService, formatFileSize, getFileIcon } from './documentService';
+import { formatFileSize, getFileIcon } from './documentService';
 import { testStoragePermissions } from './storageTest';
 import { checkDocumentsInFirestore } from './firestoreTest';
 import { testConversations, testSaveConversation } from './conversationTest';
@@ -35,7 +34,6 @@ export default function App() {
   const [documents, setDocuments] = useState([]);
   const [showDocuments, setShowDocuments] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [documentService, setDocumentService] = useState(null);
   const [showFollowUpInput, setShowFollowUpInput] = useState(false); // New: show follow-up input
   const [followUpText, setFollowUpText] = useState(''); // New: follow-up question text
 
@@ -70,24 +68,51 @@ export default function App() {
   // Helper function for API calls
   const apiCall = async (endpoint, options = {}) => {
     try {
+      console.log('🌐 API Call START:', endpoint, options.method || 'GET');
+      console.log('🌐 Full URL will be:', `${BACKEND_API_URL}${endpoint}`);
+      
       const token = await getUserToken();
+      console.log('🔑 Token obtained, length:', token ? token.length : 0);
+      console.log('🔑 Token preview:', token ? `${token.substring(0, 50)}...` : 'null');
+      
+      // Build headers
+      const headers = {
+        'Authorization': `Bearer ${token}`,
+        ...options.headers,
+      };
+      
+      // Only add Content-Type for requests that typically have a body
+      if (options.method && !['GET', 'DELETE'].includes(options.method.toUpperCase())) {
+        headers['Content-Type'] = 'application/json';
+      }
+      
+      console.log('📋 Request headers:', headers);
+      console.log('📋 Request options:', options);
+      
+      console.log('🚀 Making fetch request...');
       const response = await fetch(`${BACKEND_API_URL}${endpoint}`, {
         ...options,
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-          ...options.headers,
-        },
+        headers,
       });
 
+      console.log('📡 Response received - status:', response.status);
+      console.log('📡 Response headers:', Object.fromEntries(response.headers));
+
       if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
+        console.log('❌ Response not OK, attempting to parse error...');
+        const errorData = await response.json().catch((err) => {
+          console.log('❌ Failed to parse error response as JSON:', err);
+          return {};
+        });
+        console.error('❌ API Error details:', errorData);
         throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
       }
 
-      return await response.json();
+      const data = await response.json();
+      console.log('✅ API Success:', endpoint, data);
+      return data;
     } catch (error) {
-      console.error(`API call to ${endpoint} failed:`, error);
+      console.error(`❌ API call to ${endpoint} failed:`, error);
       throw error;
     }
   };
@@ -451,21 +476,67 @@ export default function App() {
     setFollowUpText('');
   };
 
-  // Document upload handler
+  // Document upload handler - now uses backend API
   const handleDocumentUpload = async (file) => {
-    if (!user || !documentService) {
+    if (!user) {
       Alert.alert('Error', 'Please sign in to upload documents');
       return;
     }
 
     setIsUploading(true);
     try {
-      const uploadedDoc = await documentService.uploadDocument(file);
-      console.log('Document uploaded successfully:', uploadedDoc);
+      console.log('📤 Starting document upload:', file);
+      
+      // Create FormData for file upload
+      const formData = new FormData();
+      
+      // Handle different file formats for web vs native
+      if (Platform.OS === 'web') {
+        // For web, the file should be a File object
+        if (file.file) {
+          formData.append('document', file.file, file.name);
+        } else {
+          // Try to create a blob from the URI
+          const response = await fetch(file.uri);
+          const blob = await response.blob();
+          formData.append('document', blob, file.name);
+        }
+      } else {
+        // For native platforms
+        formData.append('document', {
+          uri: file.uri,
+          type: file.mimeType || file.type,
+          name: file.name,
+        });
+      }
+
+      // Upload via backend API - don't set Content-Type header manually
+      const token = await getUserToken();
+      const response = await fetch(`${BACKEND_API_URL}/documents/upload`, {
+        method: 'POST',
+        body: formData,
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          // Don't set Content-Type - let browser set it with boundary
+        },
+      });
+
+      console.log('📡 Upload response status:', response.status);
+
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        console.error('❌ Upload error:', errorData);
+        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
+      }
+
+      const data = await response.json();
+      console.log('✅ Document uploaded successfully:', data);
       Alert.alert('Success', 'Document uploaded successfully!');
+      // Refresh documents list
+      loadUserDocuments();
     } catch (error) {
       console.error('Upload error:', error);
-      Alert.alert('Upload Error', error.message);
+      Alert.alert('Upload Error', error.message || 'Failed to upload document');
     } finally {
       setIsUploading(false);
     }
@@ -473,23 +544,48 @@ export default function App() {
 
   // Document deletion handler
   const handleDocumentDelete = async (document) => {
-    if (!documentService) return;
-
+    console.log('🗑️  Delete handler called with document:', document);
+    console.log('🗑️  Backend API URL:', BACKEND_API_URL);
+    console.log('🗑️  User authenticated:', !!user);
+    console.log('🗑️  User UID:', user?.uid);
+    
     Alert.alert(
       'Delete Document',
       `Are you sure you want to delete "${document.fileName}"?`,
       [
-        { text: 'Cancel', style: 'cancel' },
+        { text: 'Cancel', style: 'cancel', onPress: () => console.log('🗑️  Delete cancelled by user') },
         {
           text: 'Delete',
           style: 'destructive',
           onPress: async () => {
+            console.log('🗑️  User confirmed deletion - starting deletion process...');
             try {
-              await documentService.deleteDocument(document.id, document.filePath);
-              console.log('Document deleted successfully');
+              console.log('🗑️  Starting deletion for document ID:', document.id);
+              console.log('🗑️  Document owner (userId):', document.userId);
+              console.log('🗑️  Document owner (uid):', document.uid);
+              console.log('🗑️  Current user:', user?.uid);
+              
+              console.log('🗑️  About to call apiCall with endpoint:', `/documents/${document.id}`);
+              
+              // Use backend API for deletion to ensure proper cleanup
+              const response = await apiCall(`/documents/${document.id}`, {
+                method: 'DELETE'
+              });
+              
+              console.log('✅ Document deleted successfully, response:', response);
+              Alert.alert('Success', 'Document deleted successfully!');
+              
+              // Refresh documents list
+              console.log('🔄 Refreshing documents list...');
+              loadUserDocuments();
             } catch (error) {
-              console.error('Delete error:', error);
-              Alert.alert('Delete Error', error.message);
+              console.error('❌ Delete error:', error);
+              console.error('❌ Delete error details:', {
+                message: error.message,
+                stack: error.stack,
+                name: error.name
+              });
+              Alert.alert('Delete Error', error.message || 'Failed to delete document');
             }
           }
         }
@@ -497,32 +593,39 @@ export default function App() {
     );
   };
 
-  // Initialize document service when user changes
+  // Load documents when user changes
   React.useEffect(() => {
     console.log('User effect triggered, user:', user?.uid || 'none');
     
     if (user) {
-      console.log('Creating document service for user:', user.uid);
-      const service = new DocumentService(user.uid);
-      setDocumentService(service);
-      
-      // Subscribe to user's documents
-      console.log('Setting up document subscription...');
-      const unsubscribe = service.subscribeToDocuments((docs) => {
-        console.log('Documents updated in App:', docs.length);
-        setDocuments(docs);
-      });
-      
-      return () => {
-        console.log('Cleaning up document subscription');
-        if (unsubscribe) unsubscribe();
-      };
+      console.log('Loading documents for user:', user.uid);
+      loadUserDocuments();
     } else {
-      console.log('No user, clearing document service and documents');
-      setDocumentService(null);
+      console.log('No user, clearing documents');
       setDocuments([]);
     }
   }, [user]);
+
+  // Load user documents from backend
+  const loadUserDocuments = async () => {
+    try {
+      const response = await apiCall('/documents');
+      const userDocuments = response.documents || [];
+      console.log('📄 Raw documents from API:', userDocuments);
+      
+      // Convert date strings back to Date objects
+      const processedDocuments = userDocuments.map(doc => ({
+        ...doc,
+        uploadedAt: doc.uploadedAt ? new Date(doc.uploadedAt) : new Date()
+      }));
+      
+      console.log('📄 Processed documents:', processedDocuments);
+      setDocuments(processedDocuments);
+    } catch (error) {
+      console.error('Error loading documents:', error);
+      setDocuments([]);
+    }
+  };
 
   // Load conversation history when user signs in/out
   React.useEffect(() => {

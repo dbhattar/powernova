@@ -44,16 +44,26 @@ router.post('/message', async (req, res) => {
 
     // Perform semantic search on user's documents
     let documentContext = '';
+    let searchResults = [];
     try {
-      const searchResults = await vectorService.searchDocuments(userId, message, 5);
+      searchResults = await vectorService.searchDocuments(userId, message, 5);
       if (searchResults.length > 0) {
         documentContext = searchResults
           .filter(result => result.score > 0.7) // Relevance threshold
           .map(result => `Source: ${result.metadata.fileName}\n${result.metadata.text}`)
           .join('\n\n');
+        
+        if (documentContext) {
+          console.log(`📚 Using document context from ${searchResults.length} sources`);
+        }
       }
     } catch (vectorError) {
-      console.log('Vector search failed, continuing without document context:', vectorError.message);
+      console.log('⚠️  Vector search failed, continuing without document context:', vectorError.message);
+    }
+
+    // Log context status
+    if (!documentContext) {
+      console.log('💭 No document context available, using general knowledge only');
     }
 
     // Build enhanced prompt

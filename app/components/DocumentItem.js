@@ -5,7 +5,29 @@ import { formatFileSize, getFileIcon } from '../documentService';
 
 const DocumentItem = ({ document, onDelete, onSelect }) => {
   const formatDate = (date) => {
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    // Handle different date formats
+    let dateObj;
+    
+    if (date instanceof Date) {
+      dateObj = date;
+    } else if (typeof date === 'string') {
+      dateObj = new Date(date);
+    } else if (typeof date === 'number') {
+      dateObj = new Date(date);
+    } else if (date && date.toDate) {
+      // Firestore Timestamp
+      dateObj = date.toDate();
+    } else {
+      // Fallback to current date
+      dateObj = new Date();
+    }
+    
+    // Check if the date is valid
+    if (isNaN(dateObj.getTime())) {
+      dateObj = new Date();
+    }
+    
+    return dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   };
 
   return (

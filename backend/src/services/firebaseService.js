@@ -119,11 +119,26 @@ class FirebaseService {
    */
   async getUserDocuments(userId) {
     try {
-      const snapshot = await this.db
+      console.log('🔍 Getting documents for user:', userId);
+      
+      // Try both field names for backward compatibility
+      // First try with 'userId' (current standard)
+      let snapshot = await this.db
         .collection('documents')
         .where('userId', '==', userId)
-        .orderBy('uploadedAt', 'desc')
         .get();
+
+      console.log('📄 Found documents with userId field:', snapshot.size);
+
+      // If no documents found with 'userId', try with 'uid' (legacy)
+      if (snapshot.empty) {
+        console.log('🔍 Trying legacy uid field...');
+        snapshot = await this.db
+          .collection('documents')
+          .where('uid', '==', userId)
+          .get();
+        console.log('📄 Found documents with uid field:', snapshot.size);
+      }
 
       const documents = [];
       snapshot.forEach(doc => {
@@ -135,6 +150,7 @@ class FirebaseService {
         });
       });
 
+      console.log('📄 Total documents found:', documents.length);
       return documents;
     } catch (error) {
       console.error('Error getting user documents:', error);
@@ -147,9 +163,11 @@ class FirebaseService {
    */
   async deleteDocument(docId) {
     try {
+      console.log('🗑️  Deleting document from Firestore:', docId);
       await this.db.collection('documents').doc(docId).delete();
+      console.log('✅ Document deleted from Firestore:', docId);
     } catch (error) {
-      console.error('Error deleting document:', error);
+      console.error('❌ Error deleting document from Firestore:', error);
       throw new Error(`Failed to delete document: ${error.message}`);
     }
   }

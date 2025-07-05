@@ -1,4 +1,4 @@
-const { PineconeClient } = require('@pinecone-database/pinecone');
+const { Pinecone } = require('@pinecone-database/pinecone');
 const openaiService = require('./openaiService');
 
 class VectorService {
@@ -12,20 +12,38 @@ class VectorService {
     if (this.initialized) return;
 
     try {
-      this.pinecone = new PineconeClient();
+      // Validate required environment variables
+      if (!process.env.PINECONE_API_KEY) {
+        throw new Error('PINECONE_API_KEY environment variable is required');
+      }
+
+      const indexName = process.env.PINECONE_INDEX_NAME || 'powernova-docs';
+      console.log('🔧 Initializing Pinecone with latest SDK...');
+      console.log('📋 Index name:', indexName);
       
-      await this.pinecone.init({
-        apiKey: process.env.PINECONE_API_KEY,
-        environment: process.env.PINECONE_ENVIRONMENT,
+      // Use the new simplified Pinecone initialization (API version 2025-04)
+      this.pinecone = new Pinecone({
+        apiKey: process.env.PINECONE_API_KEY
       });
 
-      this.index = this.pinecone.Index(process.env.PINECONE_INDEX_NAME || 'powernova-docs');
-      this.initialized = true;
+      this.index = this.pinecone.index(indexName);
       
-      console.log('Vector service initialized successfully');
+      // Test the connection and get index info
+      const stats = await this.index.describeIndexStats();
+      console.log('📊 Index stats:', JSON.stringify(stats, null, 2));
+      
+      this.initialized = true;
+      console.log('✅ Vector service initialized successfully');
+      console.log('📐 Index dimension:', stats.dimension);
+      
     } catch (error) {
-      console.error('Failed to initialize vector service:', error);
-      throw error;
+      console.error('❌ Failed to initialize vector service:', error.message);
+      console.log('📝 Vector search will be disabled. App will continue without document context.');
+      
+      // Don't throw error - let the app continue without vector search
+      this.initialized = false;
+      this.pinecone = null;
+      this.index = null;
     }
   }
 
@@ -34,13 +52,23 @@ class VectorService {
    */
   async processDocument(docId, userId, fileName, textContent) {
     await this.initialize();
+    
+    if (!this.initialized) {
+      console.log('⚠️  Vector service not available, skipping document processing');
+      return { chunkCount: 0, success: false, message: 'Vector service not available' };
+    }
 
     try {
+      console.log('📄 Processing document:', { docId, userId, fileName });
+      
       // Chunk the text
       const chunks = this.chunkText(textContent);
+      console.log('📝 Generated chunks:', chunks.length);
       
       // Generate embeddings for chunks
       const embeddings = await openaiService.generateEmbeddings(chunks);
+      console.log('🧠 Generated embeddings:', embeddings.length);
+      console.log('📐 Embedding dimensions:', embeddings[0] ? embeddings[0].length : 'none');
 
       // Prepare vectors for upsert
       const vectors = chunks.map((chunk, index) => ({
@@ -55,16 +83,13 @@ class VectorService {
           createdAt: new Date().toISOString()
         }
       }));
+      
+      console.log('🎯 Prepared vectors for upsert:', vectors.length);
 
       // Store in Pinecone with user namespace
-      await this.index.upsert({
-        upsertRequest: {
-          vectors: vectors,
-          namespace: userId
-        }
-      });
+      await this.index.namespace(userId).upsert(vectors);
 
-      console.log(`Processed document ${docId}: ${chunks.length} chunks`);
+      console.log(`✅ Processed document ${docId}: ${chunks.length} chunks`);
       
       return {
         chunkCount: chunks.length,
@@ -72,7 +97,7 @@ class VectorService {
       };
 
     } catch (error) {
-      console.error('Document processing error:', error);
+      console.error('❌ Document processing error:', error);
       throw new Error(`Failed to process document: ${error.message}`);
     }
   }
@@ -82,6 +107,11 @@ class VectorService {
    */
   async searchDocuments(userId, query, topK = 10) {
     await this.initialize();
+    
+    if (!this.initialized) {
+      console.log('⚠️  Vector service not available, returning empty search results');
+      return [];
+    }
 
     try {
       // Generate embedding for query
@@ -89,20 +119,19 @@ class VectorService {
       const queryVector = queryEmbeddings[0];
 
       // Search in user's namespace
-      const searchResponse = await this.index.query({
-        queryRequest: {
-          vector: queryVector,
-          topK: topK,
-          namespace: userId,
-          includeMetadata: true
-        }
+      const searchResponse = await this.index.namespace(userId).query({
+        vector: queryVector,
+        topK: topK,
+        includeMetadata: true
       });
 
+      console.log(`📚 Found ${searchResponse.matches?.length || 0} relevant documents for query`);
       return searchResponse.matches || [];
 
     } catch (error) {
-      console.error('Vector search error:', error);
-      throw new Error(`Document search failed: ${error.message}`);
+      console.error('❌ Vector search error:', error);
+      console.log('📝 Returning empty results, chat will continue without document context');
+      return [];
     }
   }
 
@@ -111,44 +140,30 @@ class VectorService {
    */
   async deleteDocument(docId, userId) {
     await this.initialize();
+    
+    if (!this.initialized) {
+      console.log('⚠️  Vector service not available, skipping document deletion');
+      return { success: false, message: 'Vector service not available' };
+    }
 
     try {
-      // Get all chunk IDs for this document
-      const chunkIds = [];
-      let fetchMore = true;
-      let paginationToken = null;
-
-      while (fetchMore) {
-        const fetchResponse = await this.index.fetch({
-          ids: [], // Will be populated by filter
-          namespace: userId
-        });
-
-        // Filter by docId in metadata
-        for (const [id, vector] of Object.entries(fetchResponse.vectors || {})) {
-          if (vector.metadata?.docId === docId) {
-            chunkIds.push(id);
-          }
-        }
-
-        fetchMore = false; // Simplified for now
+      // Generate potential vector IDs based on the pattern we use
+      const vectorIds = [];
+      for (let i = 0; i < 100; i++) { // Assume max 100 chunks per document
+        vectorIds.push(`${docId}_chunk_${i}`);
       }
-
-      if (chunkIds.length > 0) {
-        await this.index._delete({
-          deleteRequest: {
-            ids: chunkIds,
-            namespace: userId
-          }
-        });
-      }
-
-      console.log(`Deleted ${chunkIds.length} vectors for document ${docId}`);
       
-      return { deletedCount: chunkIds.length };
+      console.log(`🗑️  Attempting to delete up to 100 chunk IDs for document ${docId}`);
+      
+      // Delete by IDs (this won't fail if IDs don't exist)
+      await this.index.namespace(userId).deleteMany(vectorIds);
+      
+      console.log(`🗑️  Completed deletion for document ${docId}`);
+      
+      return { success: true };
 
     } catch (error) {
-      console.error('Vector deletion error:', error);
+      console.error('❌ Vector deletion error:', error);
       throw new Error(`Failed to delete document vectors: ${error.message}`);
     }
   }
@@ -197,24 +212,48 @@ class VectorService {
    */
   async getDocumentStats(userId) {
     await this.initialize();
+    
+    if (!this.initialized) {
+      console.log('⚠️  Vector service not available, returning default stats');
+      return { totalVectors: 0, indexDimension: 0, available: false };
+    }
 
     try {
-      const stats = await this.index.describeIndexStats({
-        describeIndexStatsRequest: {}
-      });
+      const stats = await this.index.describeIndexStats();
 
       // Get namespace-specific stats
       const namespaceStats = stats.namespaces?.[userId];
       
       return {
         totalVectors: namespaceStats?.vectorCount || 0,
-        indexDimension: stats.dimension || 0
+        indexDimension: stats.dimension || 0,
+        available: true
       };
 
     } catch (error) {
-      console.error('Stats retrieval error:', error);
-      return { totalVectors: 0, indexDimension: 0 };
+      console.error('❌ Stats retrieval error:', error);
+      return { totalVectors: 0, indexDimension: 0, available: false };
     }
+  }
+
+  /**
+   * Check if vector service is available
+   */
+  isAvailable() {
+    return this.initialized && this.pinecone && this.index;
+  }
+
+  /**
+   * Get service status
+   */
+  getStatus() {
+    return {
+      initialized: this.initialized,
+      available: this.isAvailable(),
+      hasApiKey: !!process.env.PINECONE_API_KEY,
+      indexName: process.env.PINECONE_INDEX_NAME || 'powernova-docs',
+      sdkVersion: '2025-04'
+    };
   }
 }
 

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, TouchableOpacity, Text, StyleSheet, Alert } from 'react-native';
+import { View, TouchableOpacity, Text, StyleSheet, Alert, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 
@@ -11,9 +11,22 @@ const DocumentUpload = ({ onUpload, isUploading }) => {
         copyToCacheDirectory: false,
       });
 
+      console.log('📄 Document picker result:', result);
+
       if (!result.canceled && result.assets && result.assets.length > 0) {
         const file = result.assets[0];
-        onUpload(file);
+        console.log('📄 Selected file:', file);
+        
+        // For web, we might need to handle the file differently
+        if (Platform.OS === 'web' && file.file) {
+          // If the file object is available, use it
+          onUpload({
+            ...file,
+            type: file.mimeType || file.type
+          });
+        } else {
+          onUpload(file);
+        }
       }
     } catch (error) {
       console.error('Error picking document:', error);

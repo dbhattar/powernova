@@ -35,11 +35,23 @@ const upload = multer({
  */
 router.post('/upload', upload.single('document'), async (req, res) => {
   try {
+    console.log('📤 Upload request received');
+    console.log('📄 Request file:', req.file ? 'Present' : 'Missing');
+    console.log('📄 Request body:', req.body);
+    console.log('📄 Request headers:', req.headers);
+    
     if (!req.file) {
+      console.log('❌ No file in request');
       return res.status(400).json({
         error: 'Document file is required'
       });
     }
+
+    console.log('📄 File details:', {
+      originalname: req.file.originalname,
+      mimetype: req.file.mimetype,
+      size: req.file.size
+    });
 
     const userId = req.user.uid;
     const file = req.file;
@@ -97,15 +109,18 @@ router.post('/upload', upload.single('document'), async (req, res) => {
  */
 router.get('/', async (req, res) => {
   try {
+    console.log('📋 GET /api/documents - User:', req.user?.uid);
+    
     const userId = req.user.uid;
     const documents = await firebaseService.getUserDocuments(userId);
 
+    console.log('📋 Returning documents:', documents.length);
     res.json({
       documents: documents
     });
 
   } catch (error) {
-    console.error('Get documents error:', error);
+    console.error('❌ Get documents error:', error);
     res.status(500).json({
       error: 'Failed to get documents',
       message: error.message
@@ -149,31 +164,51 @@ router.get('/:id', async (req, res) => {
  * Delete a document
  */
 router.delete('/:id', async (req, res) => {
+  console.log('🔴 DELETE ROUTE HIT - ENTRY POINT');
+  console.log('🔴 Request params:', req.params);
+  console.log('🔴 Request headers:', req.headers);
+  console.log('🔴 Request method:', req.method);
+  console.log('🔴 Request URL:', req.url);
+  
   try {
     const { id } = req.params;
     const userId = req.user.uid;
     
+    console.log('🗑️  DELETE request - Document ID:', id, 'User:', userId);
+    
     // Get document to verify ownership
     const document = await firebaseService.getDocument(id);
+    console.log('📄 Document found:', document);
     
-    if (document.userId !== userId) {
+    // Check ownership using both possible field names
+    const isOwner = document.userId === userId || document.uid === userId;
+    
+    if (!isOwner) {
+      console.log('❌ Access denied - Document owner:', document.userId || document.uid, 'User:', userId);
       return res.status(403).json({
         error: 'Access denied'
       });
     }
 
+    console.log('✅ Document ownership verified');
+
     // Delete from vector store
+    console.log('🗑️  Deleting from vector store...');
     await vectorService.deleteDocument(id, userId);
+    console.log('✅ Vector store deletion completed');
     
     // Delete metadata from Firestore
+    console.log('🗑️  Deleting from Firestore...');
     await firebaseService.deleteDocument(id);
+    console.log('✅ Firestore deletion completed');
 
+    console.log('🎉 Document deleted successfully');
     res.json({
       message: 'Document deleted successfully'
     });
 
   } catch (error) {
-    console.error('Delete document error:', error);
+    console.error('❌ Delete document error:', error);
     res.status(500).json({
       error: 'Failed to delete document',
       message: error.message

@@ -1,8 +1,6 @@
 // Firebase config template. Replace with your own Firebase project config.
 import { initializeApp } from 'firebase/app';
-import { getAuth, connectAuthEmulator } from 'firebase/auth';
-import { getFirestore, connectFirestoreEmulator } from 'firebase/firestore';
-import { getStorage } from 'firebase/storage';
+import { getAuth } from 'firebase/auth';
 
 const firebaseConfig = {
   apiKey: "AIzaSyDQiD7r9N1AT4l5aoI0Y3yj6YY2DKt7czM",
@@ -16,23 +14,18 @@ const firebaseConfig = {
 
 let app;
 let auth;
-let db;
-let storage;
 
 try {
   app = initializeApp(firebaseConfig);
   auth = getAuth(app);
-  db = getFirestore(app);
-  storage = getStorage(app);
   
-  console.log('Firebase initialized successfully');
+  console.log('Firebase Auth initialized successfully');
   console.log('Auth domain:', firebaseConfig.authDomain);
   console.log('Project ID:', firebaseConfig.projectId);
-  console.log('Storage bucket:', firebaseConfig.storageBucket);
   
 } catch (error) {
   console.error('Firebase initialization error:', error);
   throw error;
 }
 
-export { auth, db, storage };
+export { auth };

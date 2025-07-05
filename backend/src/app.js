@@ -38,6 +38,11 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// API health check (no auth required)
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', api: 'powernova-backend', timestamp: new Date().toISOString() });
+});
+
 // API routes
 app.use('/api/chat', authMiddleware, chatController);
 app.use('/api/documents', authMiddleware, documentController);

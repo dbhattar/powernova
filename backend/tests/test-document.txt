@@ -1,0 +1,5 @@
+This is a test document for deletion testing.
+
+PowerNOVA is a specialized AI assistant for power systems engineering.
+
+Testing document upload and deletion functionality.
