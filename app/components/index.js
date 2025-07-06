@@ -4,3 +4,6 @@ export { default as DocumentManagement } from './DocumentManagement';
 export { default as ProfilePicture } from './ProfilePicture';
 export { default as ConversationItem } from './ConversationItem';
 export { default as ConversationHistory } from './ConversationHistory';
+export { default as ProjectDashboard } from './ProjectDashboard';
+export { default as ProjectDetails } from './ProjectDetails';
+export { default as ProjectSearch } from './ProjectSearch';

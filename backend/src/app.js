@@ -67,6 +67,13 @@ app.get('/api/test-db', async (req, res) => {
 app.use('/api/chat', authMiddleware, chatController);
 app.use('/api/documents', authMiddleware, documentController);
 app.use('/api/vectors', authMiddleware, vectorController);
+
+// Projects health check (no auth required)
+app.get('/api/projects/health', (req, res) => {
+  res.json({ status: 'ok', service: 'projects', timestamp: new Date().toISOString() });
+});
+
+// Projects routes (auth required)
 app.use('/api/projects', authMiddleware, projectsController);
 
 // Error handling middleware

@@ -13,7 +13,7 @@ import { formatFileSize, getFileIcon } from './documentService';
 import { testStoragePermissions } from './storageTest';
 import { checkDocumentsInFirestore } from './firestoreTest';
 import { testConversations, testSaveConversation } from './conversationTest';
-import { DocumentUpload, DocumentItem, DocumentManagement, ProfilePicture, ConversationItem, ConversationHistory } from './components';
+import { DocumentUpload, DocumentItem, DocumentManagement, ProfilePicture, ConversationItem, ConversationHistory, ProjectDashboard, ProjectDetails, ProjectSearch } from './components';
 
 export default function App() {
   const [recording, setRecording] = useState(null);
@@ -35,6 +35,9 @@ export default function App() {
   const [documents, setDocuments] = useState([]);
   const [showDocuments, setShowDocuments] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [showProjects, setShowProjects] = useState(false);
+  const [showProjectSearch, setShowProjectSearch] = useState(false);
+  const [selectedProject, setSelectedProject] = useState(null);
 
   // Initialize Google Auth Provider
   const googleProvider = new GoogleAuthProvider();
@@ -45,7 +48,7 @@ export default function App() {
   function getBackendApiUrl() {
     // Development: local backend
     if (__DEV__) {
-      return 'http://localhost:3001/api';
+      return 'http://localhost:3002/api';
     }
     // Production: deployed backend URL
     return Constants.expoConfig.extra.backendUrl || 'https://your-backend-url.com/api';
@@ -744,6 +747,26 @@ export default function App() {
                     </View>
                   ) : null}
                 </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.projectsButton}
+                  onPress={() => {
+                    setShowProjectSearch(false);
+                    setSelectedProject(null);
+                    setShowProjects(true);
+                  }}
+                >
+                  <Ionicons name="business-outline" size={20} color="#007AFF" />
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.searchButton}
+                  onPress={() => {
+                    setShowProjects(false);
+                    setSelectedProject(null);
+                    setShowProjectSearch(true);
+                  }}
+                >
+                  <Ionicons name="search-outline" size={20} color="#007AFF" />
+                </TouchableOpacity>
               </>
             ) : null}
             {user ? (
@@ -776,7 +799,7 @@ export default function App() {
           </View>
         </View>
         
-        {/* Show conversation history, document management, or main chat */}
+        {/* Show conversation history, document management, projects, or main chat */}
         {showHistory ? (
           <ConversationHistory 
             conversations={conversations}
@@ -801,6 +824,71 @@ export default function App() {
             onDelete={handleDocumentDelete}
             onClose={() => setShowDocuments(false)}
             isUploading={isUploading}
+          />
+        ) : selectedProject ? (
+          <ProjectDetails
+            route={{ params: { project: selectedProject } }}
+            navigation={{
+              goBack: () => {
+                setSelectedProject(null);
+                setShowProjects(true);
+              },
+              navigate: (screen, params) => {
+                if (screen === 'ProjectDashboard') {
+                  setSelectedProject(null);
+                  setShowProjects(true);
+                  setShowProjectSearch(false);
+                }
+              }
+            }}
+          />
+        ) : showProjects ? (
+          <ProjectDashboard
+            onClose={() => {
+              setShowProjects(false);
+              setShowProjectSearch(false);
+              setSelectedProject(null);
+            }}
+            navigation={{
+              navigate: (screen, params) => {
+                if (screen === 'ProjectDetails') {
+                  setSelectedProject(params.project);
+                  setShowProjects(false);
+                } else if (screen === 'ProjectSearch') {
+                  setShowProjects(false);
+                  setShowProjectSearch(true);
+                }
+              },
+              goBack: () => {
+                setShowProjects(false);
+                setShowProjectSearch(false);
+                setSelectedProject(null);
+              }
+            }}
+          />
+        ) : showProjectSearch ? (
+          <ProjectSearch
+            onClose={() => {
+              setShowProjectSearch(false);
+              setShowProjects(false);
+              setSelectedProject(null);
+            }}
+            navigation={{
+              navigate: (screen, params) => {
+                if (screen === 'ProjectDetails') {
+                  setSelectedProject(params.project);
+                  setShowProjectSearch(false);
+                } else if (screen === 'ProjectDashboard') {
+                  setShowProjectSearch(false);
+                  setShowProjects(true);
+                }
+              },
+              goBack: () => {
+                setShowProjectSearch(false);
+                setShowProjects(false);
+                setSelectedProject(null);
+              }
+            }}
           />
         ) : (
           <>
@@ -962,6 +1050,32 @@ const styles = StyleSheet.create({
     shadowRadius: 2,
     elevation: 2,
     position: 'relative',
+  },
+  projectsButton: {
+    backgroundColor: '#f0f0f0',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  searchButton: {
+    backgroundColor: '#f0f0f0',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
   },
   documentBadge: {
     position: 'absolute',
