@@ -26,6 +26,8 @@ export default function App() {
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [inputText, setInputText] = useState('');
   const [isMicActive, setIsMicActive] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false);
+  const [currentlySpeakingText, setCurrentlySpeakingText] = useState(null);
   const [user, setUser] = useState(null);
   const [conversations, setConversations] = useState([]);
   const [showHistory, setShowHistory] = useState(false);
@@ -148,9 +150,9 @@ export default function App() {
           // Stop all tracks to release microphone
           stream.getTracks().forEach(track => track.stop());
           
-          // Auto-transcribe after recording stops
+          // Auto-transcribe after recording stops, passing the URI directly
           setTimeout(() => {
-            transcribeRecording();
+            transcribeRecording(url);
           }, 500);
         });
         
@@ -207,7 +209,7 @@ export default function App() {
             return;
           }
           console.log('Recorded URI:', uri);
-          transcribeRecording();
+          transcribeRecording(uri);
         }, 1000); // 1 second delay
       }
     } catch (err) {
@@ -215,12 +217,14 @@ export default function App() {
     }
   };
 
-  const playRecording = async () => {
-    if (!recordedUri) return;
+  const playRecording = async (audioUri = null) => {
+    const uriToPlay = audioUri || recordedUri;
+    if (!uriToPlay) return;
+    
     try {
       if (Platform.OS === 'web') {
         // Web implementation using HTML5 Audio
-        const audio = new Audio(recordedUri);
+        const audio = new window.Audio(uriToPlay);
         audio.play();
         setSound(audio);
         audio.onended = () => {
@@ -228,7 +232,7 @@ export default function App() {
         };
       } else {
         // Mobile implementation using Expo Audio
-        const { sound } = await Audio.Sound.createAsync({ uri: recordedUri });
+        const { sound } = await Audio.Sound.createAsync({ uri: uriToPlay });
         setSound(sound);
         await sound.playAsync();
         sound.setOnPlaybackStatusUpdate((status) => {
@@ -298,7 +302,9 @@ export default function App() {
         prompt: text,
         response: responseText,
         timestamp: new Date(),
-        id: updatedConversation.id
+        id: updatedConversation.id,
+        type: transcription ? 'voice' : 'text',
+        audioUri: transcription ? recordedUri : null
       }]);
       
     } catch (err) {
@@ -317,8 +323,9 @@ export default function App() {
   };
 
   // Modified transcription to use backend API
-  const transcribeRecording = async () => {
-    if (!recordedUri) {
+  const transcribeRecording = async (audioUri = null) => {
+    const uriToTranscribe = audioUri || recordedUri;
+    if (!uriToTranscribe) {
       setTranscription('No audio file to transcribe.');
       return;
     }
@@ -331,7 +338,7 @@ export default function App() {
       
       if (Platform.OS === 'web') {
         // Web implementation: convert blob URL to blob
-        const response = await fetch(recordedUri);
+        const response = await fetch(uriToTranscribe);
         const blob = await response.blob();
         
         // Create a new blob with the correct MIME type if needed
@@ -342,7 +349,7 @@ export default function App() {
         formData.append('audio', audioFile);
       } else {
         // Mobile implementation
-        const fileUri = recordedUri;
+        const fileUri = uriToTranscribe;
         const fileInfo = await FileSystem.getInfoAsync(fileUri);
         console.log('File info:', fileInfo);
         
@@ -386,7 +393,9 @@ export default function App() {
             prompt: data.transcription,
             response: data.response,
             timestamp: new Date(),
-            id: Date.now().toString()
+            id: Date.now().toString(),
+            type: 'voice',
+            audioUri: uriToTranscribe
           }]);
         }
       }
@@ -417,17 +426,74 @@ export default function App() {
     setSound(null);
   };
 
+  // Stop speech function
+  const stopSpeech = () => {
+    Speech.stop();
+    setIsSpeaking(false);
+    setCurrentlySpeakingText(null);
+  };
+
+  // Play specific text function
+  const playText = (text) => {
+    Speech.stop(); // Stop any ongoing speech
+    setIsSpeaking(true);
+    setCurrentlySpeakingText(text);
+    Speech.speak(text, { 
+      language: 'en',
+      onDone: () => {
+        setIsSpeaking(false);
+        setCurrentlySpeakingText(null);
+      },
+      onStopped: () => {
+        setIsSpeaking(false);
+        setCurrentlySpeakingText(null);
+      },
+      onError: () => {
+        setIsSpeaking(false);
+        setCurrentlySpeakingText(null);
+      }
+    });
+  };
+
+  // Stop specific text function
+  const stopText = (text) => {
+    if (currentlySpeakingText === text) {
+      stopSpeech();
+    }
+  };
+
+  // Check if specific text is currently being spoken
+  const isTextSpeaking = (text) => {
+    return isSpeaking && currentlySpeakingText === text;
+  };
+
   // Automatically speak chat response when it changes, and stop previous speech
   React.useEffect(() => {
     Speech.stop(); // Stop any ongoing speech before starting new
     if (chatResponse) {
-      Speech.speak(chatResponse, { language: 'en' });
+      setIsSpeaking(true);
+      setCurrentlySpeakingText(chatResponse);
+      Speech.speak(chatResponse, { 
+        language: 'en',
+        onDone: () => {
+          setIsSpeaking(false);
+          setCurrentlySpeakingText(null);
+        },
+        onStopped: () => {
+          setIsSpeaking(false);
+          setCurrentlySpeakingText(null);
+        },
+        onError: () => {
+          setIsSpeaking(false);
+          setCurrentlySpeakingText(null);
+        }
+      });
     }
   }, [chatResponse]);
 
   // Handle mic icon press
   const handleMicPress = async () => {
-    Speech.stop(); // Stop any ongoing speech
+    stopSpeech(); // Stop any ongoing speech
     if (!isRecording) {
       setIsMicActive(true);
       await startRecording();
@@ -439,7 +505,7 @@ export default function App() {
 
   // Stop speech when user types a new prompt
   const handleInputChange = (text) => {
-    Speech.stop();
+    stopSpeech();
     setInputText(text);
   };
 
@@ -496,9 +562,16 @@ export default function App() {
       console.log('Loading conversation thread:', threadId);
       const response = await apiCall(`/chat/thread/${threadId}`);
       
-      setConversationThread(response.thread);
+      // Ensure each thread message has proper type information
+      const threadWithTypes = response.thread.map(message => ({
+        ...message,
+        type: message.type || (message.audioUri ? 'voice' : 'text'),
+        audioUri: message.audioUri || null
+      }));
+      
+      setConversationThread(threadWithTypes);
       setThreadId(threadId);
-      console.log('Loaded thread messages:', response.thread.length);
+      console.log('Loaded thread messages:', threadWithTypes.length);
     } catch (error) {
       console.error('Error loading conversation thread:', error);
     }
@@ -518,6 +591,7 @@ export default function App() {
 
   // Clear current conversation
   const clearCurrentConversation = () => {
+    stopSpeech(); // Stop any ongoing speech
     setCurrentConversation(null);
     setTranscription('');
     setChatResponse('');
@@ -878,6 +952,16 @@ export default function App() {
               // Load conversation thread if it exists
               if (conversation.threadId) {
                 loadConversationThread(conversation.threadId);
+              } else if (conversation.type === 'voice') {
+                // For voice conversations without a thread, create a single entry
+                setConversationThread([{
+                  prompt: conversation.transcription || conversation.prompt,
+                  response: conversation.response,
+                  timestamp: conversation.timestamp,
+                  id: conversation.id || Date.now().toString(),
+                  type: 'voice',
+                  audioUri: null // Audio URI not available from history
+                }]);
               }
             }}
             formatTimestamp={formatTimestamp}
@@ -960,58 +1044,108 @@ export default function App() {
             <View style={styles.middleSection}>
               <ScrollView style={styles.middleScroll} contentContainerStyle={styles.middleScrollContent}>
                 {/* Clear conversation button */}
-                {(currentConversation || transcription || chatResponse) ? (
+                {(currentConversation || transcription || chatResponse || conversationThread.length > 0) ? (
                   <TouchableOpacity style={styles.clearButton} onPress={clearCurrentConversation}>
                     <Ionicons name="refresh-outline" size={18} color="#007AFF" />
                     <Text style={styles.clearButtonText}>New Conversation</Text>
                   </TouchableOpacity>
                 ) : null}
                 
-                {/* Current conversation display */}
+                {/* Display conversation thread messages */}
+                {conversationThread.map((message, index) => (
+                  <View key={message.id || index}>
+                    {/* User message */}
+                    <View style={styles.messageContainer}>
+                      <View style={styles.userMessage}>
+                        <Text style={styles.transcriptionText}>{message.prompt}</Text>
+                        {message.type === 'voice' && (
+                          <TouchableOpacity 
+                            onPress={() => {
+                              if (message.audioUri) {
+                                playRecording(message.audioUri);
+                              } else {
+                                Alert.alert('Audio Not Available', 'This was a voice message, but the audio is no longer available.');
+                              }
+                            }}
+                            style={!message.audioUri && styles.disabledButton}
+                          >
+                            <Ionicons 
+                              name={message.audioUri ? "play-circle" : "mic"} 
+                              size={20} 
+                              color={message.audioUri ? "#fff" : "#bbb"} 
+                              style={styles.messageIcon} 
+                            />
+                          </TouchableOpacity>
+                        )}
+                      </View>
+                    </View>
+                    
+                    {/* Assistant response */}
+                    <View style={styles.messageContainer}>
+                      <View style={styles.assistantMessage}>
+                        <Markdown style={markdownStyles}>{message.response}</Markdown>
+                        <TouchableOpacity 
+                          onPress={() => isTextSpeaking(message.response) ? stopText(message.response) : playText(message.response)}
+                          style={styles.stopSpeechButton}
+                        >
+                          <Ionicons 
+                            name={isTextSpeaking(message.response) ? "stop-circle" : "play-circle"} 
+                            size={20} 
+                            color="#007AFF" 
+                          />
+                          <Text style={styles.stopSpeechText}>
+                            {isTextSpeaking(message.response) ? "Stop" : "Play"}
+                          </Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ))}
+                
+                {/* Current conversation (if not in thread yet) */}
+                {transcription && !conversationThread.find(msg => msg.prompt === transcription) ? (
+                  <View style={styles.messageContainer}>
+                    <View style={styles.userMessage}>
+                      <Text style={styles.transcriptionText}>{transcription}</Text>
+                      {recordedUri && (
+                        <TouchableOpacity onPress={playRecording}>
+                          <Ionicons name="play-circle" size={20} color="#fff" style={styles.messageIcon} />
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </View>
+                ) : null}
+                
+                {/* Current response loading or display */}
                 {isChatLoading ? (
                   <View style={styles.messageContainer}>
                     <View style={styles.assistantMessage}>
                       <Text style={styles.chatLoading}>PowerNOVA is thinking...</Text>
                     </View>
                   </View>
-                ) : chatResponse ? (
+                ) : chatResponse && !conversationThread.find(msg => msg.response === chatResponse) ? (
                   <View style={styles.messageContainer}>
                     <View style={styles.assistantMessage}>
                       <Markdown style={markdownStyles}>{chatResponse}</Markdown>
+                      <TouchableOpacity 
+                        onPress={() => isTextSpeaking(chatResponse) ? stopText(chatResponse) : playText(chatResponse)}
+                        style={styles.stopSpeechButton}
+                      >
+                        <Ionicons 
+                          name={isTextSpeaking(chatResponse) ? "stop-circle" : "play-circle"} 
+                          size={20} 
+                          color="#007AFF" 
+                        />
+                        <Text style={styles.stopSpeechText}>
+                          {isTextSpeaking(chatResponse) ? "Stop" : "Play"}
+                        </Text>
+                      </TouchableOpacity>
                     </View>
-                  </View>
-                ) : null}
-                
-                {transcription ? (
-                  <View style={styles.messageContainer}>
-                    <View style={styles.userMessage}>
-                      <Text style={styles.transcriptionText}>{transcription}</Text>
-                      {currentConversation?.type === 'voice' ? (
-                        <Ionicons name="mic" size={16} color="#007AFF" style={styles.messageIcon} />
-                      ) : null}
-                    </View>
-                  </View>
-                ) : null}
-                
-                {/* Full conversation thread display */}
-                {conversationThread.length > 0 ? (
-                  <View style={styles.threadContainer}>
-                    <Text style={styles.threadTitle}>Conversation History</Text>
-                    {conversationThread.map((message, index) => (
-                      <View key={message.id || index} style={styles.threadMessage}>
-                        <View style={styles.threadUserMessage}>
-                          <Text style={styles.threadUserText}>{message.prompt}</Text>
-                        </View>
-                        <View style={styles.threadAssistantMessage}>
-                          <Markdown style={markdownStyles}>{message.response}</Markdown>
-                        </View>
-                      </View>
-                    ))}
                   </View>
                 ) : null}
                 
                 {/* Welcome message for new users */}
-                {!currentConversation && !transcription && !chatResponse ? (
+                {!currentConversation && !transcription && !chatResponse && conversationThread.length === 0 ? (
                   <View style={styles.welcomeContainer}>
                     <Text style={styles.welcomeText}>Welcome to PowerNOVA!</Text>
                     <Text style={styles.welcomeSubtext}>
@@ -1028,6 +1162,17 @@ export default function App() {
                 ) : null}
               </ScrollView>
             </View>
+            
+            {/* Floating stop speech button */}
+            {isSpeaking && (
+              <TouchableOpacity
+                style={styles.floatingStopButton}
+                onPress={stopSpeech}
+              >
+                <Ionicons name="stop-circle" size={20} color="#fff" />
+                <Text style={styles.floatingStopText}>Stop Speech</Text>
+              </TouchableOpacity>
+            )}
             
             <View style={styles.inputSection}>
               <TextInput
@@ -1229,6 +1374,50 @@ const styles = StyleSheet.create({
   },
   messageIcon: {
     marginLeft: 8,
+  },
+  disabledButton: {
+    opacity: 0.5,
+  },
+  stopSpeechButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 12,
+    alignSelf: 'flex-start',
+  },
+  stopSpeechText: {
+    color: '#007AFF',
+    fontSize: 12,
+    fontWeight: '500',
+    marginLeft: 4,
+  },
+  floatingStopButton: {
+    position: 'absolute',
+    bottom: 90,
+    right: 20,
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FF3B30',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 25,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.25,
+    shadowRadius: 3.84,
+    elevation: 5,
+  },
+  floatingStopText: {
+    color: '#fff',
+    fontSize: 14,
+    fontWeight: '600',
+    marginLeft: 6,
   },
   clearButton: {
     flexDirection: 'row',
