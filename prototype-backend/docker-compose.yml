@@ -1,0 +1,58 @@
+services:
+  db:
+    image: timescale/timescaledb-ha:pg16
+    volumes:
+      - db_data:/home/postgres/pgdata/data
+    env_file: .env
+    ports:
+      - "5433:5433"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  server:
+    build:
+      context: ./
+      args:
+        - GITHUB_TOKEN=${GITHUB_TOKEN}
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+    volumes:
+      - .:/code/
+      - ./logs:/code/logs/
+    depends_on:
+      db:
+        condition: service_healthy
+    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  huey:
+    build:
+      context: ./
+      args:
+        - GITHUB_TOKEN=${GITHUB_TOKEN}
+    env_file: .env
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+    volumes:
+      - .:/code/
+    command: ["python", "manage.py", "run_huey"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+volumes:
+  db_data:
+  redis_data:

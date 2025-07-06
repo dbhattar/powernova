@@ -1,0 +1,10 @@
+# Miscellaneous
+
+# @import ./env.rest
+# @import ./auth.rest
+
+
+### get choices mappings (model choices)
+# @forceRef register_login
+GET /mappings/
+Authorization: Bearer {{register_login.data.access}}

@@ -1,0 +1,70 @@
+services:
+  caddy:
+    image: caddy:2
+    env_file: .env
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./config/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - ../prototype-frontend/dist:/dist 
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+  db:
+    image: timescale/timescaledb-ha:pg16
+    volumes:
+      - db_data:/home/postgres/pgdata/data
+    env_file: .env
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  server:
+    image: ghcr.io/cosmic-global-technologies/cosmic-server:latest
+    ports:
+      - "8000:8000"
+    env_file: .env
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+    volumes:
+      - ./logs:/code/logs/
+    depends_on:
+      db:
+        condition: service_healthy
+    command:
+      - sh
+      - -c
+      - |
+        /venv/bin/python manage.py collectstatic --noinput && \
+        /venv/bin/python manage.py migrate && \
+        /venv/bin/gunicorn --bind 0.0.0.0:8000 --workers=4 project.wsgi:application
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+  huey:
+    image: ghcr.io/cosmic-global-technologies/cosmic-server:latest
+    env_file: .env
+    environment:
+      - GITHUB_TOKEN=${GITHUB_TOKEN}
+    command: ["python", "manage.py", "run_huey"]
+    depends_on:
+      redis:
+        condition: service_healthy
+      db:
+        condition: service_healthy
+volumes:
+  db_data:
+  redis_data:
+  caddy_data:
+  caddy_config:
+

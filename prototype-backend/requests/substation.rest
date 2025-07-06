@@ -1,0 +1,16 @@
+# Substation API
+
+# @import ./env.rest
+# @import ./auth.rest
+
+
+### Get all substations
+# @forceRef register_login
+GET /substations/
+Authorization: Bearer {{register_login.data.access}}
+
+
+### Get all counties
+# @forceRef register_login
+GET /counties/
+Authorization: Bearer {{register_login.data.access}}

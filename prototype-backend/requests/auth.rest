@@ -1,0 +1,25 @@
+# @import ./env.rest
+@email=johndoe@example.com
+@password=admin
+
+### register user
+# @name register
+POST /register/
+Content-Type: application/json
+
+{
+    "email": "{{email}}",
+    "password": "{{password}}"
+}
+
+### login user
+# @name register_login
+# @ref register
+POST /login/
+Content-Type: application/json
+
+{
+    "email": "{{email}}",
+    "password": "{{password}}"
+}
+
