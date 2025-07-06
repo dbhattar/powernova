@@ -8,6 +8,7 @@ const authMiddleware = require('./middleware/authMiddleware');
 const chatController = require('./controllers/chatController');
 const documentController = require('./controllers/documentController');
 const vectorController = require('./controllers/vectorController');
+const projectsController = require('./controllers/projectsController');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -43,10 +44,30 @@ app.get('/api/health', (req, res) => {
   res.json({ status: 'ok', api: 'powernova-backend', timestamp: new Date().toISOString() });
 });
 
+// Test database connection (no auth required) - remove after testing
+app.get('/api/test-db', async (req, res) => {
+  try {
+    const { query } = require('./config/database');
+    await query('SELECT 1 as test');
+    res.json({ 
+      status: 'ok', 
+      database: 'connected',
+      message: 'Database connection successful'
+    });
+  } catch (error) {
+    res.status(500).json({ 
+      status: 'error', 
+      database: 'disconnected',
+      message: error.message 
+    });
+  }
+});
+
 // API routes
 app.use('/api/chat', authMiddleware, chatController);
 app.use('/api/documents', authMiddleware, documentController);
 app.use('/api/vectors', authMiddleware, vectorController);
+app.use('/api/projects', authMiddleware, projectsController);
 
 // Error handling middleware
 app.use((err, req, res, next) => {

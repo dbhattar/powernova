@@ -6,7 +6,10 @@
   "scripts": {
     "start": "node src/app.js",
     "dev": "nodemon src/app.js",
-    "test": "jest"
+    "test": "jest",
+    "setup-db": "node scripts/setup-database.js",
+    "populate-db": "node scripts/populate-database.js",
+    "install-deps": "npm install"
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^6.1.1",
@@ -22,6 +25,8 @@
     "node-fetch": "^2.7.0",
     "openai": "^4.24.0",
     "pdf-parse": "^1.1.1",
+    "pg": "^8.11.3",
+    "typesense": "^1.7.2",
     "winston": "^3.11.0"
   },
   "devDependencies": {
@@ -36,5 +41,9 @@
     "vector-search"
   ],
   "author": "PowerNOVA Team",
-  "license": "MIT"
+  "license": "MIT",
+  "directories": {
+    "test": "tests"
+  },
+  "type": "commonjs"
 }
