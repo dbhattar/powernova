@@ -14,6 +14,10 @@ import { testStoragePermissions } from './storageTest';
 import { checkDocumentsInFirestore } from './firestoreTest';
 import { testConversations, testSaveConversation } from './conversationTest';
 import { DocumentUpload, DocumentItem, DocumentManagement, ProfilePicture, ConversationItem, ConversationHistory, ProjectDashboard, ProjectDetails, ProjectSearch } from './components';
+// New imports for enhanced UI
+import { MainLayout } from './components/Layout';
+import { DashboardScreen } from './screens';
+import { Sidebar } from './components/ui';
 
 export default function App() {
   const [recording, setRecording] = useState(null);
@@ -40,6 +44,9 @@ export default function App() {
   const [showProjects, setShowProjects] = useState(false);
   const [showProjectSearch, setShowProjectSearch] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
+  // New state for enhanced UI
+  const [currentPanel, setCurrentPanel] = useState('chat');
+  const [showSidebar, setShowSidebar] = useState(false);
 
   // Initialize Google Auth Provider
   const googleProvider = new GoogleAuthProvider();
@@ -615,6 +622,9 @@ export default function App() {
     setShowProjectSearch(false);
     setSelectedProject(null);
     
+    // Set current panel for new UI
+    setCurrentPanel(panel);
+    
     // Open the requested panel
     switch (panel) {
       case 'history':
@@ -628,6 +638,9 @@ export default function App() {
         break;
       case 'search':
         setShowProjectSearch(true);
+        break;
+      case 'dashboard':
+        // Dashboard will be handled by the new UI
         break;
       case 'chat':
       default:
@@ -891,130 +904,151 @@ export default function App() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.outerContainer}>
-        <View style={styles.headerRow}>
-          <View style={styles.headerLeft}>
-            <Text style={styles.heading}>{MAIN_HEADING}</Text>
-          </View>
-          <View style={styles.headerRight}>
-            {user ? (
-              <>
-                <TouchableOpacity
-                  style={styles.historyButton}
-                  onPress={() => navigateToPanel('history')}
-                >
-                  <Ionicons name="time-outline" size={20} color="#007AFF" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.documentsButton}
-                  onPress={() => navigateToPanel('documents')}
-                >
-                  <Ionicons name="document-text-outline" size={20} color="#007AFF" />
-                  {documents.length > 0 ? (
-                    <View style={styles.documentBadge}>
-                      <Text style={styles.documentBadgeText}>{documents.length}</Text>
-                    </View>
-                  ) : null}
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.projectsButton}
-                  onPress={() => navigateToPanel('projects')}
-                >
-                  <Ionicons name="business-outline" size={20} color="#007AFF" />
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={styles.searchButton}
-                  onPress={() => navigateToPanel('search')}
-                >
-                  <Ionicons name="search-outline" size={20} color="#007AFF" />
-                </TouchableOpacity>
-              </>
-            ) : null}
-            {user ? (
-              <View style={styles.userInfoRow}>
-                <ProfilePicture user={user} />
-                <View style={styles.userNameContainer}>
-                  <Text style={styles.userName}>{user.displayName || 'User'}</Text>
-                  <Text style={styles.userStatus}>Signed in</Text>
+      <MainLayout 
+        user={user} 
+        currentRoute={currentPanel}
+        onNavigate={navigateToPanel}
+      >
+        <View style={styles.outerContainer}>
+          {/* Enhanced Header Row */}
+          <View style={styles.headerRow}>
+            <View style={styles.headerLeft}>
+              <Text style={styles.heading}>{MAIN_HEADING}</Text>
+            </View>
+            <View style={styles.headerRight}>
+              {user ? (
+                <>
+                  <TouchableOpacity
+                    style={styles.historyButton}
+                    onPress={() => navigateToPanel('history')}
+                  >
+                    <Ionicons name="time-outline" size={20} color="#007AFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.documentsButton}
+                    onPress={() => navigateToPanel('documents')}
+                  >
+                    <Ionicons name="document-text-outline" size={20} color="#007AFF" />
+                    {documents.length > 0 ? (
+                      <View style={styles.documentBadge}>
+                        <Text style={styles.documentBadgeText}>{documents.length}</Text>
+                      </View>
+                    ) : null}
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.projectsButton}
+                    onPress={() => navigateToPanel('projects')}
+                  >
+                    <Ionicons name="business-outline" size={20} color="#007AFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.searchButton}
+                    onPress={() => navigateToPanel('search')}
+                  >
+                    <Ionicons name="search-outline" size={20} color="#007AFF" />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.dashboardButton}
+                    onPress={() => navigateToPanel('dashboard')}
+                  >
+                    <Ionicons name="grid-outline" size={20} color="#007AFF" />
+                  </TouchableOpacity>
+                </>
+              ) : null}
+              {user ? (
+                <View style={styles.userInfoRow}>
+                  <ProfilePicture user={user} />
+                  <View style={styles.userNameContainer}>
+                    <Text style={styles.userName}>{user.displayName || 'User'}</Text>
+                    <Text style={styles.userStatus}>Signed in</Text>
+                  </View>
+                  <TouchableOpacity
+                    style={styles.signOutButton}
+                    onPress={() => {
+                      signOut(auth);
+                      clearCurrentConversation();
+                    }}
+                  >
+                    <Ionicons name="log-out-outline" size={16} color="#fff" style={styles.signOutIcon} />
+                    <Text style={styles.signOutText}>Sign Out</Text>
+                  </TouchableOpacity>
                 </View>
+              ) : (
                 <TouchableOpacity
-                  style={styles.signOutButton}
-                  onPress={() => {
-                    signOut(auth);
-                    clearCurrentConversation();
-                  }}
+                  style={styles.signInButton}
+                  onPress={handleGoogleSignIn}
                 >
-                  <Ionicons name="log-out-outline" size={16} color="#fff" style={styles.signOutIcon} />
-                  <Text style={styles.signOutText}>Sign Out</Text>
+                  <Ionicons name="logo-google" size={20} color="#fff" style={styles.googleIcon} />
+                  <Text style={styles.signInText}>Sign in with Google</Text>
                 </TouchableOpacity>
-              </View>
-            ) : (
-              <TouchableOpacity
-                style={styles.signInButton}
-                onPress={handleGoogleSignIn}
-              >
-                <Ionicons name="logo-google" size={20} color="#fff" style={styles.googleIcon} />
-                <Text style={styles.signInText}>Sign in with Google</Text>
-              </TouchableOpacity>
-            )}
+              )}
+            </View>
           </View>
-        </View>
-        
-        {/* Show conversation history, document management, projects, or main chat */}
-        {showHistory ? (
-          <ConversationHistory 
-            conversations={conversations}
-            onClose={() => navigateToPanel('chat')}
-            onConversationSelect={(conversation) => {
-              setTranscription(conversation.transcription || '');
-              setChatResponse(conversation.response);
-              setCurrentConversation(conversation);
-              navigateToPanel('chat');
-              
-              // Load conversation thread if it exists
-              if (conversation.threadId) {
-                loadConversationThread(conversation.threadId);
-              } else if (conversation.type === 'voice') {
-                // For voice conversations without a thread, create a single entry
-                setConversationThread([{
-                  prompt: conversation.transcription || conversation.prompt,
-                  response: conversation.response,
-                  timestamp: conversation.timestamp,
-                  id: conversation.id || Date.now().toString(),
-                  type: 'voice',
-                  audioUri: null // Audio URI not available from history
-                }]);
-              }
-            }}
-            formatTimestamp={formatTimestamp}
-          />
-        ) : showDocuments ? (
-          <DocumentManagement
-            documents={documents}
-            onUpload={handleDocumentUpload}
-            onDelete={handleDocumentDelete}
-            onClose={() => navigateToPanel('chat')}
-            isUploading={isUploading}
-          />
-        ) : selectedProject ? (
-          <ProjectDetails
-            route={{ params: { project: selectedProject } }}              navigation={{
+          
+          {/* Show different panels based on current selection */}
+          {currentPanel === 'dashboard' ? (
+            <DashboardScreen 
+              user={user}
+              conversations={conversations}
+              documents={documents}
+              onNavigate={navigateToPanel}
+            />
+          ) : showHistory ? (
+            <ConversationHistory 
+              conversations={conversations}
+              onClose={() => navigateToPanel('chat')}
+              onConversationSelect={(conversation) => {
+                setTranscription(conversation.transcription || '');
+                setChatResponse(conversation.response);
+                setCurrentConversation(conversation);
+                navigateToPanel('chat');
+                
+                // Load conversation thread if it exists
+                if (conversation.threadId) {
+                  loadConversationThread(conversation.threadId);
+                } else if (conversation.type === 'voice') {
+                  // For voice conversations without a thread, create a single entry
+                  setConversationThread([{
+                    prompt: conversation.transcription || conversation.prompt,
+                    response: conversation.response,
+                    timestamp: conversation.timestamp,
+                    id: conversation.id || Date.now().toString(),
+                    type: 'voice',
+                    audioUri: null // Audio URI not available from history
+                  }]);
+                }
+              }}
+              formatTimestamp={formatTimestamp}
+            />
+          ) : showDocuments ? (
+            <DocumentManagement
+              documents={documents}
+              onUpload={handleDocumentUpload}
+              onDelete={handleDocumentDelete}
+              onClose={() => navigateToPanel('chat')}
+              isUploading={isUploading}
+            />
+          ) : selectedProject ? (
+            <ProjectDetails
+              route={{ params: { project: selectedProject } }}
+              navigation={{
                 goBack: () => {
                   setSelectedProject(null);
                   setShowProjects(true);
                 },
-              navigate: (screen, params) => {
-                if (screen === 'ProjectDashboard') {
-                  setSelectedProject(null);
-                  setShowProjects(true);
-                  setShowProjectSearch(false);
+                navigate: (screen, params) => {
+                  if (screen === 'ProjectDashboard') {
+                    setSelectedProject(null);
+                    setShowProjects(true);
+                    setShowProjectSearch(false);
+                  }
                 }
-              }
-            }}
-          />
-        ) : showProjects ? (
-          <ProjectDashboard
-            onClose={() => navigateToPanel('chat')}              navigation={{
+              }}
+            />
+          ) : showProjects ? (
+            <ProjectDashboard
+              onClose={() => navigateToPanel('chat')}
+              navigation={{
                 navigate: (screen, params) => {
                   if (screen === 'ProjectDetails') {
                     setSelectedProject(params.project);
@@ -1026,10 +1060,11 @@ export default function App() {
                 },
                 goBack: () => navigateToPanel('chat')
               }}
-          />
-        ) : showProjectSearch ? (
-          <ProjectSearch
-            onClose={() => navigateToPanel('chat')}              navigation={{
+            />
+          ) : showProjectSearch ? (
+            <ProjectSearch
+              onClose={() => navigateToPanel('chat')}
+              navigation={{
                 navigate: (screen, params) => {
                   if (screen === 'ProjectDetails') {
                     setSelectedProject(params.project);
@@ -1041,166 +1076,167 @@ export default function App() {
                 },
                 goBack: () => navigateToPanel('chat')
               }}
-          />
-        ) : (
-          <>
-            <View style={styles.middleSection}>
-              <ScrollView style={styles.middleScroll} contentContainerStyle={styles.middleScrollContent}>
-                {/* Clear conversation button */}
-                {(currentConversation || transcription || chatResponse || conversationThread.length > 0) ? (
-                  <TouchableOpacity style={styles.clearButton} onPress={clearCurrentConversation}>
-                    <Ionicons name="refresh-outline" size={18} color="#007AFF" />
-                    <Text style={styles.clearButtonText}>New Conversation</Text>
-                  </TouchableOpacity>
-                ) : null}
-                
-                {/* Display conversation thread messages */}
-                {conversationThread.map((message, index) => (
-                  <View key={message.id || index}>
-                    {/* User message */}
-                    <View style={styles.messageContainer}>
-                      <View style={styles.userMessage}>
-                        <Text style={styles.transcriptionText}>{message.prompt}</Text>
-                        {message.type === 'voice' && (
+            />
+          ) : (
+            <>
+              <View style={styles.middleSection}>
+                <ScrollView style={styles.middleScroll} contentContainerStyle={styles.middleScrollContent}>
+                  {/* Clear conversation button */}
+                  {(currentConversation || transcription || chatResponse || conversationThread.length > 0) ? (
+                    <TouchableOpacity style={styles.clearButton} onPress={clearCurrentConversation}>
+                      <Ionicons name="refresh-outline" size={18} color="#007AFF" />
+                      <Text style={styles.clearButtonText}>New Conversation</Text>
+                    </TouchableOpacity>
+                  ) : null}
+                  
+                  {/* Display conversation thread messages */}
+                  {conversationThread.map((message, index) => (
+                    <View key={message.id || index}>
+                      {/* User message */}
+                      <View style={styles.messageContainer}>
+                        <View style={styles.userMessage}>
+                          <Text style={styles.transcriptionText}>{message.prompt}</Text>
+                          {message.type === 'voice' && (
+                            <TouchableOpacity 
+                              onPress={() => {
+                                if (message.audioUri) {
+                                  playRecording(message.audioUri);
+                                } else {
+                                  Alert.alert('Audio Not Available', 'This was a voice message, but the audio is no longer available.');
+                                }
+                              }}
+                              style={!message.audioUri && styles.disabledButton}
+                            >
+                              <Ionicons 
+                                name={message.audioUri ? "play-circle" : "mic"} 
+                                size={20} 
+                                color={message.audioUri ? "#fff" : "#bbb"} 
+                                style={styles.messageIcon} 
+                              />
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                      
+                      {/* Assistant response */}
+                      <View style={styles.messageContainer}>
+                        <View style={styles.assistantMessage}>
+                          <Markdown style={markdownStyles}>{message.response}</Markdown>
                           <TouchableOpacity 
-                            onPress={() => {
-                              if (message.audioUri) {
-                                playRecording(message.audioUri);
-                              } else {
-                                Alert.alert('Audio Not Available', 'This was a voice message, but the audio is no longer available.');
-                              }
-                            }}
-                            style={!message.audioUri && styles.disabledButton}
+                            onPress={() => isTextSpeaking(message.response) ? stopText(message.response) : playText(message.response)}
+                            style={styles.stopSpeechButton}
                           >
                             <Ionicons 
-                              name={message.audioUri ? "play-circle" : "mic"} 
+                              name={isTextSpeaking(message.response) ? "stop-circle" : "play-circle"} 
                               size={20} 
-                              color={message.audioUri ? "#fff" : "#bbb"} 
-                              style={styles.messageIcon} 
+                              color="#007AFF" 
                             />
+                            <Text style={styles.stopSpeechText}>
+                              {isTextSpeaking(message.response) ? "Stop" : "Play"}
+                            </Text>
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    </View>
+                  ))}
+                  
+                  {/* Current conversation (if not in thread yet) */}
+                  {transcription && !conversationThread.find(msg => msg.prompt === transcription) ? (
+                    <View style={styles.messageContainer}>
+                      <View style={styles.userMessage}>
+                        <Text style={styles.transcriptionText}>{transcription}</Text>
+                        {recordedUri && (
+                          <TouchableOpacity onPress={playRecording}>
+                            <Ionicons name="play-circle" size={20} color="#fff" style={styles.messageIcon} />
                           </TouchableOpacity>
                         )}
                       </View>
                     </View>
-                    
-                    {/* Assistant response */}
+                  ) : null}
+                  
+                  {/* Current response loading or display */}
+                  {isChatLoading ? (
                     <View style={styles.messageContainer}>
                       <View style={styles.assistantMessage}>
-                        <Markdown style={markdownStyles}>{message.response}</Markdown>
+                        <Text style={styles.chatLoading}>PowerNOVA is thinking...</Text>
+                      </View>
+                    </View>
+                  ) : chatResponse && !conversationThread.find(msg => msg.response === chatResponse) ? (
+                    <View style={styles.messageContainer}>
+                      <View style={styles.assistantMessage}>
+                        <Markdown style={markdownStyles}>{chatResponse}</Markdown>
                         <TouchableOpacity 
-                          onPress={() => isTextSpeaking(message.response) ? stopText(message.response) : playText(message.response)}
+                          onPress={() => isTextSpeaking(chatResponse) ? stopText(chatResponse) : playText(chatResponse)}
                           style={styles.stopSpeechButton}
                         >
                           <Ionicons 
-                            name={isTextSpeaking(message.response) ? "stop-circle" : "play-circle"} 
+                            name={isTextSpeaking(chatResponse) ? "stop-circle" : "play-circle"} 
                             size={20} 
                             color="#007AFF" 
                           />
                           <Text style={styles.stopSpeechText}>
-                            {isTextSpeaking(message.response) ? "Stop" : "Play"}
+                            {isTextSpeaking(chatResponse) ? "Stop" : "Play"}
                           </Text>
                         </TouchableOpacity>
                       </View>
                     </View>
-                  </View>
-                ))}
-                
-                {/* Current conversation (if not in thread yet) */}
-                {transcription && !conversationThread.find(msg => msg.prompt === transcription) ? (
-                  <View style={styles.messageContainer}>
-                    <View style={styles.userMessage}>
-                      <Text style={styles.transcriptionText}>{transcription}</Text>
-                      {recordedUri && (
-                        <TouchableOpacity onPress={playRecording}>
-                          <Ionicons name="play-circle" size={20} color="#fff" style={styles.messageIcon} />
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                ) : null}
-                
-                {/* Current response loading or display */}
-                {isChatLoading ? (
-                  <View style={styles.messageContainer}>
-                    <View style={styles.assistantMessage}>
-                      <Text style={styles.chatLoading}>PowerNOVA is thinking...</Text>
-                    </View>
-                  </View>
-                ) : chatResponse && !conversationThread.find(msg => msg.response === chatResponse) ? (
-                  <View style={styles.messageContainer}>
-                    <View style={styles.assistantMessage}>
-                      <Markdown style={markdownStyles}>{chatResponse}</Markdown>
-                      <TouchableOpacity 
-                        onPress={() => isTextSpeaking(chatResponse) ? stopText(chatResponse) : playText(chatResponse)}
-                        style={styles.stopSpeechButton}
-                      >
-                        <Ionicons 
-                          name={isTextSpeaking(chatResponse) ? "stop-circle" : "play-circle"} 
-                          size={20} 
-                          color="#007AFF" 
-                        />
-                        <Text style={styles.stopSpeechText}>
-                          {isTextSpeaking(chatResponse) ? "Stop" : "Play"}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : null}
-                
-                {/* Welcome message for new users */}
-                {!currentConversation && !transcription && !chatResponse && conversationThread.length === 0 ? (
-                  <View style={styles.welcomeContainer}>
-                    <Text style={styles.welcomeText}>Welcome to PowerNOVA!</Text>
-                    <Text style={styles.welcomeSubtext}>
-                      I'm here to help with power systems and electrical engineering questions.
-                      You can type your question or use the microphone to speak.
-                    </Text>
-                    {user && documents.length > 0 ? (
-                      <Text style={styles.documentHintText}>
-                        💡 You have {documents.length} document{documents.length > 1 ? 's' : ''} uploaded.
-                        Ask questions about your documents for more detailed answers!
+                  ) : null}
+                  
+                  {/* Welcome message for new users */}
+                  {!currentConversation && !transcription && !chatResponse && conversationThread.length === 0 ? (
+                    <View style={styles.welcomeContainer}>
+                      <Text style={styles.welcomeText}>Welcome to PowerNOVA!</Text>
+                      <Text style={styles.welcomeSubtext}>
+                        I'm here to help with power systems and electrical engineering questions.
+                        You can type your question or use the microphone to speak.
                       </Text>
-                    ) : null}
-                  </View>
-                ) : null}
-              </ScrollView>
-            </View>
-            
-            {/* Floating stop speech button */}
-            {isSpeaking && (
-              <TouchableOpacity
-                style={styles.floatingStopButton}
-                onPress={stopSpeech}
-              >
-                <Ionicons name="stop-circle" size={20} color="#fff" />
-                <Text style={styles.floatingStopText}>Stop Speech</Text>
-              </TouchableOpacity>
-            )}
-            
-            <View style={styles.inputSection}>
-              <TextInput
-                style={styles.textInput}
-                value={inputText}
-                onChangeText={handleInputChange}
-                placeholder="Ask about power systems..."
-                editable={!isRecording && !isMicActive}
-                multiline
-                blurOnSubmit={false}
-                onKeyPress={handleTextInputKeyPress}
-              />
-              <TouchableOpacity
-                style={[styles.micButton, isMicActive && styles.micActive]}
-                onPress={handleMicPress}
-                disabled={isTranscribing || isChatLoading}
-              >
-                <Ionicons name={isMicActive ? 'mic-off' : 'mic'} size={28} color="#fff" />
-              </TouchableOpacity>
-            </View>
-          </>
-        )}
-        
-        <StatusBar style="auto" />
-      </View>
+                      {user && documents.length > 0 ? (
+                        <Text style={styles.documentHintText}>
+                          💡 You have {documents.length} document{documents.length > 1 ? 's' : ''} uploaded.
+                          Ask questions about your documents for more detailed answers!
+                        </Text>
+                      ) : null}
+                    </View>
+                  ) : null}
+                </ScrollView>
+              </View>
+              
+              {/* Floating stop speech button */}
+              {isSpeaking && (
+                <TouchableOpacity
+                  style={styles.floatingStopButton}
+                  onPress={stopSpeech}
+                >
+                  <Ionicons name="stop-circle" size={20} color="#fff" />
+                  <Text style={styles.floatingStopText}>Stop Speech</Text>
+                </TouchableOpacity>
+              )}
+              
+              <View style={styles.inputSection}>
+                <TextInput
+                  style={styles.textInput}
+                  value={inputText}
+                  onChangeText={handleInputChange}
+                  placeholder="Ask about power systems..."
+                  editable={!isRecording && !isMicActive}
+                  multiline
+                  blurOnSubmit={false}
+                  onKeyPress={handleTextInputKeyPress}
+                />
+                <TouchableOpacity
+                  style={[styles.micButton, isMicActive && styles.micActive]}
+                  onPress={handleMicPress}
+                  disabled={isTranscribing || isChatLoading}
+                >
+                  <Ionicons name={isMicActive ? 'mic-off' : 'mic'} size={28} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            </>
+          )}
+          
+          <StatusBar style="auto" />
+        </View>
+      </MainLayout>
     </SafeAreaView>
   );
 }
@@ -1278,6 +1314,19 @@ const styles = StyleSheet.create({
     elevation: 2,
   },
   searchButton: {
+    backgroundColor: '#f0f0f0',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  dashboardButton: {
     backgroundColor: '#f0f0f0',
     width: 36,
     height: 36,
