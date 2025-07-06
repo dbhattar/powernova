@@ -606,6 +606,36 @@ export default function App() {
     setThreadId(null);
   };
 
+  // Navigation function to handle switching between panels
+  const navigateToPanel = (panel) => {
+    // Close all panels first
+    setShowHistory(false);
+    setShowDocuments(false);
+    setShowProjects(false);
+    setShowProjectSearch(false);
+    setSelectedProject(null);
+    
+    // Open the requested panel
+    switch (panel) {
+      case 'history':
+        setShowHistory(true);
+        break;
+      case 'documents':
+        setShowDocuments(true);
+        break;
+      case 'projects':
+        setShowProjects(true);
+        break;
+      case 'search':
+        setShowProjectSearch(true);
+        break;
+      case 'chat':
+      default:
+        // Stay in chat interface - all panels are already closed above
+        break;
+    }
+  };
+
   // Document upload handler - now uses backend API
   const handleDocumentUpload = async (file) => {
     if (!user) {
@@ -871,13 +901,13 @@ export default function App() {
               <>
                 <TouchableOpacity
                   style={styles.historyButton}
-                  onPress={() => setShowHistory(true)}
+                  onPress={() => navigateToPanel('history')}
                 >
                   <Ionicons name="time-outline" size={20} color="#007AFF" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.documentsButton}
-                  onPress={() => setShowDocuments(true)}
+                  onPress={() => navigateToPanel('documents')}
                 >
                   <Ionicons name="document-text-outline" size={20} color="#007AFF" />
                   {documents.length > 0 ? (
@@ -888,21 +918,13 @@ export default function App() {
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.projectsButton}
-                  onPress={() => {
-                    setShowProjectSearch(false);
-                    setSelectedProject(null);
-                    setShowProjects(true);
-                  }}
+                  onPress={() => navigateToPanel('projects')}
                 >
                   <Ionicons name="business-outline" size={20} color="#007AFF" />
                 </TouchableOpacity>
                 <TouchableOpacity
                   style={styles.searchButton}
-                  onPress={() => {
-                    setShowProjects(false);
-                    setSelectedProject(null);
-                    setShowProjectSearch(true);
-                  }}
+                  onPress={() => navigateToPanel('search')}
                 >
                   <Ionicons name="search-outline" size={20} color="#007AFF" />
                 </TouchableOpacity>
@@ -942,12 +964,12 @@ export default function App() {
         {showHistory ? (
           <ConversationHistory 
             conversations={conversations}
-            onClose={() => setShowHistory(false)}
+            onClose={() => navigateToPanel('chat')}
             onConversationSelect={(conversation) => {
               setTranscription(conversation.transcription || '');
               setChatResponse(conversation.response);
               setCurrentConversation(conversation);
-              setShowHistory(false);
+              navigateToPanel('chat');
               
               // Load conversation thread if it exists
               if (conversation.threadId) {
@@ -971,17 +993,16 @@ export default function App() {
             documents={documents}
             onUpload={handleDocumentUpload}
             onDelete={handleDocumentDelete}
-            onClose={() => setShowDocuments(false)}
+            onClose={() => navigateToPanel('chat')}
             isUploading={isUploading}
           />
         ) : selectedProject ? (
           <ProjectDetails
-            route={{ params: { project: selectedProject } }}
-            navigation={{
-              goBack: () => {
-                setSelectedProject(null);
-                setShowProjects(true);
-              },
+            route={{ params: { project: selectedProject } }}              navigation={{
+                goBack: () => {
+                  setSelectedProject(null);
+                  setShowProjects(true);
+                },
               navigate: (screen, params) => {
                 if (screen === 'ProjectDashboard') {
                   setSelectedProject(null);
@@ -993,51 +1014,33 @@ export default function App() {
           />
         ) : showProjects ? (
           <ProjectDashboard
-            onClose={() => {
-              setShowProjects(false);
-              setShowProjectSearch(false);
-              setSelectedProject(null);
-            }}
-            navigation={{
-              navigate: (screen, params) => {
-                if (screen === 'ProjectDetails') {
-                  setSelectedProject(params.project);
-                  setShowProjects(false);
-                } else if (screen === 'ProjectSearch') {
-                  setShowProjects(false);
-                  setShowProjectSearch(true);
-                }
-              },
-              goBack: () => {
-                setShowProjects(false);
-                setShowProjectSearch(false);
-                setSelectedProject(null);
-              }
-            }}
+            onClose={() => navigateToPanel('chat')}              navigation={{
+                navigate: (screen, params) => {
+                  if (screen === 'ProjectDetails') {
+                    setSelectedProject(params.project);
+                    setShowProjects(false);
+                  } else if (screen === 'ProjectSearch') {
+                    setShowProjects(false);
+                    setShowProjectSearch(true);
+                  }
+                },
+                goBack: () => navigateToPanel('chat')
+              }}
           />
         ) : showProjectSearch ? (
           <ProjectSearch
-            onClose={() => {
-              setShowProjectSearch(false);
-              setShowProjects(false);
-              setSelectedProject(null);
-            }}
-            navigation={{
-              navigate: (screen, params) => {
-                if (screen === 'ProjectDetails') {
-                  setSelectedProject(params.project);
-                  setShowProjectSearch(false);
-                } else if (screen === 'ProjectDashboard') {
-                  setShowProjectSearch(false);
-                  setShowProjects(true);
-                }
-              },
-              goBack: () => {
-                setShowProjectSearch(false);
-                setShowProjects(false);
-                setSelectedProject(null);
-              }
-            }}
+            onClose={() => navigateToPanel('chat')}              navigation={{
+                navigate: (screen, params) => {
+                  if (screen === 'ProjectDetails') {
+                    setSelectedProject(params.project);
+                    setShowProjectSearch(false);
+                  } else if (screen === 'ProjectDashboard') {
+                    setShowProjectSearch(false);
+                    setShowProjects(true);
+                  }
+                },
+                goBack: () => navigateToPanel('chat')
+              }}
           />
         ) : (
           <>
