@@ -1,0 +1,391 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerNOVA - Project Dashboard</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+          crossorigin=""/>
+    <link rel="stylesheet" href="http://code.ionicframework.com/ionicons/1.5.2/css/ionicons.min.css">
+    <link rel="stylesheet" href="css/leaflet.awesome-markers.css">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <style>
+        .iso-button {
+            transition: all 0.3s ease;
+        }
+        .iso-button.active {
+            transform: scale(1.05);
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        }
+        .status-badge {
+            padding: 0.25rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+        }
+        .status-active { background-color: #10B981; color: white; }
+        .status-withdrawn { background-color: #EF4444; color: white; }
+        .status-completed { background-color: #3B82F6; color: white; }
+        .status-pending { background-color: #F59E0B; color: white; }
+    </style>
+</head>
+<body class="bg-gray-100">
+    <!-- Navigation Bar -->
+    <nav class="top-0 left-0 w-full bg-gray-800 text-white h-16 flex items-center justify-between px-4 z-50">
+        <div class="flex space-x-4">
+            <button id="hamburger" class="text-gray-600 focus:outline-none">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+                </svg>
+            </button>
+            <div class="text-lg font-semibold">
+                PowerNOVA
+            </div>
+        </div>
+        <div class="flex space-x-4">
+            <a href="ui.html" class="hover:text-gray-300 transition-colors">Home</a>
+            <a href="search.html" class="hover:text-gray-300 transition-colors">Search</a>
+            <a href="aboutus.html" class="hover:text-gray-300 transition-colors">About</a>
+        </div>
+    </nav>
+
+    <div class="container mx-auto p-4">
+        <!-- Header Section -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Power Project Dashboard</h1>
+            <p class="text-gray-600">Explore interconnection queues across ISOs and RTOs to understand the future of energy infrastructure.</p>
+        </div>
+
+        <!-- ISO/RTO Selection and Filters -->
+        <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+            <div class="flex flex-wrap justify-center gap-4 mb-6">
+                <div class="iso-button active bg-blue-500 text-white px-6 py-3 rounded-lg cursor-pointer" data-iso="CAISO">CAISO</div>
+                <div class="iso-button bg-blue-500 text-white px-6 py-3 rounded-lg cursor-pointer" data-iso="PJM">PJM</div>
+                <div class="iso-button bg-blue-500 text-white px-6 py-3 rounded-lg cursor-pointer" data-iso="Ercot">ERCOT</div>
+                <div class="iso-button bg-blue-500 text-white px-6 py-3 rounded-lg cursor-pointer" data-iso="MISO">MISO</div>
+                <div class="iso-button bg-blue-500 text-white px-6 py-3 rounded-lg cursor-pointer" data-iso="ISONE">ISONE</div>
+                <div class="iso-button bg-blue-500 text-white px-6 py-3 rounded-lg cursor-pointer" data-iso="NYISO">NYISO</div>
+                <div class="iso-button bg-blue-500 text-white px-6 py-3 rounded-lg cursor-pointer" data-iso="SPP">SPP</div>
+            </div>
+            
+            <!-- Status Filter -->
+            <div class="flex flex-wrap gap-4 mb-4">
+                <select id="statusFilter" class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="all">All Statuses</option>
+                    <option value="active">Active</option>
+                    <option value="withdrawn">Withdrawn</option>
+                    <option value="completed">Completed</option>
+                    <option value="pending">Pending</option>
+                </select>
+                
+                <!-- Generation Type Filter -->
+                <select id="genTypeFilter" class="px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <option value="all">All Generation Types</option>
+                    <option value="solar">Solar</option>
+                    <option value="wind">Wind</option>
+                    <option value="storage">Storage</option>
+                    <option value="gas">Natural Gas</option>
+                    <option value="other">Other</option>
+                </select>
+
+                <!-- Capacity Range Filter -->
+                <div class="flex items-center gap-2">
+                    <input type="number" id="minCapacity" placeholder="Min MW" class="px-4 py-2 border rounded-lg w-32 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                    <span>-</span>
+                    <input type="number" id="maxCapacity" placeholder="Max MW" class="px-4 py-2 border rounded-lg w-32 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+            </div>
+        </div>
+
+        <!-- Statistics Cards -->
+        <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-2">Total Projects</h3>
+                <p id="totalProjects" class="text-3xl font-bold text-blue-600">-</p>
+            </div>
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-2">Total Capacity</h3>
+                <p id="totalCapacity" class="text-3xl font-bold text-green-600">- MW</p>
+            </div>
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-2">Average Project Size</h3>
+                <p id="avgProjectSize" class="text-3xl font-bold text-purple-600">- MW</p>
+            </div>
+            <div class="bg-white rounded-lg shadow-lg p-6">
+                <h3 class="text-lg font-semibold text-gray-700 mb-2">Status Distribution</h3>
+                <div id="statusDistribution" class="h-24"></div>
+            </div>
+        </div>
+
+        <!-- Map and Charts Section -->
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+            <!-- Map -->
+            <div class="bg-white rounded-lg shadow-lg p-6 h-96">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Project Locations</h3>
+                <div id="map" class="h-96 rounded-lg"></div>
+            </div>
+            
+            <!-- Charts -->
+            <div class="bg-white rounded-lg shadow-lg p-6 h-96">
+                <h3 class="text-lg font-semibold text-gray-700 mb-4">Generation Type Distribution</h3>
+                <canvas id="genTypeChart"></canvas>
+            </div>
+        </div>
+
+        <!-- Projects Table -->
+        <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+            <div class="p-6 border-b border-gray-200">
+                <h3 class="text-lg font-semibold text-gray-700">Projects</h3>
+            </div>
+            <div class="overflow-x-auto">
+                <table class="min-w-full divide-y divide-gray-200">
+                    <thead class="bg-gray-50">
+                        <tr>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Queue ID</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Project Name</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Generation Type</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Capacity (MW)</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                            <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Location</th>
+                        </tr>
+                    </thead>
+                    <tbody id="projectsTable" class="bg-white divide-y divide-gray-200">
+                        <!-- Projects will be inserted here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Project Details Modal -->
+    <div id="projectModal" class="fixed inset-0 bg-black bg-opacity-50 hidden">
+        <div class="bg-white rounded-lg shadow-xl max-w-2xl mx-auto mt-20 p-6">
+            <div class="flex justify-between items-center mb-4">
+                <h2 class="text-xl font-bold">Project Details</h2>
+                <button id="closeModal" class="text-gray-500 hover:text-gray-700">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <div id="projectDetails" class="space-y-4">
+                <!-- Project details will be inserted here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="js/leaflet.awesome-markers.min.js"></script>
+    <script>
+        // Initialize map
+        const map = L.map('map').setView([39.8283, -98.5795], 4);
+        L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+            attribution: '© OpenStreetMap contributors'
+        }).addTo(map);
+
+        // Initialize charts
+        const genTypeChart = new Chart(document.getElementById('genTypeChart'), {
+            type: 'pie',
+            data: {
+                labels: [],
+                datasets: [{
+                    data: [],
+                    backgroundColor: [
+                        '#3B82F6', // Blue
+                        '#10B981', // Green
+                        '#F59E0B', // Yellow
+                        '#EF4444', // Red
+                        '#8B5CF6'  // Purple
+                    ]
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false
+            }
+        });
+
+        // State management
+        let currentISO = 'CAISO';
+        let currentFilters = {
+            status: 'all',
+            genType: 'all',
+            minCapacity: null,
+            maxCapacity: null
+        };
+
+        // Event listeners
+        document.querySelectorAll('.iso-button').forEach(button => {
+            button.addEventListener('click', () => {
+                document.querySelectorAll('.iso-button').forEach(b => b.classList.remove('active'));
+                button.classList.add('active');
+                currentISO = button.dataset.iso;
+                loadData();
+            });
+        });
+
+        document.getElementById('statusFilter').addEventListener('change', (e) => {
+            currentFilters.status = e.target.value;
+            loadData();
+        });
+
+        document.getElementById('genTypeFilter').addEventListener('change', (e) => {
+            currentFilters.genType = e.target.value;
+            loadData();
+        });
+
+        document.getElementById('minCapacity').addEventListener('change', (e) => {
+            currentFilters.minCapacity = e.target.value ? parseFloat(e.target.value) : null;
+            loadData();
+        });
+
+        document.getElementById('maxCapacity').addEventListener('change', (e) => {
+            currentFilters.maxCapacity = e.target.value ? parseFloat(e.target.value) : null;
+            loadData();
+        });
+
+        // Load data function
+        async function loadData() {
+            try {
+                const response = await fetch(`/api/get_projects?iso=${currentISO}`);
+                const data = await response.json();
+                
+                // Update statistics
+                updateStatistics(data.results);
+                
+                // Update map
+                updateMap(data.results);
+                
+                // Update charts
+                updateCharts(data.results);
+                
+                // Update table
+                updateTable(data.results);
+                
+            } catch (error) {
+                console.error('Error loading data:', error);
+            }
+        }
+
+        function updateStatistics(projects) {
+            const totalProjects = projects.length;
+            const totalCapacity = projects.reduce((sum, p) => sum + (parseFloat(p.capacity) || 0), 0);
+            const avgSize = totalCapacity / totalProjects;
+
+            document.getElementById('totalProjects').textContent = totalProjects;
+            document.getElementById('totalCapacity').textContent = `${totalCapacity.toLocaleString()} MW`;
+            document.getElementById('avgProjectSize').textContent = `${avgSize.toFixed(2)} MW`;
+        }
+
+        function updateMap(projects) {
+            // Clear existing markers
+            map.eachLayer((layer) => {
+                if (layer instanceof L.Marker) {
+                    map.removeLayer(layer);
+                }
+            });
+
+            // Add new markers
+            projects.forEach(project => {
+                if (project.latitude && project.longitude) {
+                    const marker = L.marker([project.latitude, project.longitude])
+                        .bindPopup(`
+                            <strong>${project.name || 'Unnamed Project'}</strong><br>
+                            Queue ID: ${project.queueid}<br>
+                            Capacity: ${project.capacity} MW<br>
+                            Status: ${project.status}
+                        `);
+                    marker.addTo(map);
+                }
+            });
+        }
+
+        function updateCharts(projects) {
+            // Update generation type distribution
+            const genTypeData = {};
+            projects.forEach(project => {
+                const type = project.gentype || 'Other';
+                genTypeData[type] = (genTypeData[type] || 0) + 1;
+            });
+
+            genTypeChart.data.labels = Object.keys(genTypeData);
+            genTypeChart.data.datasets[0].data = Object.values(genTypeData);
+            genTypeChart.update();
+        }
+
+        function updateTable(projects) {
+            const tableBody = document.getElementById('projectsTable');
+            tableBody.innerHTML = '';
+
+            projects.forEach(project => {
+                const row = document.createElement('tr');
+                row.className = 'hover:bg-gray-50 cursor-pointer';
+                row.onclick = () => showProjectDetails(project);
+
+                row.innerHTML = `
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${project.QueueId}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${project.ProjectName || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${project.GenerationType || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${project.CapacityMW || 'N/A'}</td>
+                    <td class="px-6 py-4 whitespace-nowrap">
+                        <span class="status-badge status-${project.Status.toLowerCase()}">${project.Status}</span>
+                    </td>
+                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">${project.County}, ${project.StateName}</td>
+                `;
+                tableBody.appendChild(row);
+            });
+        }
+
+        function showProjectDetails(project) {
+            const modal = document.getElementById('projectModal');
+            const details = document.getElementById('projectDetails');
+            
+            details.innerHTML = `
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <h3 class="font-semibold">Queue ID</h3>
+                        <p>${project.queueid}</p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold">Project Name</h3>
+                        <p>${project.name || 'N/A'}</p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold">Generation Type</h3>
+                        <p>${project.gentype || 'N/A'}</p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold">Capacity</h3>
+                        <p>${project.capacity || 'N/A'} MW</p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold">Status</h3>
+                        <p>${project.status}</p>
+                    </div>
+                    <div>
+                        <h3 class="font-semibold">Location</h3>
+                        <p>${project.county}, ${project.state}</p>
+                    </div>
+                </div>
+                <div class="mt-4">
+                    <h3 class="font-semibold">Description</h3>
+                    <p>${project.description || 'No description available.'}</p>
+                </div>
+            `;
+            
+            modal.classList.remove('hidden');
+        }
+
+        document.getElementById('closeModal').addEventListener('click', () => {
+            document.getElementById('projectModal').classList.add('hidden');
+        });
+
+        // Initial load
+        loadData();
+    </script>
+</body>
+</html>

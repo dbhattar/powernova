@@ -1,0 +1,255 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-9Q6KLPM10S"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'G-9Q6KLPM10S');
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerNOVA: Project Search</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <style>
+        /* Smooth transition for the search container */
+        .search-container {
+            transition: all 0.3s ease-in-out;
+        }
+    </style>
+</head>
+<body class="bg-gray-100 min-h-screen">
+    <!-- Navigation Bar -->
+    <nav class="top-0 left-0 w-full bg-gray-800 text-white h-16 flex items-center justify-between px-4 z-50">
+        <!-- Left Side Description -->
+         <div class="flex space-x-4"
+            <button id="hamburger" class="text-gray-600 focus:outline-none">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+                </svg>
+            </button>
+            <div class="text-lg font-semibold">
+                PowerNOVA
+            </div>
+        </div>
+        <!-- Right Side Navigation Links -->
+        <div class="flex space-x-4">
+            <a href="/" class="hover:text-gray-300 transition-colors">Home</a>
+            <a href="search.html" class="hover:text-gray-300 transition-colors">Search</a>
+            <a href="aboutus.html" class="hover:text-gray-300 transition-colors">About</a>
+            <!--
+            <a href="login.html" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded transition-colors">
+                Sign in / Sign up
+            </a>
+        -->
+        </div>
+    </nav>
+    <!-- Main Container -->
+    <div id="main-container" class="flex flex-col items-center justify-center min-h-screen">
+        <!-- Search Container -->
+        <div id="search-container" class="search-container w-full flex flex-col items-center">
+            <!-- Search Form -->
+            <div class="flex space-x-2 mb-4">
+                <input 
+                    id="search-input" 
+                    type="text" 
+                    placeholder="Search for projects in ISO/RTO queue..." 
+                    class="w-96 px-4 py-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+                >
+                <button 
+                    id="search-btn" 
+                    class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors"
+                >
+                    Search
+                </button>
+            </div>
+        </div>
+
+        <!-- Results Container (Initially Hidden) -->
+        <div id="results-container" class="w-full max-w-7xl px-4 hidden">
+            <!-- Sample Results (Will be populated dynamically) -->
+            <div id="results" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                <!-- Results will be inserted here -->
+            </div>
+            <div class="w-full mt-5 mb-5 flex justify-center items-center space-x-4">
+                <button id="prevBtn" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50" disabled>Previous</button>
+                <span id="pageInfo" class="text-gray-700"></span>
+                <button id="nextBtn" class="bg-blue-500 text-white px-4 py-2 rounded-lg hover:bg-blue-600 transition-colors disabled:opacity-50">Next</button>
+            </div>
+        </div>
+    </div>
+    <script>
+        const searchBtn = document.getElementById('search-btn');
+        const mainContainer = document.getElementById('main-container');
+        const searchContainer = document.getElementById('search-container');
+        const resultsContainer = document.getElementById('results-container');
+        const results = document.getElementById('results');
+
+        let currentPage = 1;
+        let totalPages = 1;
+        let lastQuery = '';
+
+        // Search function with pagination
+        // Search function with pagination
+        async function search(query, page = 1) {
+            try {
+                per_page = 20; // 4 cards per row * 5 rows = 20 items per page
+                const resultResponse = await fetch("/api/search?query=" + query + "&page=" + page + "&per_page=" + per_page);
+                const results = await resultResponse.json();
+                displayResults(results.hits);
+                updatePagination(results.page, results.found);
+                lastQuery = query;
+            } catch (error) {
+                console.error('Search error:', error);
+            }
+        }
+
+        function getProjectStatus(iso, desc) {
+            var descObj = JSON.parse(desc);
+            switch(iso.toUpperCase()) {
+                case "CAISO":
+                    return descObj["Interconnection Agreement Status"];
+                case "ERCOT":
+                    return descObj["GIM Study Phase"];
+                case "MISO":
+                    return descObj["studyPhase"];
+                case "SPP":
+                    return descObj["Status (Original)"];
+                case "ISONE":
+                    return "";
+                case "NYISO":
+                    return descObj["Availability of Studies"];
+                case "PJM":
+                default:
+                    return "Unknown ISO";
+            }
+        }
+
+        function formatContent(resultItem) {
+            var iso = resultItem.iso;
+            var queueid = resultItem.queueid;
+            var desc = resultItem.description;
+            var status = getProjectStatus(iso, desc);
+            var content = `ISO: <strong>${iso}</strong><br>
+                           QueueId: <strong>${queueid}</strong><br>
+                           County: <strong>${resultItem.county}, ${resultItem.state}</strong><br>
+                           Generation Type: <strong>${resultItem.gentype}</strong><br>
+                           Status: ${status}<br>`
+            return content;
+        }
+
+        // Display search results
+        function displayResults(hits) {
+            mainContainer.classList.remove('justify-center');
+            mainContainer.classList.add('justify-start', 'pt-10');
+            resultsContainer.classList.remove('hidden');
+
+            const resultsDiv = document.getElementById('results');
+            resultsDiv.innerHTML = '';
+            
+            hits.forEach(hit => {
+                const doc = hit.document;
+                const content = formatContent(doc);
+                
+                const result = document.createElement('div');
+                result.className = 'bg-white p-4 rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200';
+                result.innerHTML = `
+                    <div class="h-full flex flex-col">
+                        <div class="flex-grow">
+                            ${content}
+                        </div>
+                    </div>
+                `;
+                results.appendChild(result);
+            });
+        }
+
+        // Update pagination controls
+        function updatePagination(current, totalHits) {
+            const perPage = 20; // 4 cards per row * 5 rows = 20 items per page
+            totalPages = Math.ceil(totalHits / perPage);
+            currentPage = current;
+
+            const pageInfo = document.getElementById('pageInfo');
+            pageInfo.textContent = `Page ${currentPage} of ${totalPages}`;
+
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+
+            prevBtn.disabled = currentPage <= 1;
+            nextBtn.disabled = currentPage >= totalPages;
+        }
+
+        function handleSearch(q) {
+            if (q.length > 2) {
+                currentPage = 1; // Reset to page 1 on new search
+                search(q, currentPage);
+            } else {
+                mainContainer.classList.add('justify-center');
+                mainContainer.classList.remove('justify-start', 'pt-10');
+                searchContainer.classList.add('flex-col');
+                resultsContainer.classList.add('hidden');
+                results.innerHTML = '';
+
+                document.getElementById('pageInfo').textContent = '';
+                document.getElementById('prevBtn').disabled = true;
+                document.getElementById('nextBtn').disabled = true;
+            }
+        }
+
+        // Event listener for search input
+        searchBtn.addEventListener('click', (e) => {
+            const query = document.getElementById('search-input').value
+            handleSearch(query);
+        });
+
+        // // Event listener for search input
+        document.getElementById('search-input').addEventListener('keyup', (e) => {
+            if (e.key == "Enter") {
+                e.preventDefault();
+                const query = e.target.value;
+                handleSearch(query);
+                return true;
+            }
+
+            return false;
+        });
+
+        // document.getElementById('search-input').addEventListener('input', (e) => {
+        //     const query = e.target.value;
+        //     if (query.length > 2) {
+        //         currentPage = 1; // Reset to page 1 on new search
+        //         search(query, currentPage);
+        //     } else {
+        //         mainContainer.classList.add('justify-center');
+        //         mainContainer.classList.remove('justify-start', 'pt-10');
+        //         searchContainer.classList.add('flex-col');
+        //         resultsContainer.classList.add('hidden');
+        //         results.innerHTML = '';
+
+        //         document.getElementById('pageInfo').textContent = '';
+        //         document.getElementById('prevBtn').disabled = true;
+        //         document.getElementById('nextBtn').disabled = true;
+        //     }
+        // });
+
+        // Pagination button event listeners
+        document.getElementById('prevBtn').addEventListener('click', () => {
+            if (currentPage > 1) {
+                currentPage--;
+                search(lastQuery, currentPage);
+            }
+        });
+
+        document.getElementById('nextBtn').addEventListener('click', () => {
+            if (currentPage < totalPages) {
+                currentPage++;
+                search(lastQuery, currentPage);
+            }
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,62 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Coming Soon</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+</head>
+<body class="bg-gray-900 flex items-center justify-center min-h-screen">
+    <div class="text-center text-white max-w-lg mx-auto px-4">
+        <h1 class="text-4xl md:text-5xl font-bold mb-6">Something Awesome is Coming Soon</h1>
+        <p class="text-lg md:text-xl mb-8">Join our waitlist to get early access and exclusive updates!</p>
+        
+        <div id="waitlist-form" class="bg-white rounded-lg p-6 shadow-lg">
+            <h2 class="text-gray-900 text-2xl font-semibold mb-4">Join the Waitlist</h2>
+            <div class="space-y-4">
+                <input type="text" id="name" placeholder="Your Name" class="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="email" id="email" placeholder="Your Email" class="w-full p-3 rounded-md border border-gray-300 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button onclick="submitWaitlist()" class="w-full bg-blue-600 text-white p-3 rounded-md hover:bg-blue-700 transition">Sign Up</button>
+            </div>
+        </div>
+        
+        <div id="success-message" class="hidden bg-white rounded-lg p-6 shadow-lg text-gray-900">
+            <h2 class="text-2xl font-semibold mb-4">Thank You!</h2>
+            <p class="text-lg">You're now on the waitlist. We'll keep you updated with exclusive news and early access details!</p>
+        </div>
+        
+        <p class="mt-6 text-sm text-gray-400">We respect your privacy. Unsubscribe at any time.</p>
+    </div>
+
+    <script>
+        async function submitWaitlist() {
+            const name = document.getElementById('name').value;
+            const email = document.getElementById('email').value;
+
+            if (!name || !email) {
+                alert('Please fill out both fields.');
+                return;
+            }
+
+            try {
+                const response = await fetch('/api/waitlist_signup', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({ name, email }),
+                });
+
+                if (response.ok) {
+                    document.getElementById('waitlist-form').classList.add('hidden');
+                    document.getElementById('success-message').classList.remove('hidden');
+                } else {
+                    alert('Something went wrong. Please try again.');
+                }
+            } catch (error) {
+                alert('Error connecting to the server. Please try again later.');
+            }
+        }
+    </script>
+</body>
+</html>

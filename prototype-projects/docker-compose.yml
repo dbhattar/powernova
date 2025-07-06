@@ -1,0 +1,88 @@
+version: '3.8'
+
+services:
+  # Caddy as Reverse Proxy and Frontend Server
+  caddy:
+    image: caddy:2-alpine
+    environment:
+      BACKEND_CONTAINER: ${BACKEND_CONTAINER}
+    ports:
+      - "80:80"    # External HTTP access
+      - "443:443"  # External HTTPS access (optional)
+    volumes:
+      - ./frontend:/usr/share/caddy  # Mount frontend files
+      - ./Caddyfile:/etc/caddy/Caddyfile  # Mount Caddy configuration
+    networks:
+      - app-network
+    depends_on:
+      - backend
+# PostgreSQL Database
+  database:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: ${POWERNOVA_USER}
+      POSTGRES_PASSWORD: ${POWERNOVA_PASSWORD}
+      POSTGRES_DB: ${POWERNOVA_DB}
+    # ports:
+    #   - "5434:5432"  # External HTTPS access (optional)
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./database/init.sql:/docker-entrypoint-initdb.d/10-initdb.sql
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POWERNOVA_USER} -d ${POWERNOVA_DB}"]
+      interval: 10s
+      retries: 5
+      start_period: 30s
+      timeout: 10s
+# FastAPI Backend
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    volumes:
+      - ./backend:/app
+      - ./data:/data
+    environment:
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY}
+      TYPESENSE_HOST: ${TYPESENSE_HOST}
+      TYPESENSE_PORT: ${TYPESENSE_PORT}
+      TYPESENSE_PROTOCOL: ${TYPESENSE_PROTOCOL}
+      AUTH_DB: ${AUTH_DB}
+      POWERNOVA_DB: ${POWERNOVA_DB}
+      POWERNOVA_USER: ${POWERNOVA_USER}
+      POWERNOVA_PASSWORD: ${POWERNOVA_PASSWORD}
+      POWERNOVA_HOST: ${POWERNOVA_HOST}
+      POWERNOVA_PORT: ${POWERNOVA_PORT}
+      PJM_API_KEY: ${PJM_API_KEY}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    depends_on:
+      database:        
+        condition: service_healthy
+      typesense:
+        condition: service_started
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
+    # ports:
+    #   - "8000:8000"  # External HTTPS access (optional)
+    networks:
+      - app-network
+# # Typesense Search Engine
+  typesense:
+    image: typesense/typesense:28.0
+    environment:
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY}
+      TYPESENSE_DATA_DIR: /data
+    volumes:
+      - typesense-data:/data
+    command: --data-dir /data --api-key=${TYPESENSE_API_KEY}
+    networks:
+      - app-network
+# Network for inter-service communication
+networks:
+  app-network:
+    driver: bridge
+# Volumes for data persistence
+volumes:
+  pgdata:
+  typesense-data:

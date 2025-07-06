@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <!-- Google tag (gtag.js) -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-9Q6KLPM10S"></script>
+    <script>
+        window.dataLayer = window.dataLayer || [];
+        function gtag(){dataLayer.push(arguments);}
+        gtag('js', new Date());
+
+        gtag('config', 'G-9Q6KLPM10S');
+    </script>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerNOVA</title>
+    <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+    <link href="css/mermaid.min.css" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" 
+          integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" 
+          crossorigin=""/>
+    <link rel="stylesheet" href="https://code.ionicframework.com/ionicons/1.5.2/css/ionicons.min.css">
+    <link rel="stylesheet" href="css/leaflet.awesome-markers.css">
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+    <!--link rel="stylesheet" href="css/ui.css" /-->
+</head>
+<body class="bg-gray-100">
+    <!-- Navigation Bar -->
+    <nav class="top-0 left-0 w-full bg-gray-800 text-white h-16 flex items-center justify-between px-4 z-50">
+        <!-- Left Side Description -->
+         <div class="flex space-x-4"
+            <button id="hamburger" class="text-gray-600 focus:outline-none">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+                </svg>
+            </button>
+            <div class="text-lg font-semibold">
+                PowerNOVA
+            </div>
+        </div>
+        <!-- Right Side Navigation Links -->
+        <div class="flex space-x-4">
+            <a href="/" class="hover:text-gray-300 transition-colors">Home</a>
+            <a href="search.html" class="hover:text-gray-300 transition-colors">Search</a>
+            <a href="aboutus.html" class="hover:text-gray-300 transition-colors">About</a>
+            <!--
+            <a href="login.html" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded transition-colors">
+                Sign in / Sign up
+            </a> -->
+        </div>
+    </nav>
+    <div class="container mx-auto p-4 grid grid-cols-12 gap-4">
+        <!-- Header Section -->
+        <div class="mb-8 col-span-12">
+            <h1 class="text-3xl font-bold text-gray-800 mb-2">Power Project Dashboard</h1>
+            <p class="text-gray-600">Explore interconnection queues across ISOs and RTOs to understand the future of energy infrastructure.</p>
+        </div>
+        <!-- Bar with ISO -->
+        <div class="col-span-12 flex justify-center">
+            <div class="flex flex-wrap justify-center gap-4 mb-6">
+                <div class="iso-button active bg-blue-500 text-white px-6 py-3 rounded-lg cursor-pointer" data-iso="CAISO" id="CAISO">CAISO</div>
+                <div class="iso-button bg-blue-500 text-white px-6 py-3 rounded-lg cursor-pointer" data-iso="PJM" id="PJM">PJM</div>
+                <div class="iso-button bg-blue-500 text-white px-6 py-3 rounded-lg cursor-pointer" data-iso="ERCOT" id="ERCOT">ERCOT</div>
+                <div class="iso-button bg-blue-500 text-white px-6 py-3 rounded-lg cursor-pointer" data-iso="MISO" id="MISO">MISO</div>
+                <div class="iso-button bg-blue-500 text-white px-6 py-3 rounded-lg cursor-pointer" data-iso="ISONE" id="ISONE">ISONE</div>
+                <div class="iso-button bg-blue-500 text-white px-6 py-3 rounded-lg cursor-pointer" data-iso="NYISO" id="NYISO">NYISO</div>
+                <div class="iso-button bg-blue-500 text-white px-6 py-3 rounded-lg cursor-pointer" data-iso="SPP" id="SPP">SPP</div>
+            </div>
+
+            <!-- <div class="flex ml-4 mr-4 col-span-2 rounded-lg justify-center items-center h-16 w-32 bg-blue-500 text-white text-xl hover:bg-blue-600 transition-colors cursor-pointer" id="CAISO">
+                CAISO
+            </div>
+            <div class="flex ml-4 mr-4 col-span-2 rounded-lg justify-center items-center h-16 w-32 bg-blue-500 text-white text-xl hover:bg-blue-600 transition-colors cursor-pointer" id="PJM">
+                PJM
+            </div>
+            <div class="flex ml-4 mr-4 col-span-2 rounded-lg justify-center items-center h-16 w-32 bg-blue-500 text-white text-xl hover:bg-blue-600 transition-colors cursor-pointer" id="Ercot">
+                Ercot
+            </div>
+            <div class="flex ml-4 mr-4 col-span-2 rounded-lg justify-center items-center h-16 w-32 bg-blue-500 text-white text-xl hover:bg-blue-600 transition-colors cursor-pointer" id="MISO">
+                MISO
+            </div>
+            <div class="flex ml-4 mr-4 col-span-2 rounded-lg justify-center items-center h-16 w-32 bg-blue-500 text-white text-xl hover:bg-blue-600 transition-colors cursor-pointer" id="ISONE">
+                ISONE
+            </div>
+            <div class="flex ml-4 mr-4 col-span-2 rounded-lg justify-center items-center h-16 w-32 bg-blue-500 text-white text-xl hover:bg-blue-600 transition-colors cursor-pointer" id="NYISO">
+                NYISO
+            </div>
+            <div class="flex ml-4 col-span-2 rounded-lg justify-center items-center h-16 w-32 bg-blue-500 text-white text-xl hover:bg-blue-600 transition-colors cursor-pointer" id="SPP">
+                SPP
+            </div> -->
+        </div>
+        <div class="col-span-12 h-screen z-0">
+            <div class="col-span-12 h-2/3 w-full  content-center flex">
+                <!-- Map -->
+            <div id="map" class="col-span-12 h-full w-full p-4 z-0"></div>
+        </div>
+        <div class="col-span-12 gap-4">
+            <div class="bg-white p-4 rounded shadow overflow-auto">
+              <div id="proj-table"></div>
+            </div>
+        </div>
+        <!-- Floating Panel -->
+        <div id="panel" class="fixed top-0 right-0 h-full w-1/3 bg-white shadow-lg transform translate-x-full transition-transform duration-300 z-50">
+            <div class="p-4">
+                <h2 class="text-lg font-bold">Project Details</h2>
+                <div id="project_details" class="mt-2">
+                    
+                </div>
+                <button id="close-panel" class="mt-4 bg-red-500 text-white p-2 rounded">Close</button>
+            </div>
+        </div>
+    </div>
+    </div>
+    <!-- Leaflet JS -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" 
+            integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" 
+            crossorigin=""></script>
+    <script src="js/leaflet.awesome-markers.min.js"></script>
+    <script src="https://unpkg.com/gridjs@6.2.0/dist/gridjs.umd.js" defer></script>
+    <script src="js/report.js"></script>
+    <script src="js/ui.js"></script>
+</body>
+</html>

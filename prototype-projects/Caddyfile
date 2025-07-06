@@ -1,0 +1,11 @@
+# Caddyfile
+:80 {
+	# Serve frontend static files
+	root * /usr/share/caddy
+	file_server
+
+	# Proxy API requests to FastAPI backend
+	handle /api/* {
+		reverse_proxy {$BACKEND_CONTAINER}:8000
+	}
+}

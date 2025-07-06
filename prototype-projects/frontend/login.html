@@ -1,0 +1,73 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>PowerNOVA: Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-100">
+    <!-- Navigation Bar -->
+    <nav class="top-0 left-0 w-full bg-gray-800 text-white h-16 flex items-center justify-between px-4 z-50">
+        <!-- Left Side Description -->
+         <div class="flex space-x-4"
+            <button id="hamburger" class="text-gray-600 focus:outline-none">
+                <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16m-7 6h7"></path>
+                </svg>
+            </button>
+            <div class="text-lg font-semibold">
+                PowerNOVA
+            </div>
+        </div>
+        <!-- Right Side Navigation Links -->
+        <div class="flex space-x-4">
+            <a href="ui.html" class="hover:text-gray-300 transition-colors">Home</a>
+            <a href="search.html" class="hover:text-gray-300 transition-colors">Search</a>
+            <a href="aboutus.html" class="hover:text-gray-300 transition-colors">About</a>
+            <a href="login.html" class="bg-blue-500 hover:bg-blue-600 px-4 py-2 rounded transition-colors" id="loginbtn">
+                Sign in / Sign up
+            </a>
+            <div id="userName" class="hover:text-gray-300 transition-colors">Hello</div>
+        </div>
+    </nav>
+
+    <div id="main-container" class="flex flex-col items-center justify-center min-h-screen">
+        <!-- Signup Form -->
+        <div class="bg-white p-8 rounded-lg shadow-md" id="signup-form">
+            <h2 class="text-2xl font-bold text-center mb-6">Sign Up</h2>
+            <form id="signup">
+                <input type="email" id="signup-email" placeholder="Email" required 
+                       class="w-full p-3 mb-4 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="password" id="signup-password" placeholder="Password" required 
+                       class="w-full p-3 mb-4 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button type="submit" 
+                        class="w-full p-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition duration-200">
+                    Sign Up
+                </button>
+                <p class="text-center mt-4">Already have an account? 
+                    <span onclick="toggleForm()" class="text-blue-600 cursor-pointer hover:underline">Sign In</span>
+                </p>
+            </form>
+        </div>
+
+        <!-- Signin Form -->
+        <div class="bg-white p-8 rounded-lg shadow-md" id="signin-form" style="display: none;">
+            <h2 class="text-2xl font-bold text-center mb-6">Sign In</h2>
+            <form id="signin">
+                <input type="email" id="signin-email" placeholder="Email" required 
+                       class="w-full p-3 mb-4 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <input type="password" id="signin-password" placeholder="Password" required 
+                       class="w-full p-3 mb-4 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500">
+                <button type="submit" 
+                        class="w-full p-3 bg-blue-600 text-white rounded hover:bg-blue-700 transition duration-200">
+                    Sign In
+                </button>
+                <p class="text-center mt-4">Need an account? 
+                    <span onclick="toggleForm()" class="text-blue-600 cursor-pointer hover:underline">Sign Up</span>
+                </p>
+            </form>
+        </div>
+    </div>
+    <script src="js/login.js"></script>
+</body>
+</html>
