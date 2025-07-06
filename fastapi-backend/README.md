@@ -104,13 +104,6 @@ fastapi-backend/
 - `GET /api/auth/profile` - Get user profile
 - `DELETE /api/auth/account` - Delete account
 
-### Chat & Conversations
-- `GET /api/chat/history` - Get conversation history
-- `GET /api/chat/thread/{thread_id}` - Get conversation thread
-- `POST /api/chat/message` - Send chat message
-- `POST /api/chat/transcribe` - Transcribe audio and chat
-- `DELETE /api/chat/thread/{thread_id}` - Delete conversation
-
 ### Documents
 - `GET /api/documents/` - Get user documents
 - `POST /api/documents/upload` - Upload document
@@ -126,13 +119,18 @@ fastapi-backend/
 - `GET /api/substations/counties/` - Get counties
 - `GET /api/substations/search/` - Search substations
 
+> **Note**: Chat functionality is handled by the React Native backend and is not included in this FastAPI backend.
+
 ## Configuration
 
 Key environment variables in `.env`:
 
 ```env
-# Database
-DATABASE_URL=postgresql://user:password@localhost:5432/powernova_fastapi
+# Database (SQLite for development)
+DATABASE_URL=sqlite:///./powernova_fastapi.db
+
+# Database (PostgreSQL for production)
+# DATABASE_URL=postgresql://user:password@localhost:5432/powernova_fastapi
 
 # Firebase
 FIREBASE_CREDENTIALS_PATH=path/to/firebase-service-account.json
