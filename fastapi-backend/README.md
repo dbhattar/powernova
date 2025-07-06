@@ -7,7 +7,6 @@ A modern, fast API backend for PowerNOVA built with FastAPI, replacing the Djang
 - 🔥 **Firebase Authentication**: Seamless integration with Firebase Auth
 - ⚡ **High Performance**: Built with FastAPI for speed
 - 🗄️ **Database Support**: SQLite for development, PostgreSQL for production
-- 📁 **Document Management**: File upload and management
 - 🏭 **Substation Data**: Power system infrastructure management
 - 📚 **Auto Documentation**: OpenAPI/Swagger docs at `/docs`
 - 🔒 **Security**: JWT token validation and CORS protection
@@ -103,12 +102,6 @@ fastapi-backend/
 - `POST /api/auth/register` - Register user
 - `GET /api/auth/profile` - Get user profile
 - `DELETE /api/auth/account` - Delete account
-
-### Documents
-- `GET /api/documents/` - Get user documents
-- `POST /api/documents/upload` - Upload document
-- `GET /api/documents/{id}` - Get specific document
-- `DELETE /api/documents/{id}` - Delete document
 
 ### Substations
 - `GET /api/substations/` - Get substations (with filtering)

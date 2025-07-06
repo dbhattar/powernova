@@ -2,6 +2,15 @@
 
 This guide helps you migrate from your Django backend to the new FastAPI backend.
 
+## Overview
+
+The FastAPI backend focuses on core infrastructure functionality:
+- **Authentication**: Firebase Auth integration  
+- **Substations**: Power system infrastructure management
+- **Core APIs**: Health checks and system status
+
+Note: Chat and document management remain in the React Native backend.
+
 ## Phase 1: Setup FastAPI (Parallel to Django)
 
 ### 1. Install and Test FastAPI Backend

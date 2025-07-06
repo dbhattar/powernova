@@ -3,7 +3,7 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from app.models.database import get_db
 from app.models.models import Substation, County
-from app.models.schemas import SubstationResponse, SubstationCreate, CountyResponse
+from app.models.schemas import SubstationResponse, SubstationCreate, CountyResponse, SubstationCompareResponse, SubstationMappingsResponse, SubstationCompareResponse, SubstationMappingsResponse
 from app.middleware.firebase_auth import verify_firebase_token, FirebaseUser, optional_firebase_token
 
 router = APIRouter()
@@ -38,6 +38,96 @@ async def get_substations(
     
     substations = query.offset(skip).limit(limit).all()
     return substations
+
+@router.get("/compare", response_model=SubstationCompareResponse)
+async def compare_substations(
+    substation_ids: str = Query(..., description="Comma-separated list of substation IDs"),
+    user: Optional[FirebaseUser] = Depends(optional_firebase_token),
+    db: Session = Depends(get_db)
+):
+    """Compare multiple substations (2-5 substations allowed)"""
+    
+    try:
+        ids = [int(id.strip()) for id in substation_ids.split(",")]
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid substation IDs format"
+        )
+    
+    # Validate number of substations (2-5 as per Django)
+    if len(ids) < 2 or len(ids) > 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please provide between 2 and 5 substation IDs."
+        )
+    
+    substations = db.query(Substation).filter(Substation.id.in_(ids)).all()
+    
+    if len(substations) != len(ids):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="One or more substations not found"
+        )
+    
+    return {"data": substations}
+
+@router.get("/mappings", response_model=SubstationMappingsResponse)
+async def get_substation_mappings(
+    user: Optional[FirebaseUser] = Depends(optional_firebase_token),
+    db: Session = Depends(get_db)
+):
+    """Get substation mappings by type, interconnecting entity, study region, and utility area"""
+    
+    # Get distinct combinations from the database
+    substations = db.query(
+        Substation.substation_type,
+        Substation.interconnecting_entity,
+        Substation.study_region,
+        Substation.utility_area
+    ).distinct().all()
+    
+    mappings_dict = {}
+    for substation in substations:
+        substation_type = substation.substation_type or "Unknown"
+        interconnecting_entity = substation.interconnecting_entity or "Unknown"
+        study_region = substation.study_region or "Unknown"
+        utility_area = substation.utility_area or "Unknown"
+        
+        if substation_type not in mappings_dict:
+            mappings_dict[substation_type] = {}
+        
+        if interconnecting_entity not in mappings_dict[substation_type]:
+            mappings_dict[substation_type][interconnecting_entity] = {
+                "study_regions": set(),
+                "utility_areas": set(),
+            }
+        
+        mappings_dict[substation_type][interconnecting_entity]["study_regions"].add(study_region)
+        mappings_dict[substation_type][interconnecting_entity]["utility_areas"].add(utility_area)
+    
+    # Convert to the format expected by the frontend
+    mappings = []
+    for substation_type, entities in mappings_dict.items():
+        for interconnecting_entity, data in entities.items():
+            mappings.append([
+                substation_type,
+                interconnecting_entity,
+                list(data["study_regions"]),
+                list(data["utility_areas"]),
+            ])
+    
+    return {
+        "data": {
+            "columns": [
+                "Substation Type",
+                "Interconnecting Entity",
+                "Study Regions",
+                "Utility Areas",
+            ],
+            "rows": mappings,
+        }
+    }
 
 @router.get("/{substation_id}", response_model=SubstationResponse)
 async def get_substation(
@@ -177,3 +267,93 @@ async def search_substations(
     )
     
     return substations
+
+@router.get("/compare", response_model=SubstationCompareResponse)
+async def compare_substations(
+    substation_ids: str = Query(..., description="Comma-separated list of substation IDs"),
+    user: Optional[FirebaseUser] = Depends(optional_firebase_token),
+    db: Session = Depends(get_db)
+):
+    """Compare multiple substations (2-5 substations allowed)"""
+    
+    try:
+        ids = [int(id.strip()) for id in substation_ids.split(",")]
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid substation IDs format"
+        )
+    
+    # Validate number of substations (2-5 as per Django)
+    if len(ids) < 2 or len(ids) > 5:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Please provide between 2 and 5 substation IDs."
+        )
+    
+    substations = db.query(Substation).filter(Substation.id.in_(ids)).all()
+    
+    if len(substations) != len(ids):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="One or more substations not found"
+        )
+    
+    return {"data": substations}
+
+@router.get("/mappings", response_model=SubstationMappingsResponse)
+async def get_substation_mappings(
+    user: Optional[FirebaseUser] = Depends(optional_firebase_token),
+    db: Session = Depends(get_db)
+):
+    """Get substation mappings by type, interconnecting entity, study region, and utility area"""
+    
+    # Get distinct combinations from the database
+    substations = db.query(
+        Substation.substation_type,
+        Substation.interconnecting_entity,
+        Substation.study_region,
+        Substation.utility_area
+    ).distinct().all()
+    
+    mappings_dict = {}
+    for substation in substations:
+        substation_type = substation.substation_type or "Unknown"
+        interconnecting_entity = substation.interconnecting_entity or "Unknown"
+        study_region = substation.study_region or "Unknown"
+        utility_area = substation.utility_area or "Unknown"
+        
+        if substation_type not in mappings_dict:
+            mappings_dict[substation_type] = {}
+        
+        if interconnecting_entity not in mappings_dict[substation_type]:
+            mappings_dict[substation_type][interconnecting_entity] = {
+                "study_regions": set(),
+                "utility_areas": set(),
+            }
+        
+        mappings_dict[substation_type][interconnecting_entity]["study_regions"].add(study_region)
+        mappings_dict[substation_type][interconnecting_entity]["utility_areas"].add(utility_area)
+    
+    # Convert to the format expected by the frontend
+    mappings = []
+    for substation_type, entities in mappings_dict.items():
+        for interconnecting_entity, data in entities.items():
+            mappings.append([
+                substation_type,
+                interconnecting_entity,
+                list(data["study_regions"]),
+                list(data["utility_areas"]),
+            ])
+    
+    return {
+        "data": {
+            "columns": [
+                "Substation Type",
+                "Interconnecting Entity",
+                "Study Regions",
+                "Utility Areas",
+            ],
+            "rows": mappings,
+        }
+    }

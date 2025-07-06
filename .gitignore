@@ -61,8 +61,6 @@ fastapi-backend/**/__pycache__/
 fastapi-backend/*.db
 fastapi-backend/*.sqlite
 fastapi-backend/*.sqlite3
-fastapi-backend/uploads/
-fastapi-backend/logs/
 
 # Frontend specific
 app/.env

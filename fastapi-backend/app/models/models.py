@@ -26,23 +26,7 @@ class User(BaseModel):
     last_login = Column(DateTime, nullable=True)
     
     # Relationships
-    documents = relationship("Document", back_populates="user")
-
-class Document(BaseModel):
-    """Document model"""
-    __tablename__ = "documents"
-    
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    filename = Column(String, nullable=False)
-    original_filename = Column(String, nullable=False)
-    file_path = Column(String, nullable=False)
-    file_size = Column(Integer, nullable=False)
-    content_type = Column(String, nullable=False)
-    upload_status = Column(String, default="completed")  # completed, processing, failed
-    processed_content = Column(Text, nullable=True)  # Extracted text content
-    
-    # Relationships
-    user = relationship("User", back_populates="documents")
+    # Note: Document management is handled by React Native backend
 
 class County(BaseModel):
     """County model from Django"""
@@ -72,3 +56,32 @@ class Substation(BaseModel):
     
     # Relationships
     county = relationship("County", back_populates="substations")
+
+class TransmissionLine(BaseModel):
+    """Transmission Line model from Django"""
+    __tablename__ = "transmission_lines"
+    
+    name = Column(String(150), nullable=False)
+    voltage = Column(Float, nullable=False)  # Voltage (kV)
+    utility_area = Column(String(255), nullable=True)
+    circuit = Column(String(50), nullable=True)
+    line_type = Column(String(50), nullable=True)
+    # Note: geo_coordinates stored as separate lat/lng columns for simplicity
+    # In production, you might want to use PostGIS for proper LineString support
+
+class AverageLMP(BaseModel):
+    """Average LMP model from Django"""
+    __tablename__ = "average_lmp"
+    
+    substation_id = Column(Integer, ForeignKey("substations.id"), nullable=False)
+    lmp_type = Column(String(50), default="forecast")  # forecast, actual
+    energy = Column(Float, nullable=True)  # Energy LMP ($/MWh)
+    congestion = Column(Float, nullable=True)  # Congestion LMP ($/MWh)
+    loss = Column(Float, nullable=True)  # Loss LMP ($/MWh)
+    total_lmp = Column(Float, nullable=True)  # LMP ($/MWh)
+    opening_price = Column(Float, nullable=True)  # Opening Price ($/MWh)
+    closing_price = Column(Float, nullable=True)  # Closing Price ($/MWh)
+    time = Column(DateTime, nullable=True)  # Time of the LMP data
+    
+    # Relationships
+    substation = relationship("Substation")

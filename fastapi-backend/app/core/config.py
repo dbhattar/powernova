@@ -20,10 +20,6 @@ class Settings(BaseSettings):
     # CORS
     ALLOWED_ORIGINS: list = ["http://localhost:3000", "http://localhost:8081"]
     
-    # File Upload
-    UPLOAD_DIR: str = "uploads"
-    MAX_FILE_SIZE: int = 10 * 1024 * 1024  # 10MB
-    
     # Redis (for caching)
     REDIS_URL: Optional[str] = "redis://localhost:6379"
     
