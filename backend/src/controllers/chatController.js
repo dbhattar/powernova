@@ -46,16 +46,31 @@ router.post('/message', async (req, res) => {
     let documentContext = '';
     let searchResults = [];
     try {
+      console.log(`🔍 Starting document search for user: ${userId}, query: "${message}"`);
       searchResults = await vectorService.searchDocuments(userId, message, 5);
+      console.log(`📊 Search completed. Found ${searchResults.length} results`);
+      
       if (searchResults.length > 0) {
-        documentContext = searchResults
-          .filter(result => result.score > 0.7) // Relevance threshold
-          .map(result => `Source: ${result.metadata.fileName}\n${result.metadata.text}`)
-          .join('\n\n');
-        
-        if (documentContext) {
-          console.log(`📚 Using document context from ${searchResults.length} sources`);
+        console.log(`📋 Search result details:`);
+        searchResults.forEach((result, index) => {
+          console.log(`   ${index + 1}. Score: ${result.score?.toFixed(4)}, File: ${result.metadata?.fileName}, Content preview: "${result.metadata?.text?.substring(0, 100)}..."`);
+        });
+
+        // Filter by relevance threshold
+        const relevantResults = searchResults.filter(result => result.score > 0.3);
+        console.log(`🎯 Results above 0.3 threshold: ${relevantResults.length}`);
+
+        if (relevantResults.length > 0) {
+          documentContext = relevantResults
+            .map(result => `Source: ${result.metadata.fileName}\n${result.metadata.text}`)
+            .join('\n\n');
+          
+          console.log(`📚 Using document context from ${relevantResults.length} sources (${documentContext.length} characters)`);
+        } else {
+          console.log(`⚠️ No results met the 0.3 score threshold. Highest score: ${Math.max(...searchResults.map(r => r.score || 0)).toFixed(4)}`);
         }
+      } else {
+        console.log(`❌ No search results returned from vector service`);
       }
     } catch (vectorError) {
       console.log('⚠️  Vector search failed, continuing without document context:', vectorError.message);
@@ -137,7 +152,7 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
     // Auto-send transcription to chat
     const searchResults = await vectorService.searchDocuments(userId, transcription, 5);
     const documentContext = searchResults
-      .filter(result => result.score > 0.7)
+      .filter(result => result.score > 0.3)
       .map(result => `Source: ${result.metadata.fileName}\n${result.metadata.text}`)
       .join('\n\n');
 

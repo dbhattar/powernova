@@ -82,9 +82,20 @@ However, if a question has any connection to energy, power systems, or related p
    */
   async generateEmbeddings(texts) {
     try {
+      const textArray = Array.isArray(texts) ? texts : [texts];
+      
+      // Check token limits
+      const totalTokens = textArray.reduce((sum, text) => sum + this.estimateTokenCount(text), 0);
+      
+      if (totalTokens > 250000) { // Leave some buffer below 300k limit
+        throw new Error(`Token limit exceeded: ${totalTokens} tokens, max 250,000 per request`);
+      }
+      
+      console.log(`🔤 Generating embeddings for ${textArray.length} texts (≈${totalTokens} tokens)`);
+
       const response = await this.openai.embeddings.create({
         model: 'text-embedding-3-small',
-        input: Array.isArray(texts) ? texts : [texts],
+        input: textArray,
       });
 
       return response.data.map(item => item.embedding);
@@ -92,6 +103,14 @@ However, if a question has any connection to energy, power systems, or related p
       console.error('OpenAI embeddings error:', error);
       throw new Error(`Embedding generation failed: ${error.message}`);
     }
+  }
+
+  /**
+   * Estimate token count for text (approximate)
+   */
+  estimateTokenCount(text) {
+    // Rough estimation: 1 token ≈ 4 characters for English text
+    return Math.ceil(text.length / 4);
   }
 
   /**

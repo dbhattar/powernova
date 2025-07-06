@@ -1,6 +1,7 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
+import Markdown from 'react-native-markdown-display';
 
 const ConversationItem = ({ conversation, onPress }) => {
   return (
@@ -28,9 +29,9 @@ const ConversationItem = ({ conversation, onPress }) => {
       <Text style={styles.conversationPrompt} numberOfLines={2}>
         {conversation.isFollowUp ? '↳ ' : ''}{conversation.prompt}
       </Text>
-      <Text style={styles.conversationResponse} numberOfLines={2}>
-        {conversation.response}
-      </Text>
+      <View style={styles.conversationResponseContainer}>
+        <Markdown style={conversationMarkdownStyles}>{conversation.response}</Markdown>
+      </View>
     </TouchableOpacity>
   );
 };
@@ -70,6 +71,65 @@ const styles = StyleSheet.create({
     marginBottom: 4,
   },
   conversationResponse: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 18,
+  },
+  conversationResponseContainer: {
+    flex: 1,
+  },
+});
+
+const conversationMarkdownStyles = StyleSheet.create({
+  body: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 18,
+  },
+  heading1: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 0,
+    marginBottom: 4,
+  },
+  heading2: {
+    fontSize: 15,
+    fontWeight: 'bold',
+    color: '#333',
+    marginTop: 0,
+    marginBottom: 3,
+  },
+  paragraph: {
+    fontSize: 14,
+    color: '#666',
+    lineHeight: 18,
+    marginTop: 0,
+    marginBottom: 0,
+  },
+  strong: {
+    fontWeight: 'bold',
+  },
+  em: {
+    fontStyle: 'italic',
+  },
+  code_inline: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 2,
+    paddingVertical: 1,
+    borderRadius: 3,
+    fontSize: 13,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+  },
+  code_block: {
+    backgroundColor: '#f5f5f5',
+    padding: 8,
+    borderRadius: 6,
+    fontSize: 13,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginVertical: 4,
+  },
+  list_item: {
     fontSize: 14,
     color: '#666',
     lineHeight: 18,

@@ -102,12 +102,16 @@ class FirebaseService {
   /**
    * Update document processing status
    */
-  async updateDocumentStatus(docId, updates) {
+  async updateDocumentStatus(docId, statusData) {
     try {
-      await this.db.collection('documents').doc(docId).update({
-        ...updates,
-        updatedAt: admin.firestore.FieldValue.serverTimestamp()
-      });
+      const updateData = {
+        ...statusData,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+      };
+      
+      await this.db.collection('documents').doc(docId).update(updateData);
+      console.log(`📝 Updated document ${docId} status:`, statusData.processingStatus || 'unknown');
+      
     } catch (error) {
       console.error('Error updating document status:', error);
       throw new Error(`Failed to update document status: ${error.message}`);

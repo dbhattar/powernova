@@ -11,7 +11,7 @@ const router = express.Router();
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
-    fileSize: 50 * 1024 * 1024, // 50MB limit
+    fileSize: 100 * 1024 * 1024, // 100MB limit (increased from 50MB)
   },
   fileFilter: (req, file, cb) => {
     const allowedTypes = [
@@ -67,11 +67,20 @@ router.post('/upload', upload.single('document'), async (req, res) => {
       });
     }
 
-    if (!textContent || textContent.trim().length < 50) {
+    // Validate document for processing
+    try {
+      const validation = vectorService.validateDocumentForProcessing(textContent, file.originalname);
+      console.log(`📋 Document validation passed:`, validation);
+    } catch (validationError) {
       return res.status(400).json({
-        error: 'Document appears to be empty or too short for processing'
+        error: 'Document validation failed',
+        message: validationError.message
       });
     }
+
+    // Calculate optimal chunk parameters
+    const chunkParams = vectorService.calculateOptimalChunkSize(textContent);
+    console.log(`⚙️ Using chunk parameters:`, chunkParams);
 
     // Save document metadata to Firestore
     const docId = await firebaseService.saveDocumentMetadata({
@@ -79,12 +88,14 @@ router.post('/upload', upload.single('document'), async (req, res) => {
       fileName: file.originalname,
       fileSize: file.size,
       fileType: file.mimetype,
+      characterCount: textContent.length,
+      estimatedTokens: Math.ceil(textContent.length / 4),
       processingStatus: 'processing',
       isProcessed: false
     });
 
-    // Process document asynchronously
-    processDocumentAsync(docId, userId, file.originalname, textContent);
+    // Process document asynchronously with improved chunking
+    processDocumentAsync(docId, userId, file.originalname, textContent, chunkParams);
 
     res.json({
       documentId: docId,
@@ -279,32 +290,44 @@ async function extractTextContent(file) {
 }
 
 /**
- * Process document asynchronously
+ * Process document asynchronously with improved chunking and error handling
  */
-async function processDocumentAsync(docId, userId, fileName, textContent) {
+async function processDocumentAsync(docId, userId, fileName, textContent, chunkParams) {
   try {
-    console.log(`Processing document ${docId} for user ${userId}`);
+    console.log(`🔄 Starting async processing for document: ${fileName}`);
+    console.log(`📊 Document stats: ${textContent.length} characters, ~${Math.ceil(textContent.length / 4)} tokens`);
+    
+    // Update processing status
+    await firebaseService.updateDocumentStatus(docId, {
+      processingStatus: 'processing',
+      message: 'Creating embeddings and vector index...',
+      progress: 0
+    });
 
-    // Process with vector service
-    const result = await vectorService.processDocument(docId, userId, fileName, textContent);
+    // Process document with optimal chunking
+    const result = await vectorService.processDocument(docId, userId, fileName, textContent, chunkParams);
 
-    // Update document status
+    // Update completion status
     await firebaseService.updateDocumentStatus(docId, {
       processingStatus: 'completed',
       isProcessed: true,
-      chunkCount: result.chunkCount
+      chunkCount: result.chunkCount,
+      message: 'Document processed successfully',
+      progress: 100
     });
 
-    console.log(`Document ${docId} processed successfully`);
+    console.log(`✅ Document processing completed: ${fileName} (${result.chunkCount} chunks)`);
 
   } catch (error) {
-    console.error(`Error processing document ${docId}:`, error);
+    console.error(`❌ Error processing document ${docId}:`, error);
 
-    // Update with error status
+    // Update error status
     await firebaseService.updateDocumentStatus(docId, {
       processingStatus: 'error',
       isProcessed: false,
-      processingError: error.message
+      processingError: error.message,
+      message: `Processing failed: ${error.message}`,
+      progress: 0
     });
   }
 }

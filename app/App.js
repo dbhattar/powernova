@@ -8,6 +8,7 @@ import * as Speech from 'expo-speech';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from './firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from 'firebase/auth';
+import Markdown from 'react-native-markdown-display';
 import { formatFileSize, getFileIcon } from './documentService';
 import { testStoragePermissions } from './storageTest';
 import { checkDocumentsInFirestore } from './firestoreTest';
@@ -823,7 +824,7 @@ export default function App() {
                 ) : chatResponse ? (
                   <View style={styles.messageContainer}>
                     <View style={styles.assistantMessage}>
-                      <Text style={styles.chatResponse}>{chatResponse}</Text>
+                      <Markdown style={markdownStyles}>{chatResponse}</Markdown>
                     </View>
                   </View>
                 ) : null}
@@ -849,7 +850,7 @@ export default function App() {
                           <Text style={styles.threadUserText}>{message.prompt}</Text>
                         </View>
                         <View style={styles.threadAssistantMessage}>
-                          <Text style={styles.threadAssistantText}>{message.response}</Text>
+                          <Markdown style={markdownStyles}>{message.response}</Markdown>
                         </View>
                       </View>
                     ))}
@@ -1244,5 +1245,123 @@ const styles = StyleSheet.create({
   threadAssistantText: {
     color: '#333',
     fontSize: 14,
+  },
+});
+
+const markdownStyles = StyleSheet.create({
+  body: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 24,
+    fontFamily: Platform.OS === 'ios' ? 'SF Pro Text' : 'Roboto',
+  },
+  heading1: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginTop: 16,
+    marginBottom: 8,
+  },
+  heading2: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginTop: 12,
+    marginBottom: 6,
+  },
+  heading3: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#007AFF',
+    marginTop: 10,
+    marginBottom: 5,
+  },
+  paragraph: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 24,
+    marginTop: 0,
+    marginBottom: 8,
+  },
+  strong: {
+    fontWeight: 'bold',
+    color: '#333',
+  },
+  em: {
+    fontStyle: 'italic',
+    color: '#333',
+  },
+  code_inline: {
+    backgroundColor: '#f5f5f5',
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    fontSize: 14,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    color: '#d73a49',
+  },
+  code_block: {
+    backgroundColor: '#f6f8fa',
+    padding: 12,
+    borderRadius: 8,
+    fontSize: 14,
+    fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+    marginVertical: 8,
+    borderWidth: 1,
+    borderColor: '#e1e4e8',
+  },
+  list_item: {
+    fontSize: 16,
+    color: '#333',
+    lineHeight: 24,
+    marginBottom: 4,
+  },
+  bullet_list: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  ordered_list: {
+    marginTop: 4,
+    marginBottom: 8,
+  },
+  link: {
+    color: '#007AFF',
+    textDecorationLine: 'underline',
+  },
+  blockquote: {
+    backgroundColor: '#f8f9fa',
+    borderLeftWidth: 4,
+    borderLeftColor: '#007AFF',
+    paddingLeft: 12,
+    paddingVertical: 8,
+    marginVertical: 8,
+    fontStyle: 'italic',
+  },
+  table: {
+    borderWidth: 1,
+    borderColor: '#e1e4e8',
+    borderRadius: 6,
+    marginVertical: 8,
+  },
+  thead: {
+    backgroundColor: '#f6f8fa',
+  },
+  tbody: {
+    backgroundColor: '#fff',
+  },
+  th: {
+    fontSize: 14,
+    fontWeight: 'bold',
+    color: '#333',
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#e1e4e8',
+  },
+  td: {
+    fontSize: 14,
+    color: '#333',
+    padding: 8,
+    borderWidth: 1,
+    borderColor: '#e1e4e8',
   },
 });
