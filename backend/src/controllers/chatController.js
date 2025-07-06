@@ -141,7 +141,7 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
     const userId = req.user.uid;
 
     // Transcribe audio
-    const transcription = await openaiService.transcribeAudio(req.file.buffer);
+    const transcription = await openaiService.transcribeAudio(req.file);
 
     if (!autoSend) {
       return res.json({

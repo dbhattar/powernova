@@ -116,14 +116,46 @@ However, if a question has any connection to energy, power systems, or related p
   /**
    * Transcribe audio file
    */
-  async transcribeAudio(audioBuffer, options = {}) {
+  async transcribeAudio(fileData, options = {}) {
     try {
+      let transcriptionInput;
+      
+      if (fileData.buffer && fileData.originalname) {
+        // For multer file objects, we need to create a Readable stream or use fs
+        const fs = require('fs');
+        const path = require('path');
+        const os = require('os');
+        
+        // Create a temporary file
+        const tempFileName = `temp_audio_${Date.now()}.webm`;
+        const tempFilePath = path.join(os.tmpdir(), tempFileName);
+        
+        // Write buffer to temporary file
+        fs.writeFileSync(tempFilePath, fileData.buffer);
+        
+        // Create a readable stream from the file
+        transcriptionInput = fs.createReadStream(tempFilePath);
+        transcriptionInput.path = tempFilePath; // Set the path for cleanup later
+      } else {
+        transcriptionInput = fileData;
+      }
+
       const transcription = await this.openai.audio.transcriptions.create({
-        file: audioBuffer,
+        file: transcriptionInput,
         model: 'whisper-1',
         language: options.language || 'en',
         response_format: options.format || 'json'
       });
+
+      // Clean up temporary file if we created one
+      if (transcriptionInput.path) {
+        const fs = require('fs');
+        try {
+          fs.unlinkSync(transcriptionInput.path);
+        } catch (cleanupError) {
+          console.warn('Failed to clean up temporary file:', cleanupError);
+        }
+      }
 
       return transcription.text;
     } catch (error) {

@@ -124,43 +124,92 @@ export default function App() {
 
   const startRecording = async () => {
     try {
-      const permission = await Audio.requestPermissionsAsync();
-      if (permission.status !== 'granted') {
-        alert('Permission to access microphone is required!');
-        return;
+      if (Platform.OS === 'web') {
+        // Web implementation using MediaRecorder API
+        if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+          alert('Audio recording is not supported in this browser.');
+          return;
+        }
+        
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const mediaRecorder = new MediaRecorder(stream);
+        const chunks = [];
+        
+        mediaRecorder.addEventListener('dataavailable', (event) => {
+          if (event.data.size > 0) {
+            chunks.push(event.data);
+          }
+        });
+        
+        mediaRecorder.addEventListener('stop', () => {
+          const blob = new Blob(chunks, { type: 'audio/webm' });
+          const url = URL.createObjectURL(blob);
+          setRecordedUri(url);
+          // Stop all tracks to release microphone
+          stream.getTracks().forEach(track => track.stop());
+          
+          // Auto-transcribe after recording stops
+          setTimeout(() => {
+            transcribeRecording();
+          }, 500);
+        });
+        
+        mediaRecorder.start();
+        setRecording(mediaRecorder);
+        setIsRecording(true);
+      } else {
+        // Mobile implementation using Expo Audio
+        const permission = await Audio.requestPermissionsAsync();
+        if (permission.status !== 'granted') {
+          alert('Permission to access microphone is required!');
+          return;
+        }
+        await Audio.setAudioModeAsync({
+          allowsRecordingIOS: true,
+          playsInSilentModeIOS: true,
+        });
+        const { recording } = await Audio.Recording.createAsync(
+          Audio.RecordingOptionsPresets.HIGH_QUALITY
+        );
+        setRecording(recording);
+        setIsRecording(true);
       }
-      await Audio.setAudioModeAsync({
-        allowsRecordingIOS: true,
-        playsInSilentModeIOS: true,
-      });
-      const { recording } = await Audio.Recording.createAsync(
-        Audio.RecordingOptionsPresets.HIGH_QUALITY
-      );
-      setRecording(recording);
-      setIsRecording(true);
     } catch (err) {
       console.error('Failed to start recording', err);
+      alert('Failed to start recording. Please check your microphone permissions.');
     }
   };
 
   const stopRecording = async () => {
     try {
       setIsRecording(false);
-      await recording.stopAndUnloadAsync();
-      const uri = recording.getURI();
-      setRecordedUri(uri);
-      setRecording(null);
-      setTranscription('');
-      setChatResponse('');
-      // Add a longer delay and log the URI for debugging
-      setTimeout(() => {
-        if (!uri) {
-          setTranscription('Recording failed. No audio file found.');
-          return;
+      
+      if (Platform.OS === 'web') {
+        // Web implementation
+        if (recording && recording.stop) {
+          recording.stop();
         }
-        console.log('Recorded URI:', uri);
-        transcribeRecording();
-      }, 1000); // 1 second delay
+        setRecording(null);
+        setTranscription('');
+        setChatResponse('');
+      } else {
+        // Mobile implementation
+        await recording.stopAndUnloadAsync();
+        const uri = recording.getURI();
+        setRecordedUri(uri);
+        setRecording(null);
+        setTranscription('');
+        setChatResponse('');
+        // Add a longer delay and log the URI for debugging
+        setTimeout(() => {
+          if (!uri) {
+            setTranscription('Recording failed. No audio file found.');
+            return;
+          }
+          console.log('Recorded URI:', uri);
+          transcribeRecording();
+        }, 1000); // 1 second delay
+      }
     } catch (err) {
       console.error('Failed to stop recording', err);
     }
@@ -169,15 +218,26 @@ export default function App() {
   const playRecording = async () => {
     if (!recordedUri) return;
     try {
-      const { sound } = await Audio.Sound.createAsync({ uri: recordedUri });
-      setSound(sound);
-      await sound.playAsync();
-      sound.setOnPlaybackStatusUpdate((status) => {
-        if (status.didJustFinish) {
-          sound.unloadAsync();
+      if (Platform.OS === 'web') {
+        // Web implementation using HTML5 Audio
+        const audio = new Audio(recordedUri);
+        audio.play();
+        setSound(audio);
+        audio.onended = () => {
           setSound(null);
-        }
-      });
+        };
+      } else {
+        // Mobile implementation using Expo Audio
+        const { sound } = await Audio.Sound.createAsync({ uri: recordedUri });
+        setSound(sound);
+        await sound.playAsync();
+        sound.setOnPlaybackStatusUpdate((status) => {
+          if (status.didJustFinish) {
+            sound.unloadAsync();
+            setSound(null);
+          }
+        });
+      }
     } catch (err) {
       console.error('Failed to play recording', err);
     }
@@ -267,25 +327,34 @@ export default function App() {
     setChatResponse('');
     
     try {
-      if (Platform.OS === 'web') {
-        setTranscription('Transcription is not supported on web.');
-        setIsTranscribing(false);
-        return;
-      }
-
-      const fileUri = recordedUri;
-      const fileInfo = await FileSystem.getInfoAsync(fileUri);
-      console.log('File info:', fileInfo);
-      
-      if (!fileInfo.exists) throw new Error('File does not exist');
-
-      // Create FormData for audio upload
       const formData = new FormData();
-      formData.append('audio', {
-        uri: fileUri,
-        name: getFileName(fileUri),
-        type: 'audio/mp4',
-      });
+      
+      if (Platform.OS === 'web') {
+        // Web implementation: convert blob URL to blob
+        const response = await fetch(recordedUri);
+        const blob = await response.blob();
+        
+        // Create a new blob with the correct MIME type if needed
+        const audioBlob = new Blob([blob], { type: 'audio/webm' });
+        
+        // Create a File object instead of just a blob for better compatibility
+        const audioFile = new File([audioBlob], 'recording.webm', { type: 'audio/webm' });
+        formData.append('audio', audioFile);
+      } else {
+        // Mobile implementation
+        const fileUri = recordedUri;
+        const fileInfo = await FileSystem.getInfoAsync(fileUri);
+        console.log('File info:', fileInfo);
+        
+        if (!fileInfo.exists) throw new Error('File does not exist');
+
+        formData.append('audio', {
+          uri: fileUri,
+          name: getFileName(fileUri),
+          type: 'audio/mp4',
+        });
+      }
+      
       formData.append('autoSend', 'true');
 
       // Call backend transcription API
@@ -359,10 +428,6 @@ export default function App() {
   // Handle mic icon press
   const handleMicPress = async () => {
     Speech.stop(); // Stop any ongoing speech
-    if (Platform.OS === 'web') {
-      alert('Voice recording is not supported on web in this app.');
-      return;
-    }
     if (!isRecording) {
       setIsMicActive(true);
       await startRecording();
