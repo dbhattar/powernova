@@ -1,18 +1,36 @@
-fastapi==0.104.1
-uvicorn[standard]==0.24.0
-firebase-admin==6.2.0
-sqlalchemy==2.0.23
-psycopg2-binary==2.9.9
-python-multipart==0.0.6
-pydantic==2.5.0
-pydantic-settings==2.3.1
-python-jose[cryptography]==3.3.0
-python-decouple==3.8
-alembic==1.13.1
-redis==5.0.1
-pandas==2.2.3
-requests==2.31.0
-httpx==0.25.2
-asyncpg==0.29.0
-geoalchemy2==0.14.4
-shapely==2.0.2
+# Core FastAPI dependencies
+fastapi>=0.104.0
+uvicorn[standard]>=0.24.0
+python-multipart>=0.0.6
+
+# Pydantic - ensure compatibility
+pydantic>=2.7.0,<3.0.0
+pydantic-settings>=2.3.0
+email-validator>=2.0.0
+
+# Database
+sqlalchemy>=2.0.20
+psycopg2-binary>=2.9.7
+asyncpg>=0.29.0
+alembic>=1.13.0
+aiosqlite>=0.20.0
+
+# Firebase Authentication
+firebase-admin>=6.2.0
+
+# Security & Authentication
+python-jose[cryptography]>=3.3.0
+
+# Configuration
+python-decouple>=3.8
+
+# Optional dependencies
+redis>=5.0.0
+pandas>=2.0.0
+requests>=2.30.0
+httpx>=0.25.0
+greenlet>=3.0.0
+
+# GIS dependencies (optional)
+geoalchemy2>=0.14.0
+shapely>=2.0.0
