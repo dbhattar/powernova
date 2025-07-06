@@ -34,8 +34,6 @@ export default function App() {
   const [documents, setDocuments] = useState([]);
   const [showDocuments, setShowDocuments] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
-  const [showFollowUpInput, setShowFollowUpInput] = useState(false); // New: show follow-up input
-  const [followUpText, setFollowUpText] = useState(''); // New: follow-up question text
 
   // Initialize Google Auth Provider
   const googleProvider = new GoogleAuthProvider();
@@ -182,7 +180,7 @@ export default function App() {
   };
 
   // Send transcription to backend API with document context and conversation history
-  const sendToChat = async (text, isFollowUp = false) => {
+  const sendToChat = async (text) => {
     setIsChatLoading(true);
     setChatResponse('');
     
@@ -191,6 +189,9 @@ export default function App() {
     if (!threadId) {
       setThreadId(currentThreadId);
     }
+    
+    // Determine if this is a follow-up (if we have an existing thread)
+    const isFollowUp = threadId !== null;
     
     // Create a new conversation entry
     const newConversation = {
@@ -456,24 +457,10 @@ export default function App() {
     clearConversationThread();
   };
 
-  // Handle follow-up question
-  const handleFollowUpSend = async () => {
-    if (!followUpText.trim() || isChatLoading) return;
-    
-    const followUpQuestion = followUpText.trim();
-    setFollowUpText('');
-    setShowFollowUpInput(false);
-    
-    // Send as follow-up question
-    await sendToChat(followUpQuestion, true);
-  };
-
   // Clear conversation thread
   const clearConversationThread = () => {
     setConversationThread([]);
     setThreadId(null);
-    setShowFollowUpInput(false);
-    setFollowUpText('');
   };
 
   // Document upload handler - now uses backend API
@@ -827,6 +814,20 @@ export default function App() {
                 ) : null}
                 
                 {/* Current conversation display */}
+                {isChatLoading ? (
+                  <View style={styles.messageContainer}>
+                    <View style={styles.assistantMessage}>
+                      <Text style={styles.chatLoading}>PowerNOVA is thinking...</Text>
+                    </View>
+                  </View>
+                ) : chatResponse ? (
+                  <View style={styles.messageContainer}>
+                    <View style={styles.assistantMessage}>
+                      <Text style={styles.chatResponse}>{chatResponse}</Text>
+                    </View>
+                  </View>
+                ) : null}
+                
                 {transcription ? (
                   <View style={styles.messageContainer}>
                     <View style={styles.userMessage}>
@@ -838,63 +839,7 @@ export default function App() {
                   </View>
                 ) : null}
                 
-                {isChatLoading ? (
-                  <View style={styles.messageContainer}>
-                    <View style={styles.assistantMessage}>
-                      <Text style={styles.chatLoading}>PowerNOVA is thinking...</Text>
-                    </View>
-                  </View>
-                ) : chatResponse ? (
-                  <View style={styles.messageContainer}>
-                    <View style={styles.assistantMessage}>
-                      <Text style={styles.chatResponse}>{chatResponse}</Text>
-                      {/* Follow-up question section */}
-                      <View style={styles.followUpContainer}>
-                        <TouchableOpacity 
-                          style={styles.followUpButton}
-                          onPress={() => setShowFollowUpInput(true)}
-                        >
-                          <Ionicons name="chatbubbles-outline" size={16} color="#007AFF" />
-                          <Text style={styles.followUpButtonText}>Ask Follow-up</Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
-                  </View>
-                ) : null}
-                
-                {/* Follow-up input section */}
-                {showFollowUpInput ? (
-                  <View style={styles.followUpInputContainer}>
-                    <TextInput
-                      style={styles.followUpInput}
-                      value={followUpText}
-                      onChangeText={setFollowUpText}
-                      placeholder="Ask a follow-up question..."
-                      multiline
-                      autoFocus
-                    />
-                    <View style={styles.followUpActions}>
-                      <TouchableOpacity
-                        style={styles.followUpCancelButton}
-                        onPress={() => {
-                          setShowFollowUpInput(false);
-                          setFollowUpText('');
-                        }}
-                      >
-                        <Text style={styles.followUpCancelText}>Cancel</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        style={[styles.followUpSendButton, (!followUpText.trim() || isChatLoading) && styles.followUpSendButtonDisabled]}
-                        onPress={handleFollowUpSend}
-                        disabled={!followUpText.trim() || isChatLoading}
-                      >
-                        <Text style={styles.followUpSendText}>Send</Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                ) : null}
-                
-                {/* Conversation thread display */}
+                {/* Full conversation thread display */}
                 {conversationThread.length > 0 ? (
                   <View style={styles.threadContainer}>
                     <Text style={styles.threadTitle}>Conversation History</Text>
@@ -1258,75 +1203,6 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  
-  // Follow-up styles
-  followUpContainer: {
-    marginTop: 12,
-    alignItems: 'flex-start',
-  },
-  followUpButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 16,
-    gap: 6,
-  },
-  followUpButtonText: {
-    fontSize: 14,
-    color: '#007AFF',
-    fontWeight: '500',
-  },
-  followUpInputContainer: {
-    backgroundColor: '#f8f9fa',
-    borderRadius: 12,
-    margin: 16,
-    padding: 12,
-  },
-  followUpInput: {
-    backgroundColor: '#fff',
-    borderWidth: 1,
-    borderColor: '#ddd',
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    minHeight: 40,
-    maxHeight: 120,
-    textAlignVertical: 'top',
-  },
-  followUpActions: {
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: 8,
-    marginTop: 12,
-  },
-  followUpCancelButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#f0f0f0',
-    borderRadius: 8,
-  },
-  followUpCancelText: {
-    color: '#666',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  followUpSendButton: {
-    paddingHorizontal: 16,
-    paddingVertical: 8,
-    backgroundColor: '#007AFF',
-    borderRadius: 8,
-  },
-  followUpSendButtonDisabled: {
-    backgroundColor: '#ccc',
-  },
-  followUpSendText: {
-    color: '#fff',
-    fontSize: 14,
-    fontWeight: '500',
-  },
-  
   // Conversation thread styles
   threadContainer: {
     marginTop: 20,
