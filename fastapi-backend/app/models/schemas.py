@@ -28,44 +28,6 @@ class UserResponse(BaseResponse):
     is_active: bool
     last_login: Optional[datetime]
 
-# Conversation schemas
-class ConversationCreate(BaseModel):
-    title: Optional[str] = "New Conversation"
-
-class ConversationResponse(BaseResponse):
-    title: str
-    thread_id: str
-    user_id: int
-
-class ConversationWithMessages(ConversationResponse):
-    messages: List["MessageResponse"] = []
-
-# Message schemas
-class MessageCreate(BaseModel):
-    content: str
-    message_type: Optional[str] = "text"
-    audio_uri: Optional[str] = None
-
-class MessageResponse(BaseResponse):
-    conversation_id: int
-    content: str
-    response: Optional[str]
-    message_type: str
-    audio_uri: Optional[str]
-    is_from_user: bool
-
-# Chat schemas
-class ChatRequest(BaseModel):
-    message: str
-    thread_id: Optional[str] = None
-    is_follow_up: Optional[bool] = False
-
-class ChatResponse(BaseModel):
-    response: str
-    thread_id: str
-    message_id: int
-    conversation_id: int
-
 # Document schemas
 class DocumentResponse(BaseResponse):
     filename: str
@@ -122,6 +84,3 @@ class ErrorResponse(BaseModel):
     error: str
     detail: Optional[str] = None
     status_code: int
-
-# Update forward references
-ConversationWithMessages.model_rebuild()

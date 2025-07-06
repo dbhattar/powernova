@@ -6,7 +6,7 @@ import os
 from contextlib import asynccontextmanager
 
 from app.core.config import settings
-from app.routes import chat, documents, auth, substations
+from app.routes import documents, auth, substations
 from app.models.database import create_tables
 
 # Initialize security
@@ -42,7 +42,6 @@ app.add_middleware(
 
 # Include routes
 app.include_router(auth.router, prefix="/api/auth", tags=["Authentication"])
-app.include_router(chat.router, prefix="/api/chat", tags=["Chat & Conversations"])
 app.include_router(documents.router, prefix="/api/documents", tags=["Documents"])
 app.include_router(substations.router, prefix="/api/substations", tags=["Substations"])
 

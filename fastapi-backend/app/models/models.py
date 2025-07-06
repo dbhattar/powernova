@@ -26,34 +26,7 @@ class User(BaseModel):
     last_login = Column(DateTime, nullable=True)
     
     # Relationships
-    conversations = relationship("Conversation", back_populates="user")
     documents = relationship("Document", back_populates="user")
-
-class Conversation(BaseModel):
-    """Conversation/Thread model"""
-    __tablename__ = "conversations"
-    
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    title = Column(String, default="New Conversation")
-    thread_id = Column(String, unique=True, index=True, nullable=False)
-    
-    # Relationships
-    user = relationship("User", back_populates="conversations")
-    messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan")
-
-class Message(BaseModel):
-    """Individual messages in a conversation"""
-    __tablename__ = "messages"
-    
-    conversation_id = Column(Integer, ForeignKey("conversations.id"), nullable=False)
-    content = Column(Text, nullable=False)
-    response = Column(Text, nullable=True)
-    message_type = Column(String, default="text")  # text, voice, etc.
-    audio_uri = Column(String, nullable=True)
-    is_from_user = Column(Boolean, default=True)
-    
-    # Relationships
-    conversation = relationship("Conversation", back_populates="messages")
 
 class Document(BaseModel):
     """Document model"""

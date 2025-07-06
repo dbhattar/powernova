@@ -6,9 +6,8 @@ A modern, fast API backend for PowerNOVA built with FastAPI, replacing the Djang
 
 - 🔥 **Firebase Authentication**: Seamless integration with Firebase Auth
 - ⚡ **High Performance**: Built with FastAPI for speed
-- 🗄️ **PostgreSQL Database**: Robust data storage with SQLAlchemy ORM
+- 🗄️ **Database Support**: SQLite for development, PostgreSQL for production
 - 📁 **Document Management**: File upload and management
-- 💬 **Chat System**: Conversation threads and AI integration
 - 🏭 **Substation Data**: Power system infrastructure management
 - 📚 **Auto Documentation**: OpenAPI/Swagger docs at `/docs`
 - 🔒 **Security**: JWT token validation and CORS protection
