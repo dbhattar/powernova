@@ -186,12 +186,16 @@ const ProjectDashboard = ({ navigation, onClose }) => {
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
-      if (currentUser) {
-        fetchProjects();
-      }
     });
     return () => unsubscribe();
   }, []);
+
+  // Separate effect to fetch projects when user is available
+  useEffect(() => {
+    if (user) {
+      fetchProjects(null); // Fetch all projects initially
+    }
+  }, [user]);
 
   if (loading && projects.length === 0) {
     return (
