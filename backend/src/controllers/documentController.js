@@ -82,12 +82,24 @@ router.post('/upload', upload.single('document'), async (req, res) => {
     const chunkParams = vectorService.calculateOptimalChunkSize(textContent);
     console.log(`⚙️ Using chunk parameters:`, chunkParams);
 
-    // Save document metadata to Firestore
+    // Upload file to Firebase Storage
+    console.log('📤 Uploading file to Firebase Storage...');
+    const uploadResult = await firebaseService.uploadFile(
+      file.buffer,
+      file.originalname,
+      file.mimetype,
+      userId
+    );
+
+    // Save document metadata to Firestore with download URL
     const docId = await firebaseService.saveDocumentMetadata({
       userId: userId,
       fileName: file.originalname,
       fileSize: file.size,
       fileType: file.mimetype,
+      filePath: uploadResult.filePath,
+      downloadUrl: uploadResult.downloadUrl,
+      type: file.mimetype,
       characterCount: textContent.length,
       estimatedTokens: Math.ceil(textContent.length / 4),
       processingStatus: 'processing',
@@ -101,6 +113,7 @@ router.post('/upload', upload.single('document'), async (req, res) => {
       documentId: docId,
       fileName: file.originalname,
       fileSize: file.size,
+      downloadUrl: uploadResult.downloadUrl,
       status: 'processing',
       message: 'Document uploaded successfully and is being processed'
     });
@@ -147,6 +160,8 @@ router.get('/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.user.uid;
+    
+    console.log('📄 DOCUMENT CONTROLLER - Getting document:', id, 'for user:', userId);
     
     const document = await firebaseService.getDocument(id);
     
@@ -207,6 +222,13 @@ router.delete('/:id', async (req, res) => {
     console.log('🗑️  Deleting from vector store...');
     await vectorService.deleteDocument(id, userId);
     console.log('✅ Vector store deletion completed');
+    
+    // Delete file from Firebase Storage if filePath exists
+    if (document.filePath) {
+      console.log('🗑️  Deleting from Firebase Storage...');
+      await firebaseService.deleteFile(document.filePath);
+      console.log('✅ Firebase Storage deletion completed');
+    }
     
     // Delete metadata from Firestore
     console.log('🗑️  Deleting from Firestore...');

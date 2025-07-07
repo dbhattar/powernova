@@ -23,7 +23,8 @@ function initializeFirebase() {
       
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
-        projectId: serviceAccount.project_id
+        projectId: serviceAccount.project_id,
+        storageBucket: 'powernova-6753c.firebasestorage.app'
       });
       
       console.log('✅ Firebase Admin initialized successfully with service account file');
@@ -47,7 +48,8 @@ function initializeFirebase() {
 
       admin.initializeApp({
         credential: admin.credential.cert(serviceAccount),
-        projectId: process.env.FIREBASE_PROJECT_ID
+        projectId: process.env.FIREBASE_PROJECT_ID,
+        storageBucket: 'powernova-6753c.firebasestorage.app'
       });
       
       console.log('✅ Firebase Admin initialized with environment variables');

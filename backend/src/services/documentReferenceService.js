@@ -90,7 +90,8 @@ class DocumentReferenceService {
         ? ` (p. ${doc.pages.join(', ')})` 
         : '';
       const chunkInfo = doc.chunks > 1 ? ` • ${doc.chunks} sections` : '';
-      return `- [${doc.name}${pageRef}](/api/chat/document/${doc.id}${doc.pages.length > 0 ? `?page=${doc.pages[0]}` : ''})${chunkInfo}`;
+      // Don't include clickable links since they're handled separately in the UI
+      return `- ${doc.name}${pageRef}${chunkInfo}`;
     });
 
     return `\n\n**📄 References:**\n${references.join('\n')}`;

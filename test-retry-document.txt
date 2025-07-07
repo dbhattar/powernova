@@ -1,0 +1,10 @@
+This is a test document to verify the retry mechanism works properly for Pinecone timeouts.
+The document contains multiple sentences to create several chunks.
+This will test the exponential backoff retry strategy.
+We want to ensure that temporary network issues or gateway timeouts don't cause document processing to fail.
+The retry mechanism should handle 504 Gateway Timeout errors gracefully.
+Each retry attempt should wait progressively longer before trying again.
+This helps reduce load on the Pinecone servers during high traffic periods.
+The system should be resilient to temporary failures while still reporting persistent errors.
+After successful retries, document processing should continue normally.
+This test document will help verify that the improvements are working correctly.

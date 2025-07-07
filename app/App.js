@@ -27,6 +27,7 @@ export default function App() {
   const [transcription, setTranscription] = useState('');
   const [isTranscribing, setIsTranscribing] = useState(false);
   const [chatResponse, setChatResponse] = useState('');
+  const [currentResponseData, setCurrentResponseData] = useState(null); // Store current response metadata
   const [isChatLoading, setIsChatLoading] = useState(false);
   const [inputText, setInputText] = useState('');
   const [isMicActive, setIsMicActive] = useState(false);
@@ -297,11 +298,23 @@ export default function App() {
       const responseText = response.response;
       setChatResponse(responseText);
       
+      // Store current response data for immediate access
+      setCurrentResponseData({
+        sourceDocuments: response.sourceDocuments,
+        hasReferences: response.hasReferences,
+        referenceSummary: response.referenceSummary,
+        documentSources: response.documentSources
+      });
+      
       // Update the conversation with response
       const updatedConversation = {
         ...newConversation,
         response: responseText,
         isLoading: false,
+        sourceDocuments: response.sourceDocuments,
+        hasReferences: response.hasReferences,
+        referenceSummary: response.referenceSummary,
+        documentSources: response.documentSources
       };
       setCurrentConversation(updatedConversation);
       
@@ -312,7 +325,11 @@ export default function App() {
         timestamp: new Date(),
         id: updatedConversation.id,
         type: transcription ? 'voice' : 'text',
-        audioUri: transcription ? recordedUri : null
+        audioUri: transcription ? recordedUri : null,
+        sourceDocuments: response.sourceDocuments,
+        hasReferences: response.hasReferences,
+        referenceSummary: response.referenceSummary,
+        documentSources: response.documentSources
       }]);
       
     } catch (err) {
@@ -394,6 +411,14 @@ export default function App() {
       if (data.response) {
         setChatResponse(data.response);
         
+        // Store current response data for immediate access
+        setCurrentResponseData({
+          sourceDocuments: data.sourceDocuments,
+          hasReferences: data.hasReferences,
+          referenceSummary: data.referenceSummary,
+          documentSources: data.documentSources
+        });
+        
         // Update conversation thread
         if (data.threadId) {
           setThreadId(data.threadId);
@@ -403,7 +428,11 @@ export default function App() {
             timestamp: new Date(),
             id: Date.now().toString(),
             type: 'voice',
-            audioUri: uriToTranscribe
+            audioUri: uriToTranscribe,
+            sourceDocuments: data.sourceDocuments,
+            hasReferences: data.hasReferences,
+            referenceSummary: data.referenceSummary,
+            documentSources: data.documentSources
           }]);
         }
       }
@@ -603,6 +632,7 @@ export default function App() {
     setCurrentConversation(null);
     setTranscription('');
     setChatResponse('');
+    setCurrentResponseData(null); // Clear current response data
     setRecordedUri(null);
     setSound(null);
     clearConversationThread();
@@ -1095,53 +1125,15 @@ export default function App() {
                   
                   {/* Display conversation thread messages */}
                   {conversationThread.map((message, index) => (
-                    <View key={message.id || index}>
-                      {/* User message */}
-                      <View style={styles.messageContainer}>
-                        <View style={styles.userMessage}>
-                          <Text style={styles.transcriptionText}>{message.prompt}</Text>
-                          {message.type === 'voice' && (
-                            <TouchableOpacity 
-                              onPress={() => {
-                                if (message.audioUri) {
-                                  playRecording(message.audioUri);
-                                } else {
-                                  Alert.alert('Audio Not Available', 'This was a voice message, but the audio is no longer available.');
-                                }
-                              }}
-                              style={!message.audioUri && styles.disabledButton}
-                            >
-                              <Ionicons 
-                                name={message.audioUri ? "play-circle" : "mic"} 
-                                size={20} 
-                                color={message.audioUri ? "#fff" : "#bbb"} 
-                                style={styles.messageIcon} 
-                              />
-                            </TouchableOpacity>
-                          )}
-                        </View>
-                      </View>
-                      
-                      {/* Assistant response */}
-                      <View style={styles.messageContainer}>
-                        <View style={styles.assistantMessage}>
-                          <Markdown style={markdownStyles}>{message.response}</Markdown>
-                          <TouchableOpacity 
-                            onPress={() => isTextSpeaking(message.response) ? stopText(message.response) : playText(message.response)}
-                            style={styles.stopSpeechButton}
-                          >
-                            <Ionicons 
-                              name={isTextSpeaking(message.response) ? "stop-circle" : "play-circle"} 
-                              size={20} 
-                              color="#007AFF" 
-                            />
-                            <Text style={styles.stopSpeechText}>
-                              {isTextSpeaking(message.response) ? "Stop" : "Play"}
-                            </Text>
-                          </TouchableOpacity>
-                        </View>
-                      </View>
-                    </View>
+                    <ConversationItem
+                      key={message.id || index}
+                      conversation={{
+                        ...message,
+                        formatTimestamp: () => formatTimestamp(message.timestamp)
+                      }}
+                      onPress={() => {}} // No action for individual messages in thread
+                      onDocumentPress={handleDocumentPress}
+                    />
                   ))}
                   
                   {/* Current conversation (if not in thread yet) */}
@@ -1166,24 +1158,24 @@ export default function App() {
                       </View>
                     </View>
                   ) : chatResponse && !conversationThread.find(msg => msg.response === chatResponse) ? (
-                    <View style={styles.messageContainer}>
-                      <View style={styles.assistantMessage}>
-                        <Markdown style={markdownStyles}>{chatResponse}</Markdown>
-                        <TouchableOpacity 
-                          onPress={() => isTextSpeaking(chatResponse) ? stopText(chatResponse) : playText(chatResponse)}
-                          style={styles.stopSpeechButton}
-                        >
-                          <Ionicons 
-                            name={isTextSpeaking(chatResponse) ? "stop-circle" : "play-circle"} 
-                            size={20} 
-                            color="#007AFF" 
-                          />
-                          <Text style={styles.stopSpeechText}>
-                            {isTextSpeaking(chatResponse) ? "Stop" : "Play"}
-                          </Text>
-                        </TouchableOpacity>
-                      </View>
-                    </View>
+                    <ConversationItem
+                      conversation={{
+                        response: chatResponse,
+                        timestamp: new Date(),
+                        type: transcription ? 'voice' : 'text',
+                        audioUri: transcription ? recordedUri : null,
+                        sourceDocuments: currentResponseData?.sourceDocuments || currentConversation?.sourceDocuments,
+                        hasReferences: currentResponseData?.hasReferences || currentConversation?.hasReferences,
+                        referenceSummary: currentResponseData?.referenceSummary || currentConversation?.referenceSummary,
+                        documentSources: currentResponseData?.documentSources || currentConversation?.documentSources,
+                        formatTimestamp: () => formatTimestamp(new Date())
+                      }}
+                      onPress={() => {}} // No action for current response
+                      onDocumentPress={handleDocumentPress}
+                      showPlayButton={true}
+                      isPlaying={isTextSpeaking(chatResponse)}
+                      onPlayPress={() => isTextSpeaking(chatResponse) ? stopText(chatResponse) : playText(chatResponse)}
+                    />
                   ) : null}
                   
                   {/* Welcome message for new users */}
@@ -1789,3 +1781,22 @@ const markdownStyles = StyleSheet.create({
     borderColor: '#e1e4e8',
   },
 });
+
+// Handle document reference clicks
+const handleDocumentPress = async (documentId, page) => {
+  try {
+    // Try to import the full document viewer service, fallback to simple version
+    let DocumentViewerService;
+    try {
+      DocumentViewerService = require('./services/documentViewerService').default;
+    } catch (error) {
+      console.warn('Using simple document viewer service as fallback');
+      DocumentViewerService = require('./services/simpleDocumentViewerService').default;
+    }
+    
+    await DocumentViewerService.handleDocumentPress(documentId, page);
+  } catch (error) {
+    console.error('Error opening document:', error);
+    Alert.alert('Error', `Unable to open document: ${error.message}`);
+  }
+};

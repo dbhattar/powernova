@@ -1,5 +1,6 @@
 import { Linking, Platform, Alert } from 'react-native';
 import { API_BASE_URL } from '../config/constants';
+import { auth } from '../firebase';
 
 // Try to import Expo packages, but handle gracefully if not available
 let FileSystem, WebBrowser;
@@ -16,8 +17,12 @@ class DocumentViewerService {
    */
   static async handleDocumentPress(documentId, page = null) {
     try {
-      const token = await this.getAuthToken(); // Implement based on your auth system
+      console.log('📄 Opening document:', documentId, 'page:', page);
+      
+      const token = await this.getAuthToken();
       const url = `${API_BASE_URL}/api/chat/document/${documentId}${page ? `?page=${page}` : ''}`;
+      
+      console.log('🔗 Fetching document from:', url);
       
       // Get document details first
       const response = await fetch(url, {
@@ -28,25 +33,89 @@ class DocumentViewerService {
       });
       
       if (!response.ok) {
-        throw new Error('Failed to fetch document');
+        const errorText = await response.text();
+        console.error('❌ API Error:', response.status, errorText);
+        throw new Error(`Failed to fetch document: ${response.status} ${errorText}`);
       }
       
       const document = await response.json();
+      console.log('📋 Document details:', document);
       
-      // Handle different document types
+      // For PDFs, try to modify the URL to force inline viewing
       if (document.type === 'pdf' && document.url) {
-        await this.openPDF(document.url, page);
-      } else if (document.downloadUrl) {
-        await this.downloadAndOpen(document);
+        console.log('📄 Opening PDF with inline viewer');
+        await this.openPDFInline(document.url, page);
+      } else if (document.url) {
+        console.log('📄 Opening document directly');
+        await this.openDocumentDirect(document.url);
       } else {
-        // Fallback: open in browser
-        await WebBrowser.openBrowserAsync(url);
+        throw new Error('Document URL not available');
       }
       
     } catch (error) {
-      console.error('Error opening document:', error);
+      console.error('❌ Error opening document:', error);
       // Show error message to user
-      Alert.alert('Error', 'Unable to open document. Please try again.');
+      Alert.alert('Error', `Unable to open document: ${error.message}`);
+    }
+  }
+
+  /**
+   * Open PDF with inline viewing (try to prevent download)
+   */
+  static async openPDFInline(pdfUrl, page = null) {
+    try {
+      // Try to modify Firebase Storage URL to force inline viewing
+      let url = pdfUrl;
+      
+      // If it's a Firebase Storage URL, try to modify it for inline viewing
+      if (url.includes('firebasestorage.googleapis.com')) {
+        // Remove any existing response-content-disposition parameter
+        url = url.replace(/[?&]response-content-disposition=[^&]*/, '');
+        
+        // Add inline disposition
+        const separator = url.includes('?') ? '&' : '?';
+        url += `${separator}response-content-disposition=inline`;
+      }
+      
+      // Add page parameter if specified
+      if (page) {
+        url += `#page=${page}`;
+      }
+      
+      console.log('🌐 Opening PDF URL:', url);
+      
+      if (WebBrowser) {
+        await WebBrowser.openBrowserAsync(url, {
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.FORM_SHEET,
+          controlsColor: '#007AFF',
+        });
+      } else {
+        await Linking.openURL(url);
+      }
+      
+    } catch (error) {
+      console.error('Error opening PDF inline:', error);
+      // Fallback to regular PDF opening
+      await this.openPDF(pdfUrl, page);
+    }
+  }
+
+  /**
+   * Open document directly with appropriate viewer
+   */
+  static async openDocumentDirect(documentUrl) {
+    try {
+      if (WebBrowser) {
+        await WebBrowser.openBrowserAsync(documentUrl, {
+          presentationStyle: WebBrowser.WebBrowserPresentationStyle.FORM_SHEET,
+          controlsColor: '#007AFF',
+        });
+      } else {
+        await Linking.openURL(documentUrl);
+      }
+    } catch (error) {
+      console.error('Error opening document directly:', error);
+      throw error;
     }
   }
 
@@ -151,12 +220,12 @@ class DocumentViewerService {
 
   /**
    * Get authentication token
-   * Replace this with your actual auth implementation
    */
   static async getAuthToken() {
-    // Implement based on your authentication system
-    // This is a placeholder
-    return 'your-auth-token';
+    if (!auth.currentUser) {
+      throw new Error('User not authenticated');
+    }
+    return await auth.currentUser.getIdToken();
   }
 }
 

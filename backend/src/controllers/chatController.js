@@ -275,15 +275,28 @@ router.get('/document/:documentId', async (req, res) => {
     const { page } = req.query;
     const userId = req.user.uid;
 
+    console.log('🔗 CHAT CONTROLLER - Getting document:', documentId, 'for user:', userId);
+
     // Get document from Firestore
     const document = await firebaseService.getDocument(documentId);
     
-    // Check if document belongs to the user
-    if (document.uid !== userId) {
+    console.log('📄 Document retrieved:', document ? 'Found' : 'Not found');
+    if (document) {
+      console.log('📄 Document details - ID:', document.id, 'UID:', document.uid, 'userId:', document.userId, 'fileName:', document.fileName);
+      console.log('📄 Document fields:', Object.keys(document));
+      console.log('📄 Document type:', document.type, 'fileType:', document.fileType);
+      console.log('📄 Document downloadUrl:', document.downloadUrl);
+    }
+    
+    // Check if document belongs to the user (handle both uid and userId fields)
+    const documentOwner = document.uid || document.userId;
+    if (documentOwner !== userId) {
+      console.log('❌ Access denied - document owner:', documentOwner, 'user.uid:', userId);
       return res.status(403).json({ error: 'Access denied' });
     }
     
     if (!document) {
+      console.log('❌ Document not found');
       return res.status(404).json({ error: 'Document not found' });
     }
 
@@ -291,10 +304,10 @@ router.get('/document/:documentId', async (req, res) => {
     const response = {
       id: document.id,
       name: document.fileName,
-      type: document.type,
-      uploadDate: document.createdAt,
-      size: document.size,
-      url: document.downloadUrl
+      type: document.type || document.fileType || 'unknown',
+      uploadDate: document.createdAt || document.uploadedAt,
+      size: document.size || document.fileSize,
+      url: document.downloadUrl || document.downloadURL || null
     };
 
     // If page is specified and it's a PDF, include page reference
@@ -302,11 +315,82 @@ router.get('/document/:documentId', async (req, res) => {
       response.highlightPage = parseInt(page);
     }
 
+    console.log('✅ Returning document response:', {
+      id: response.id,
+      name: response.name,
+      type: response.type,
+      url: response.url ? 'Present' : 'Missing'
+    });
+
     res.json(response);
   } catch (error) {
     console.error('Error serving document reference:', error);
     res.status(500).json({ error: 'Failed to retrieve document' });
   }
 });
+
+/**
+ * GET /api/chat/document/:documentId/preview
+ * Stream document content with proper headers for preview
+ */
+router.get('/document/:documentId/preview', async (req, res) => {
+  try {
+    const { documentId } = req.params;
+    const { page } = req.query;
+    const userId = req.user.uid;
+
+    // Get document from Firestore
+    const document = await firebaseService.getDocument(documentId);
+    
+    // Check if document belongs to the user (handle both uid and userId fields)
+    const documentOwner = document?.uid || document?.userId;
+    if (!document || documentOwner !== userId) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // Fetch the document from Firebase Storage
+    const fetch = require('node-fetch');
+    const response = await fetch(document.downloadUrl);
+    
+    if (!response.ok) {
+      return res.status(500).json({ error: 'Failed to fetch document from storage' });
+    }
+
+    // Set appropriate headers for preview
+    const contentType = getContentType(document.type);
+    res.setHeader('Content-Type', contentType);
+    res.setHeader('Content-Disposition', `inline; filename="${document.fileName}"`);
+    
+    // For PDFs, we can add page parameter to URL fragment
+    if (document.type === 'pdf' && page) {
+      res.setHeader('X-PDF-Page', page);
+    }
+
+    // Stream the document content
+    response.body.pipe(res);
+    
+  } catch (error) {
+    console.error('Error serving document preview:', error);
+    res.status(500).json({ error: 'Failed to serve document preview' });
+  }
+});
+
+/**
+ * Helper function to get content type based on document type
+ */
+function getContentType(type) {
+  switch (type.toLowerCase()) {
+    case 'pdf':
+      return 'application/pdf';
+    case 'doc':
+      return 'application/msword';
+    case 'docx':
+      return 'application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+    case 'txt':
+      return 'text/plain';
+    default:
+      return 'application/octet-stream';
+  }
+}
 
 module.exports = router;

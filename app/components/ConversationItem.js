@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, Platform, Linking } from 'rea
 import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 
-const ConversationItem = ({ conversation, onPress, onDocumentPress }) => {
+const ConversationItem = ({ conversation, onPress, onDocumentPress, showPlayButton = false, isPlaying = false, onPlayPress }) => {
   const handleDocumentPress = (documentId, page) => {
     if (onDocumentPress) {
       onDocumentPress(documentId, page);
@@ -81,6 +81,21 @@ const ConversationItem = ({ conversation, onPress, onDocumentPress }) => {
       </Text>
       <View style={styles.conversationResponseContainer}>
         <Markdown style={conversationMarkdownStyles}>{conversation.response}</Markdown>
+        {showPlayButton && conversation.response && (
+          <TouchableOpacity 
+            onPress={onPlayPress}
+            style={styles.playButton}
+          >
+            <Ionicons 
+              name={isPlaying ? "stop-circle" : "play-circle"} 
+              size={16} 
+              color="#007AFF" 
+            />
+            <Text style={styles.playButtonText}>
+              {isPlaying ? "Stop" : "Play"}
+            </Text>
+          </TouchableOpacity>
+        )}
       </View>
       {renderDocumentReferences()}
     </TouchableOpacity>
@@ -175,6 +190,24 @@ const styles = StyleSheet.create({
     fontStyle: 'italic',
     marginTop: 4,
     textAlign: 'center',
+  },
+  playButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    marginTop: 8,
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 6,
+    backgroundColor: '#f8f9fa',
+    borderWidth: 1,
+    borderColor: '#e9ecef',
+  },
+  playButtonText: {
+    fontSize: 12,
+    color: '#007AFF',
+    marginLeft: 4,
+    fontWeight: '500',
   },
 });
 

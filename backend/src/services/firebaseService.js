@@ -3,6 +3,7 @@ const admin = require('../config/firebase');
 class FirebaseService {
   constructor() {
     this.db = admin.firestore();
+    this.storage = admin.storage();
   }
 
   /**
@@ -194,6 +195,75 @@ class FirebaseService {
     } catch (error) {
       console.error('Error getting document:', error);
       throw new Error(`Failed to get document: ${error.message}`);
+    }
+  }
+
+  /**
+   * Upload file to Firebase Storage
+   */
+  async uploadFile(fileBuffer, fileName, fileType, userId) {
+    try {
+      // Create a unique file path
+      const timestamp = Date.now();
+      const fileExtension = fileName.split('.').pop();
+      const uniqueFileName = `${timestamp}_${fileName}`;
+      const filePath = `documents/${userId}/${uniqueFileName}`;
+      
+      console.log('📤 Uploading file to Firebase Storage:', filePath);
+      
+      // Get bucket reference
+      const bucket = this.storage.bucket();
+      const file = bucket.file(filePath);
+      
+      // Upload the file
+      await file.save(fileBuffer, {
+        metadata: {
+          contentType: fileType,
+          metadata: {
+            originalName: fileName,
+            uploadedBy: userId,
+            uploadedAt: new Date().toISOString()
+          }
+        }
+      });
+      
+      // Make the file publicly accessible
+      await file.makePublic();
+      
+      // Get the download URL
+      const downloadUrl = `https://storage.googleapis.com/${bucket.name}/${filePath}`;
+      
+      console.log('✅ File uploaded successfully:', downloadUrl);
+      
+      return {
+        filePath,
+        downloadUrl,
+        fileName: uniqueFileName,
+        originalName: fileName
+      };
+      
+    } catch (error) {
+      console.error('Error uploading file to Firebase Storage:', error);
+      throw new Error(`Failed to upload file: ${error.message}`);
+    }
+  }
+
+  /**
+   * Delete file from Firebase Storage
+   */
+  async deleteFile(filePath) {
+    try {
+      console.log('🗑️ Deleting file from Firebase Storage:', filePath);
+      
+      const bucket = this.storage.bucket();
+      const file = bucket.file(filePath);
+      
+      await file.delete();
+      console.log('✅ File deleted successfully:', filePath);
+      
+    } catch (error) {
+      console.error('Error deleting file from Firebase Storage:', error);
+      throw new Error(`Failed to delete file: ${error.message}`);
     }
   }
 }

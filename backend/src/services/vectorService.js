@@ -132,13 +132,9 @@ class VectorService {
       
       console.log(`🧠 Generated query embedding with ${queryVector ? queryVector.length : 0} dimensions`);
 
-      // Search in user's namespace
+      // Search in user's namespace with retry
       console.log(`🔍 Searching in namespace: ${userId}`);
-      const searchResponse = await this.index.namespace(userId).query({
-        vector: queryVector,
-        topK: topK,
-        includeMetadata: true
-      });
+      const searchResponse = await this.searchWithRetry(userId, queryVector, topK);
 
       console.log(`📚 Search response:`, {
         matchesFound: searchResponse.matches?.length || 0,
@@ -196,8 +192,8 @@ class VectorService {
       
       console.log(`🗑️  Attempting to delete up to 100 chunk IDs for document ${docId}`);
       
-      // Delete by IDs (this won't fail if IDs don't exist)
-      await this.index.namespace(userId).deleteMany(vectorIds);
+      // Delete by IDs with retry (this won't fail if IDs don't exist)
+      await this.deleteWithRetry(userId, vectorIds);
       
       console.log(`🗑️  Completed deletion for document ${docId}`);
       
@@ -324,7 +320,7 @@ class VectorService {
       console.log(`🔄 Processing embedding batch ${batchNumber}/${totalBatches} (${batch.length} chunks, ~${batchTokens.toLocaleString()} tokens)`);
       
       try {
-        const batchEmbeddings = await openaiService.generateEmbeddings(batch);
+        const batchEmbeddings = await this.generateEmbeddingsWithRetry(batch);
         allEmbeddings.push(...batchEmbeddings);
         
         // Longer delay between batches for large documents to avoid rate limiting
@@ -332,7 +328,7 @@ class VectorService {
         await new Promise(resolve => setTimeout(resolve, delay));
         
       } catch (error) {
-        console.error(`❌ Batch embedding failed for batch starting at ${i}:`, error);
+        console.error(`❌ Batch embedding failed for batch starting at ${i} after all retries:`, error);
         throw error;
       }
       
@@ -348,25 +344,268 @@ class VectorService {
    * Upsert vectors in batches to Pinecone
    */
   async upsertVectors(vectors, userId) {
-    const batchSize = 100; // Pinecone batch size limit
+    // Reduced batch size for better reliability
+    const batchSize = 50; // Reduced from 100 to 50 for better timeout handling
+    const batchDelay = 300; // Increased delay between batches
+    
+    console.log(`📤 Starting upsert of ${vectors.length} vectors in batches of ${batchSize}`);
     
     for (let i = 0; i < vectors.length; i += batchSize) {
       const batch = vectors.slice(i, i + batchSize);
-      console.log(`📤 Upserting batch ${Math.floor(i / batchSize) + 1}/${Math.ceil(vectors.length / batchSize)} (${batch.length} vectors)`);
+      const batchNumber = Math.floor(i / batchSize) + 1;
+      const totalBatches = Math.ceil(vectors.length / batchSize);
+      
+      console.log(`📤 Upserting batch ${batchNumber}/${totalBatches} (${batch.length} vectors)`);
       
       try {
-        await this.index.namespace(userId).upsert(batch);
+        await this.upsertWithRetry(batch, userId);
         
-        // Small delay between batches
-        await new Promise(resolve => setTimeout(resolve, 100));
+        // Progress indicator
+        const progress = ((i + batch.length) / vectors.length * 100).toFixed(1);
+        console.log(`📊 Progress: ${progress}% (${i + batch.length}/${vectors.length} vectors)`);
+        
+        // Delay between batches to avoid rate limiting
+        if (i + batchSize < vectors.length) {
+          await new Promise(resolve => setTimeout(resolve, batchDelay));
+        }
         
       } catch (error) {
-        console.error(`❌ Vector upsert failed for batch starting at ${i}:`, error);
+        console.error(`❌ Vector upsert failed for batch ${batchNumber}/${totalBatches} after all retries:`, error);
         throw error;
       }
     }
     
-    console.log(`✅ Upserted ${vectors.length} vectors to Pinecone`);
+    console.log(`✅ Successfully upserted all ${vectors.length} vectors to Pinecone`);
+  }
+
+  /**
+   * Upsert vectors with exponential backoff retry
+   */
+  async upsertWithRetry(batch, userId, maxRetries = 5) {
+    let lastError;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        await this.index.namespace(userId).upsert(batch);
+        
+        // Success - log if this wasn't the first attempt
+        if (attempt > 0) {
+          console.log(`✅ Upsert succeeded on attempt ${attempt + 1}`);
+        }
+        
+        return; // Success!
+        
+      } catch (error) {
+        lastError = error;
+        
+        // Check if this is a retryable error
+        if (!this.isRetryableError(error)) {
+          console.error(`❌ Non-retryable error: ${this.getErrorDescription(error)}`);
+          throw error;
+        }
+        
+        // Calculate exponential backoff delay
+        const baseDelay = 1000; // 1 second
+        const maxDelay = 30000; // 30 seconds
+        const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+        
+        console.log(`⚠️  Attempt ${attempt + 1}/${maxRetries} failed: ${this.getErrorDescription(error)}`);
+        console.log(`⏳ Retrying in ${delay}ms...`);
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    
+    // All retries failed
+    throw lastError;
+  }
+
+  /**
+   * Check if an error is retryable
+   */
+  isRetryableError(error) {
+    // Check HTTP status codes for retryable errors
+    if (error.status) {
+      const retryableStatusCodes = [500, 502, 503, 504, 408, 429];
+      return retryableStatusCodes.includes(error.status);
+    }
+    
+    // Check error messages for known retryable patterns
+    const errorMessage = error.message?.toLowerCase() || '';
+    const retryablePatterns = [
+      'timeout',
+      'gateway time-out',
+      'service unavailable',
+      'internal server error',
+      'too many requests',
+      'rate limit',
+      'connection reset',
+      'network error',
+      'econnreset',
+      'enotfound',
+      'etimedout',
+      'socket hang up',
+      'connect timeout',
+      'request timeout'
+    ];
+    
+    return retryablePatterns.some(pattern => errorMessage.includes(pattern));
+  }
+
+  /**
+   * Get a human-readable error description
+   */
+  getErrorDescription(error) {
+    if (error.status === 504) {
+      return 'Gateway timeout - Pinecone server took too long to respond';
+    }
+    if (error.status === 503) {
+      return 'Service unavailable - Pinecone temporarily overloaded';
+    }
+    if (error.status === 429) {
+      return 'Rate limit exceeded - too many requests';
+    }
+    if (error.status === 500) {
+      return 'Internal server error - temporary Pinecone issue';
+    }
+    
+    const errorMessage = error.message?.toLowerCase() || '';
+    if (errorMessage.includes('timeout')) {
+      return 'Request timeout - operation took too long';
+    }
+    
+    return error.message || 'Unknown error';
+  }
+
+  /**
+   * Search vectors with exponential backoff retry
+   */
+  async searchWithRetry(userId, queryVector, topK, maxRetries = 3) {
+    let lastError;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const searchResponse = await this.index.namespace(userId).query({
+          vector: queryVector,
+          topK: topK,
+          includeMetadata: true
+        });
+        
+        // Success - log if this wasn't the first attempt
+        if (attempt > 0) {
+          console.log(`✅ Search succeeded on attempt ${attempt + 1}`);
+        }
+        
+        return searchResponse;
+        
+      } catch (error) {
+        lastError = error;
+        
+        // Check if this is a retryable error
+        if (!this.isRetryableError(error)) {
+          console.error(`❌ Non-retryable search error:`, error.message);
+          throw error;
+        }
+        
+        // Calculate exponential backoff delay (shorter delays for search)
+        const baseDelay = 500; // 0.5 second
+        const maxDelay = 5000; // 5 seconds
+        const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+        
+        console.log(`⚠️  Search attempt ${attempt + 1} failed (${error.message}), retrying in ${delay}ms...`);
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    
+    // All retries failed
+    throw lastError;
+  }
+
+  /**
+   * Delete vectors with exponential backoff retry
+   */
+  async deleteWithRetry(userId, vectorIds, maxRetries = 3) {
+    let lastError;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        await this.index.namespace(userId).deleteMany(vectorIds);
+        
+        // Success - log if this wasn't the first attempt
+        if (attempt > 0) {
+          console.log(`✅ Delete succeeded on attempt ${attempt + 1}`);
+        }
+        
+        return;
+        
+      } catch (error) {
+        lastError = error;
+        
+        // Check if this is a retryable error
+        if (!this.isRetryableError(error)) {
+          console.error(`❌ Non-retryable delete error:`, error.message);
+          throw error;
+        }
+        
+        // Calculate exponential backoff delay (shorter delays for delete)
+        const baseDelay = 500; // 0.5 second
+        const maxDelay = 5000; // 5 seconds
+        const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+        
+        console.log(`⚠️  Delete attempt ${attempt + 1} failed (${error.message}), retrying in ${delay}ms...`);
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    
+    // All retries failed
+    throw lastError;
+  }
+
+  /**
+   * Generate embeddings with exponential backoff retry
+   */
+  async generateEmbeddingsWithRetry(batch, maxRetries = 3) {
+    let lastError;
+    
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      try {
+        const batchEmbeddings = await openaiService.generateEmbeddings(batch);
+        
+        // Success - log if this wasn't the first attempt
+        if (attempt > 0) {
+          console.log(`✅ Embedding generation succeeded on attempt ${attempt + 1}`);
+        }
+        
+        return batchEmbeddings;
+        
+      } catch (error) {
+        lastError = error;
+        
+        // Check if this is a retryable error
+        if (!this.isRetryableError(error)) {
+          console.error(`❌ Non-retryable embedding error:`, error.message);
+          throw error;
+        }
+        
+        // Calculate exponential backoff delay
+        const baseDelay = 1000; // 1 second
+        const maxDelay = 10000; // 10 seconds
+        const delay = Math.min(baseDelay * Math.pow(2, attempt), maxDelay);
+        
+        console.log(`⚠️  Embedding attempt ${attempt + 1} failed (${error.message}), retrying in ${delay}ms...`);
+        
+        // Wait before retrying
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+    }
+    
+    // All retries failed
+    throw lastError;
   }
 
   /**
