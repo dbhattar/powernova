@@ -9,6 +9,7 @@ const chatController = require('./controllers/chatController');
 const documentController = require('./controllers/documentController');
 const vectorController = require('./controllers/vectorController');
 const projectsController = require('./controllers/projectsController');
+const userController = require('./controllers/userController');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -67,6 +68,7 @@ app.get('/api/test-db', async (req, res) => {
 app.use('/api/chat', authMiddleware, chatController);
 app.use('/api/documents', authMiddleware, documentController);
 app.use('/api/vectors', authMiddleware, vectorController);
+app.use('/api/user', authMiddleware, userController);
 
 // Projects health check (no auth required)
 app.get('/api/projects/health', (req, res) => {

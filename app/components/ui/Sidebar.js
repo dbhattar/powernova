@@ -104,7 +104,15 @@ export const Sidebar = ({ navigation, user, currentRoute, onClose, onNavigate })
 
       {/* User Section */}
       {user && (
-        <View style={styles.userSection}>
+        <TouchableOpacity 
+          style={styles.userSection}
+          onPress={() => {
+            if (onNavigate) {
+              onNavigate('profile');
+            }
+            onClose && onClose();
+          }}
+        >
           <View style={styles.userInfo}>
             <View style={styles.userAvatar}>
               <Text style={styles.userInitial}>
@@ -115,8 +123,14 @@ export const Sidebar = ({ navigation, user, currentRoute, onClose, onNavigate })
               <Text style={styles.userName}>{user.displayName || 'User'}</Text>
               <Text style={styles.userEmail}>{user.email}</Text>
             </View>
+            <Ionicons 
+              name="chevron-forward" 
+              size={16} 
+              color="#666" 
+              style={styles.userChevron}
+            />
           </View>
-        </View>
+        </TouchableOpacity>
       )}
     </View>
   );
@@ -227,5 +241,8 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: '#666',
     marginTop: 2,
+  },
+  userChevron: {
+    marginLeft: 'auto',
   },
 });

@@ -16,7 +16,7 @@ import { testConversations, testSaveConversation } from './conversationTest';
 import { DocumentUpload, DocumentItem, DocumentManagement, ProfilePicture, ConversationItem, ConversationHistory, ProjectDashboard, ProjectDetails, ProjectSearch } from './components';
 // New imports for enhanced UI
 import { MainLayout } from './components/Layout';
-import { DashboardScreen } from './screens';
+import { DashboardScreen, ProfileScreen } from './screens';
 import { Sidebar } from './components/ui';
 
 export default function App() {
@@ -44,6 +44,7 @@ export default function App() {
   const [showProjects, setShowProjects] = useState(false);
   const [showProjectSearch, setShowProjectSearch] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
+  const [showProfile, setShowProfile] = useState(false);
   // New state for enhanced UI
   const [currentPanel, setCurrentPanel] = useState('chat');
   const [showSidebar, setShowSidebar] = useState(false);
@@ -621,6 +622,7 @@ export default function App() {
     setShowProjects(false);
     setShowProjectSearch(false);
     setSelectedProject(null);
+    setShowProfile(false);
     
     // Set current panel for new UI
     setCurrentPanel(panel);
@@ -641,6 +643,9 @@ export default function App() {
         break;
       case 'dashboard':
         // Dashboard will be handled by the new UI
+        break;
+      case 'profile':
+        setShowProfile(true);
         break;
       case 'chat':
       default:
@@ -956,23 +961,17 @@ export default function App() {
                 </>
               ) : null}
               {user ? (
-                <View style={styles.userInfoRow}>
+                <TouchableOpacity 
+                  style={styles.userInfoRow}
+                  onPress={() => navigateToPanel('profile')}
+                >
                   <ProfilePicture user={user} />
                   <View style={styles.userNameContainer}>
                     <Text style={styles.userName}>{user.displayName || 'User'}</Text>
                     <Text style={styles.userStatus}>Signed in</Text>
                   </View>
-                  <TouchableOpacity
-                    style={styles.signOutButton}
-                    onPress={() => {
-                      signOut(auth);
-                      clearCurrentConversation();
-                    }}
-                  >
-                    <Ionicons name="log-out-outline" size={16} color="#fff" style={styles.signOutIcon} />
-                    <Text style={styles.signOutText}>Sign Out</Text>
-                  </TouchableOpacity>
-                </View>
+                  <Ionicons name="chevron-forward" size={16} color="#666" />
+                </TouchableOpacity>
               ) : (
                 <TouchableOpacity
                   style={styles.signInButton}
@@ -992,6 +991,11 @@ export default function App() {
               conversations={conversations}
               documents={documents}
               onNavigate={navigateToPanel}
+            />
+          ) : showProfile ? (
+            <ProfileScreen
+              user={user}
+              onClose={() => navigateToPanel('chat')}
             />
           ) : showHistory ? (
             <ConversationHistory 
