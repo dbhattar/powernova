@@ -3,6 +3,7 @@ const multer = require('multer');
 const openaiService = require('../services/openaiService');
 const vectorService = require('../services/vectorService');
 const firebaseService = require('../services/firebaseService');
+const DocumentReferenceService = require('../services/documentReferenceService');
 
 const router = express.Router();
 
@@ -43,7 +44,6 @@ router.post('/message', async (req, res) => {
     }
 
     // Perform semantic search on user's documents
-    let documentContext = '';
     let searchResults = [];
     try {
       console.log(`🔍 Starting document search for user: ${userId}, query: "${message}"`);
@@ -55,20 +55,6 @@ router.post('/message', async (req, res) => {
         searchResults.forEach((result, index) => {
           console.log(`   ${index + 1}. Score: ${result.score?.toFixed(4)}, File: ${result.metadata?.fileName}, Content preview: "${result.metadata?.text?.substring(0, 100)}..."`);
         });
-
-        // Filter by relevance threshold
-        const relevantResults = searchResults.filter(result => result.score > 0.3);
-        console.log(`🎯 Results above 0.3 threshold: ${relevantResults.length}`);
-
-        if (relevantResults.length > 0) {
-          documentContext = relevantResults
-            .map(result => `Source: ${result.metadata.fileName}\n${result.metadata.text}`)
-            .join('\n\n');
-          
-          console.log(`📚 Using document context from ${relevantResults.length} sources (${documentContext.length} characters)`);
-        } else {
-          console.log(`⚠️ No results met the 0.3 score threshold. Highest score: ${Math.max(...searchResults.map(r => r.score || 0)).toFixed(4)}`);
-        }
       } else {
         console.log(`❌ No search results returned from vector service`);
       }
@@ -76,9 +62,14 @@ router.post('/message', async (req, res) => {
       console.log('⚠️  Vector search failed, continuing without document context:', vectorError.message);
     }
 
+    // Process search results and extract document references
+    const { documentContext, sourceDocuments, hasReferences } = DocumentReferenceService.processSearchResults(searchResults);
+
     // Log context status
     if (!documentContext) {
       console.log('💭 No document context available, using general knowledge only');
+    } else {
+      console.log(`📚 Using document context from ${sourceDocuments.length} sources (${documentContext.length} characters)`);
     }
 
     // Build enhanced prompt
@@ -96,24 +87,38 @@ router.post('/message', async (req, res) => {
     // Generate thread ID if not provided
     const currentThreadId = threadId || `thread_${Date.now()}_${userId}`;
 
+    // Add document references to response
+    let responseWithReferences = response;
+    if (hasReferences) {
+      const documentReferences = DocumentReferenceService.formatDocumentReferences(sourceDocuments);
+      responseWithReferences += documentReferences;
+    }
+
+    // Generate reference summary for metadata
+    const referenceSummary = DocumentReferenceService.generateReferenceSummary(sourceDocuments);
+
     // Save conversation to Firestore
     const conversationData = {
       uid: userId,
       threadId: currentThreadId,
       prompt: message,
-      response: response,
+      response: responseWithReferences,
       type: 'text',
       isFollowUp: isFollowUp,
-      documentSources: searchResults?.map(r => r.metadata.docId) || [],
+      documentSources: sourceDocuments.map(doc => doc.id),
+      sourceDocuments: sourceDocuments,
+      referenceSummary: referenceSummary,
       createdAt: new Date()
     };
 
     await firebaseService.saveConversation(conversationData);
 
     res.json({
-      response: response,
+      response: responseWithReferences,
       threadId: currentThreadId,
-      documentSources: conversationData.documentSources
+      documentSources: sourceDocuments,
+      hasReferences: hasReferences,
+      referenceSummary: referenceSummary
     });
 
   } catch (error) {
@@ -151,10 +156,9 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
 
     // Auto-send transcription to chat
     const searchResults = await vectorService.searchDocuments(userId, transcription, 5);
-    const documentContext = searchResults
-      .filter(result => result.score > 0.3)
-      .map(result => `Source: ${result.metadata.fileName}\n${result.metadata.text}`)
-      .join('\n\n');
+    
+    // Process search results and extract document references
+    const { documentContext, sourceDocuments, hasReferences } = DocumentReferenceService.processSearchResults(searchResults);
 
     const enhancedPrompt = openaiService.buildEnhancedPrompt(transcription, documentContext);
     const response = await openaiService.generateChatCompletion([
@@ -163,15 +167,27 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
 
     const currentThreadId = threadId || `thread_${Date.now()}_${userId}`;
 
+    // Add document references to response
+    let responseWithReferences = response;
+    if (hasReferences) {
+      const documentReferences = DocumentReferenceService.formatDocumentReferences(sourceDocuments);
+      responseWithReferences += documentReferences;
+    }
+
+    // Generate reference summary for metadata
+    const referenceSummary = DocumentReferenceService.generateReferenceSummary(sourceDocuments);
+
     // Save conversation
     const conversationData = {
       uid: userId,
       threadId: currentThreadId,
       prompt: transcription,
-      response: response,
+      response: responseWithReferences,
       type: 'voice',
       isFollowUp: false,
-      documentSources: searchResults?.map(r => r.metadata.docId) || [],
+      documentSources: sourceDocuments.map(doc => doc.id),
+      sourceDocuments: sourceDocuments,
+      referenceSummary: referenceSummary,
       createdAt: new Date()
     };
 
@@ -179,9 +195,11 @@ router.post('/transcribe', upload.single('audio'), async (req, res) => {
 
     res.json({
       transcription: transcription,
-      response: response,
+      response: responseWithReferences,
       threadId: currentThreadId,
-      documentSources: conversationData.documentSources
+      documentSources: sourceDocuments,
+      hasReferences: hasReferences,
+      referenceSummary: referenceSummary
     });
 
   } catch (error) {
@@ -244,6 +262,50 @@ router.get('/thread/:threadId', async (req, res) => {
       error: 'Failed to get conversation thread',
       message: error.message
     });
+  }
+});
+
+/**
+ * GET /api/chat/document/:documentId
+ * Get document details for chat references
+ */
+router.get('/document/:documentId', async (req, res) => {
+  try {
+    const { documentId } = req.params;
+    const { page } = req.query;
+    const userId = req.user.uid;
+
+    // Get document from Firestore
+    const document = await firebaseService.getDocument(documentId);
+    
+    // Check if document belongs to the user
+    if (document.uid !== userId) {
+      return res.status(403).json({ error: 'Access denied' });
+    }
+    
+    if (!document) {
+      return res.status(404).json({ error: 'Document not found' });
+    }
+
+    // Return document details with optional page highlighting
+    const response = {
+      id: document.id,
+      name: document.fileName,
+      type: document.type,
+      uploadDate: document.createdAt,
+      size: document.size,
+      url: document.downloadUrl
+    };
+
+    // If page is specified and it's a PDF, include page reference
+    if (page && document.type === 'pdf') {
+      response.highlightPage = parseInt(page);
+    }
+
+    res.json(response);
+  } catch (error) {
+    console.error('Error serving document reference:', error);
+    res.status(500).json({ error: 'Failed to retrieve document' });
   }
 });
 

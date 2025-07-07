@@ -3,7 +3,24 @@ import { View, Text, TouchableOpacity, FlatList, StyleSheet } from 'react-native
 import { Ionicons } from '@expo/vector-icons';
 import ConversationItem from './ConversationItem';
 
+// Try to import the full document viewer service, fallback to simple version
+let DocumentViewerService;
+try {
+  DocumentViewerService = require('../services/documentViewerService').default;
+} catch (error) {
+  console.warn('Using simple document viewer service as fallback');
+  DocumentViewerService = require('../services/simpleDocumentViewerService').default;
+}
+
 const ConversationHistory = ({ conversations, onClose, onConversationSelect, formatTimestamp }) => {
+  const handleDocumentPress = async (documentId, page) => {
+    try {
+      await DocumentViewerService.handleDocumentPress(documentId, page);
+    } catch (error) {
+      console.error('Error opening document:', error);
+    }
+  };
+
   const renderConversationItem = ({ item }) => (
     <ConversationItem 
       conversation={{
@@ -11,6 +28,7 @@ const ConversationHistory = ({ conversations, onClose, onConversationSelect, for
         formatTimestamp: () => formatTimestamp(item.timestamp)
       }}
       onPress={() => onConversationSelect(item)}
+      onDocumentPress={handleDocumentPress}
     />
   );
 

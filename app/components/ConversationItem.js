@@ -1,9 +1,51 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import Markdown from 'react-native-markdown-display';
 
-const ConversationItem = ({ conversation, onPress }) => {
+const ConversationItem = ({ conversation, onPress, onDocumentPress }) => {
+  const handleDocumentPress = (documentId, page) => {
+    if (onDocumentPress) {
+      onDocumentPress(documentId, page);
+    }
+  };
+
+  const renderDocumentReferences = () => {
+    if (!conversation.sourceDocuments || conversation.sourceDocuments.length === 0) {
+      return null;
+    }
+
+    return (
+      <View style={styles.documentReferencesContainer}>
+        <Text style={styles.documentReferencesTitle}>📄 References:</Text>
+        {conversation.sourceDocuments.map((doc, index) => (
+          <TouchableOpacity
+            key={doc.id}
+            style={styles.documentReference}
+            onPress={() => handleDocumentPress(doc.id, doc.pages?.[0])}
+          >
+            <Ionicons name="document-text" size={14} color="#007AFF" />
+            <Text style={styles.documentName}>
+              {doc.name}
+              {doc.pages && doc.pages.length > 0 && (
+                <Text style={styles.documentPages}> (p. {doc.pages.join(', ')})</Text>
+              )}
+            </Text>
+            {doc.chunks > 1 && (
+              <Text style={styles.documentChunks}>• {doc.chunks} sections</Text>
+            )}
+          </TouchableOpacity>
+        ))}
+        {conversation.referenceSummary && (
+          <Text style={styles.referenceSummary}>
+            Based on {conversation.referenceSummary.documentCount} document{conversation.referenceSummary.documentCount > 1 ? 's' : ''} 
+            ({conversation.referenceSummary.totalChunks} sections)
+          </Text>
+        )}
+      </View>
+    );
+  };
+
   return (
     <TouchableOpacity style={styles.conversationItem} onPress={onPress}>
       <View style={styles.conversationHeader}>
@@ -24,6 +66,14 @@ const ConversationItem = ({ conversation, onPress }) => {
           <Text style={styles.conversationTimestamp}>
             {conversation.formatTimestamp ? conversation.formatTimestamp() : 'Recent'}
           </Text>
+          {conversation.hasReferences && (
+            <Ionicons 
+              name="document-text" 
+              size={12} 
+              color="#28A745" 
+              style={styles.referencesIcon}
+            />
+          )}
         </View>
       </View>
       <Text style={styles.conversationPrompt} numberOfLines={2}>
@@ -32,6 +82,7 @@ const ConversationItem = ({ conversation, onPress }) => {
       <View style={styles.conversationResponseContainer}>
         <Markdown style={conversationMarkdownStyles}>{conversation.response}</Markdown>
       </View>
+      {renderDocumentReferences()}
     </TouchableOpacity>
   );
 };
@@ -59,6 +110,9 @@ const styles = StyleSheet.create({
   followUpIcon: {
     marginLeft: 4,
   },
+  referencesIcon: {
+    marginLeft: 4,
+  },
   conversationTimestamp: {
     fontSize: 12,
     color: '#666',
@@ -77,6 +131,50 @@ const styles = StyleSheet.create({
   },
   conversationResponseContainer: {
     flex: 1,
+  },
+  documentReferencesContainer: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: '#e9ecef',
+  },
+  documentReferencesTitle: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#333',
+    marginBottom: 8,
+  },
+  documentReference: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#f8f9fa',
+    padding: 8,
+    borderRadius: 6,
+    marginBottom: 4,
+    borderWidth: 1,
+    borderColor: '#dee2e6',
+  },
+  documentName: {
+    fontSize: 13,
+    color: '#007AFF',
+    marginLeft: 6,
+    flex: 1,
+  },
+  documentPages: {
+    color: '#666',
+    fontSize: 12,
+  },
+  documentChunks: {
+    fontSize: 11,
+    color: '#666',
+    marginLeft: 6,
+  },
+  referenceSummary: {
+    fontSize: 11,
+    color: '#666',
+    fontStyle: 'italic',
+    marginTop: 4,
+    textAlign: 'center',
   },
 });
 
