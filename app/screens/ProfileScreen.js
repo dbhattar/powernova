@@ -283,6 +283,21 @@ const ProfileScreen = ({ onClose, user }) => {
             <TouchableOpacity style={styles.closeFromErrorButton} onPress={handleClose}>
               <Text style={styles.closeFromErrorButtonText}>Close</Text>
             </TouchableOpacity>
+            
+            {/* Sign Out Button - Always available even when profile fails to load */}
+            <View style={styles.errorSignOutContainer}>
+              <Text style={styles.errorSignOutLabel}>Account Actions</Text>
+              <TouchableOpacity 
+                style={styles.errorSignOutButton}
+                onPress={() => {
+                  auth.signOut();
+                  handleClose();
+                }}
+              >
+                <Ionicons name="log-out-outline" size={20} color="#007AFF" />
+                <Text style={styles.errorSignOutButtonText}>Sign Out</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </SafeAreaView>
       </Modal>
@@ -823,6 +838,37 @@ const styles = StyleSheet.create({
     color: '#007AFF',
     fontSize: 16,
     fontWeight: '600',
+  },
+  errorSignOutContainer: {
+    marginTop: 32,
+    paddingTop: 24,
+    borderTopWidth: 1,
+    borderTopColor: '#e1e4e8',
+    width: '100%',
+    alignItems: 'center',
+  },
+  errorSignOutLabel: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 12,
+    textAlign: 'center',
+  },
+  errorSignOutButton: {
+    backgroundColor: '#fff',
+    borderRadius: 8,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+    borderWidth: 1,
+    borderColor: '#e1e4e8',
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  errorSignOutButtonText: {
+    color: '#007AFF',
+    fontSize: 16,
+    fontWeight: '500',
+    marginLeft: 8,
   },
   bottomCloseButton: {
     backgroundColor: '#f0f0f0',
