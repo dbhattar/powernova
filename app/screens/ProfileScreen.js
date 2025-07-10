@@ -36,7 +36,7 @@ const ProfileScreen = ({ onClose, user }) => {
   };
 
   // Backend API configuration
-  const BACKEND_API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3002/api';
+  const BACKEND_API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000';
 
   // Handle hardware back button on Android
   useEffect(() => {
@@ -61,7 +61,7 @@ const ProfileScreen = ({ onClose, user }) => {
       setIsLoading(true);
       const token = await user.getIdToken();
       
-      const response = await fetch(`${BACKEND_API_URL}/user/profile`, {
+      const response = await fetch(`${BACKEND_API_URL}/api/user/profile`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json',
@@ -96,7 +96,7 @@ const ProfileScreen = ({ onClose, user }) => {
     try {
       const token = await user.getIdToken();
       
-      const response = await fetch(`${BACKEND_API_URL}/user/settings`, {
+      const response = await fetch(`${BACKEND_API_URL}/api/user/settings`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -124,7 +124,7 @@ const ProfileScreen = ({ onClose, user }) => {
       setIsSaving(true);
       const token = await user.getIdToken();
       
-      const response = await fetch(`${BACKEND_API_URL}/user/profile`, {
+      const response = await fetch(`${BACKEND_API_URL}/api/user/profile`, {
         method: 'PUT',
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -172,7 +172,7 @@ const ProfileScreen = ({ onClose, user }) => {
             try {
               const token = await user.getIdToken();
               
-              const response = await fetch(`${BACKEND_API_URL}/user/account`, {
+              const response = await fetch(`${BACKEND_API_URL}/api/user/account`, {
                 method: 'DELETE',
                 headers: {
                   'Authorization': `Bearer ${token}`,

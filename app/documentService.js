@@ -12,8 +12,11 @@ export const formatFileSize = (bytes) => {
 
 // Get appropriate icon for file type
 export const getFileIcon = (fileType) => {
-  if (fileType.includes('pdf')) return 'document-text';
-  if (fileType.includes('word') || fileType.includes('doc')) return 'document';
-  if (fileType.includes('text')) return 'document-outline';
+  if (!fileType || typeof fileType !== 'string') return 'document';
+  
+  const type = fileType.toLowerCase();
+  if (type.includes('pdf')) return 'document-text';
+  if (type.includes('word') || type.includes('doc')) return 'document';
+  if (type.includes('text')) return 'document-outline';
   return 'document';
 };

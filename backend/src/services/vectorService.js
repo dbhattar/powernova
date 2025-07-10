@@ -60,6 +60,16 @@ class VectorService {
 
     try {
       console.log('📄 Processing document:', { docId, userId, fileName });
+      
+      // Validate textContent
+      if (!textContent || typeof textContent !== 'string') {
+        throw new Error(`Invalid text content: ${typeof textContent} (expected string)`);
+      }
+      
+      if (textContent.length === 0) {
+        throw new Error('Document text content is empty');
+      }
+      
       console.log(`📊 Document stats: ${textContent.length} characters, ~${Math.ceil(textContent.length / 4)} tokens`);
       
       // Use provided chunk parameters or calculate optimal ones
@@ -238,6 +248,16 @@ class VectorService {
    * Enhanced text chunking with sentence boundary detection and overlap
    */
   chunkText(text, chunkSize = 1000, overlap = 200) {
+    if (!text || typeof text !== 'string') {
+      console.log('⚠️ Invalid text for chunking:', typeof text);
+      return [];
+    }
+    
+    if (text.length === 0) {
+      console.log('⚠️ Empty text for chunking');
+      return [];
+    }
+    
     const chunks = [];
     let start = 0;
     
@@ -286,6 +306,9 @@ class VectorService {
    * Estimate token count for text (approximate)
    */
   estimateTokenCount(text) {
+    if (!text || typeof text !== 'string') {
+      return 0;
+    }
     // Rough estimation: 1 token ≈ 4 characters for English text
     return Math.ceil(text.length / 4);
   }

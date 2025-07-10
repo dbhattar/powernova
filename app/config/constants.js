@@ -1,5 +1,5 @@
 // API Configuration
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3002';
+export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000';
 
 // Document viewer settings
 export const DOCUMENT_VIEWER_CONFIG = {

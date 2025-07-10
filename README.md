@@ -132,6 +132,49 @@ npm run clean          # Clean all node_modules
 npm run reset          # Clean and reinstall all dependencies
 ```
 
+## 🐳 Docker Services
+
+PowerNOVA uses Docker for Redis (job queue) and other services:
+
+### Quick Start with Docker
+```bash
+# Start with job queue system (includes Redis)
+./start-with-worker.sh
+
+# Or manage Docker services manually
+./docker-manage.sh start    # Start Redis
+./docker-manage.sh status   # Check status
+./docker-manage.sh logs     # View logs
+./docker-manage.sh stop     # Stop services
+```
+
+### Available Docker Commands
+```bash
+./docker-manage.sh start     # Start Redis container
+./docker-manage.sh stop      # Stop Redis container
+./docker-manage.sh restart   # Restart Redis container
+./docker-manage.sh status    # Show container status
+./docker-manage.sh logs      # Show Redis logs
+./docker-manage.sh clean     # Remove container and data
+./docker-manage.sh reset     # Clean and recreate
+```
+
+### Manual Docker Setup
+```bash
+# Start Redis with Docker Compose
+docker-compose up -d redis
+
+# Check Redis is running
+docker exec powernova-redis redis-cli ping
+# Should return: PONG
+
+# View Redis logs
+docker logs powernova-redis
+
+# Stop Redis
+docker-compose down
+```
+
 ## 🔐 Security Architecture
 
 PowerNOVA uses a secure backend-first architecture:
@@ -186,10 +229,17 @@ OpenAI API / Pinecone / Firebase
 **Backend won't start:**
 - Check `.env` file exists and has all required variables
 - Verify Firebase credentials are correct
-- Ensure port 3001 is available
+- Ensure port 3002 is available
+- Make sure Redis is running: `./docker-manage.sh start`
+
+**Redis connection errors:**
+- Start Redis container: `./docker-manage.sh start`
+- Check Docker is running: `docker info`
+- Verify Redis status: `./docker-manage.sh status`
+- View Redis logs: `./docker-manage.sh logs`
 
 **Frontend can't connect to backend:**
-- Check backend is running on port 3001
+- Check backend is running on port 3002
 - Verify `BACKEND_API_URL` in App.js
 - Check CORS settings in backend
 
@@ -202,6 +252,12 @@ OpenAI API / Pinecone / Firebase
 - Check Firebase Storage rules
 - Verify file size limits (25MB for audio, 10MB for documents)
 - Ensure user is authenticated
+- Check Redis is running for job queue: `./docker-manage.sh status`
+
+**Job queue not processing:**
+- Ensure Redis is running: `./docker-manage.sh start`
+- Check backend logs for worker errors
+- Verify REDIS_URL in backend/.env
 
 ## 📖 Documentation
 

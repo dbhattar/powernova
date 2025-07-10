@@ -19,7 +19,7 @@ const ProjectDetails = ({ route, navigation }) => {
   const [loading, setLoading] = useState(false);
   const [additionalInfo, setAdditionalInfo] = useState(null);
 
-  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3002';
+  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000';
 
   const fetchProjectDetails = async () => {
     if (!project.IsoID || !project.QueueID) return;

@@ -32,7 +32,7 @@ const ProjectSearch = ({ navigation, onClose }) => {
     return () => unsubscribe();
   }, []);
 
-  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3002';
+  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000';
 
   const searchProjects = async (query, page = 1) => {
     if (!query.trim()) {

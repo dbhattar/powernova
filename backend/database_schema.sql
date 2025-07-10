@@ -1,0 +1,4 @@
+-- PowerNOVA Database Schema
+-- NOTE: Document storage is handled by Firestore, not PostgreSQL
+-- This schema is only for user profiles and settings that require PostgreSQL
+-- For actual schema setup, use database_migration.sql instead

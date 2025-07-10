@@ -7,6 +7,19 @@ class FirebaseService {
   }
 
   /**
+   * Verify Firebase ID token
+   */
+  async verifyIdToken(idToken) {
+    try {
+      const decodedToken = await admin.auth().verifyIdToken(idToken);
+      return decodedToken;
+    } catch (error) {
+      console.error('❌ Failed to verify Firebase ID token:', error.message);
+      throw new Error('Invalid or expired token');
+    }
+  }
+
+  /**
    * Save conversation to Firestore
    */
   async saveConversation(conversationData) {
@@ -86,6 +99,25 @@ class FirebaseService {
   /**
    * Save document metadata to Firestore
    */
+  async saveDocument(documentData) {
+    try {
+      const docRef = this.db.collection('documents').doc(documentData.documentId);
+      await docRef.set({
+        ...documentData,
+        uploadedAt: admin.firestore.FieldValue.serverTimestamp()
+      });
+      
+      console.log(`📝 Document saved to Firestore: ${documentData.documentId}`);
+      return documentData.documentId;
+    } catch (error) {
+      console.error('Error saving document:', error);
+      throw new Error(`Failed to save document: ${error.message}`);
+    }
+  }
+
+  /**
+   * Save document metadata to Firestore
+   */
   async saveDocumentMetadata(documentData) {
     try {
       const docRef = await this.db.collection('documents').add({
@@ -104,6 +136,66 @@ class FirebaseService {
    * Update document processing status
    */
   async updateDocumentStatus(docId, statusData) {
+    try {
+      const updateData = {
+        ...statusData,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+      };
+      
+      await this.db.collection('documents').doc(docId).update(updateData);
+      console.log(`📝 Updated document ${docId} status:`, statusData.processingStatus || statusData.status || 'unknown');
+      
+    } catch (error) {
+      console.error('Error updating document status:', error);
+      throw new Error(`Failed to update document status: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update document with processing completion data
+   */
+  async updateDocumentComplete(docId, completionData) {
+    try {
+      const updateData = {
+        status: 'completed',
+        processedAt: admin.firestore.FieldValue.serverTimestamp(),
+        vectorCount: completionData.vectorCount || 0,
+        ...completionData
+      };
+      
+      await this.db.collection('documents').doc(docId).update(updateData);
+      console.log(`📝 Document ${docId} marked as completed`);
+      
+    } catch (error) {
+      console.error('Error updating document completion:', error);
+      throw new Error(`Failed to update document completion: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update document with error status
+   */
+  async updateDocumentError(docId, errorMessage) {
+    try {
+      const updateData = {
+        status: 'failed',
+        errorMessage: errorMessage,
+        lastUpdated: admin.firestore.FieldValue.serverTimestamp()
+      };
+      
+      await this.db.collection('documents').doc(docId).update(updateData);
+      console.log(`📝 Document ${docId} marked as failed: ${errorMessage}`);
+      
+    } catch (error) {
+      console.error('Error updating document error:', error);
+      throw new Error(`Failed to update document error: ${error.message}`);
+    }
+  }
+
+  /**
+   * Update document processing status (legacy method)
+   */
+  async updateDocumentStatusLegacy(docId, statusData) {
     try {
       const updateData = {
         ...statusData,

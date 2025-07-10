@@ -4,6 +4,8 @@ const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
 const vectorService = require('../services/vectorService');
 const firebaseService = require('../services/firebaseService');
+const jobQueue = require('../services/jobQueue');
+const { v4: uuidv4 } = require('uuid');
 
 const router = express.Router();
 
@@ -56,7 +58,7 @@ router.post('/upload', upload.single('document'), async (req, res) => {
     const userId = req.user.uid;
     const file = req.file;
     
-    // Extract text content based on file type
+    // Extract text content for validation
     let textContent = '';
     try {
       textContent = await extractTextContent(file);
@@ -78,44 +80,44 @@ router.post('/upload', upload.single('document'), async (req, res) => {
       });
     }
 
-    // Calculate optimal chunk parameters
-    const chunkParams = vectorService.calculateOptimalChunkSize(textContent);
-    console.log(`⚙️ Using chunk parameters:`, chunkParams);
+    // Save document metadata to Firestore
+    const documentId = uuidv4();
+    
+    // Create vectorization job
+    const jobId = await jobQueue.enqueue({
+      type: 'vectorize_document',
+      payload: {
+        documentId: documentId,
+        fileBuffer: Array.from(file.buffer), // Convert Buffer to array for JSON serialization
+        filename: file.originalname,
+        mimeType: file.mimetype,
+        userId: userId
+      }
+    });
 
-    // Upload file to Firebase Storage
-    console.log('📤 Uploading file to Firebase Storage...');
-    const uploadResult = await firebaseService.uploadFile(
-      file.buffer,
-      file.originalname,
-      file.mimetype,
-      userId
-    );
-
-    // Save document metadata to Firestore with download URL
-    const docId = await firebaseService.saveDocumentMetadata({
+    // Save document to Firestore with job ID (without content to avoid size limits)
+    await firebaseService.saveDocument({
+      documentId: documentId,
       userId: userId,
       fileName: file.originalname,
       fileSize: file.size,
-      fileType: file.mimetype,
-      filePath: uploadResult.filePath,
-      downloadUrl: uploadResult.downloadUrl,
-      type: file.mimetype,
-      characterCount: textContent.length,
-      estimatedTokens: Math.ceil(textContent.length / 4),
-      processingStatus: 'processing',
-      isProcessed: false
+      mimeType: file.mimetype,
+      status: 'queued_for_processing',
+      jobId: jobId,
+      uploadedAt: new Date()
+      // Note: content is not stored in Firestore to avoid 1MB size limit
+      // The vectorization job will extract content from fileBuffer
     });
 
-    // Process document asynchronously with improved chunking
-    processDocumentAsync(docId, userId, file.originalname, textContent, chunkParams);
+    console.log(`📋 Document ${documentId} queued for processing with job ${jobId}`);
 
     res.json({
-      documentId: docId,
+      documentId: documentId,
       fileName: file.originalname,
       fileSize: file.size,
-      downloadUrl: uploadResult.downloadUrl,
-      status: 'processing',
-      message: 'Document uploaded successfully and is being processed'
+      status: 'queued_for_processing',
+      jobId: jobId,
+      message: 'Document uploaded successfully and queued for processing'
     });
 
   } catch (error) {
@@ -258,24 +260,52 @@ router.get('/:id/status', async (req, res) => {
     const { id } = req.params;
     const userId = req.user.uid;
     
-    const document = await firebaseService.getDocument(id);
+    console.log('📄 Getting document status:', id, 'for user:', userId);
     
+    // Get document from Firestore
+    const document = await firebaseService.getDocument(id);
+
+    if (!document) {
+      return res.status(404).json({
+        error: 'Document not found'
+      });
+    }
+
+    // Check if user owns this document
     if (document.userId !== userId) {
       return res.status(403).json({
         error: 'Access denied'
       });
     }
+    
+    // If document has a job ID, get job status
+    if (document.jobId) {
+      const jobStatus = await jobQueue.getJobStatus(document.jobId);
+      if (jobStatus) {
+        return res.json({
+          documentId: document.documentId,
+          fileName: document.fileName,
+          status: jobStatus.status,
+          error: jobStatus.error,
+          createdAt: jobStatus.createdAt,
+          startedAt: jobStatus.startedAt,
+          completedAt: jobStatus.completedAt
+        });
+      }
+    }
 
+    // Fallback to document status from Firestore
     res.json({
-      documentId: id,
-      status: document.processingStatus,
-      isProcessed: document.isProcessed,
-      chunkCount: document.chunkCount || 0,
-      processingError: document.processingError || null
+      documentId: document.documentId,
+      fileName: document.fileName,
+      status: document.status,
+      error: document.errorMessage,
+      createdAt: document.uploadedAt,
+      processedAt: document.processedAt
     });
 
   } catch (error) {
-    console.error('Get status error:', error);
+    console.error('Get document status error:', error);
     res.status(500).json({
       error: 'Failed to get document status',
       message: error.message

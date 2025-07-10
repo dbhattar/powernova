@@ -18,6 +18,7 @@ import { DocumentUpload, DocumentItem, DocumentManagement, ProfilePicture, Conve
 import { MainLayout } from './components/Layout';
 import { DashboardScreen, ProfileScreen } from './screens';
 import { Sidebar } from './components/ui';
+import { webSocketService } from './services/webSocketService';
 
 export default function App() {
   const [recording, setRecording] = useState(null);
@@ -42,6 +43,7 @@ export default function App() {
   const [documents, setDocuments] = useState([]);
   const [showDocuments, setShowDocuments] = useState(false);
   const [isUploading, setIsUploading] = useState(false);
+  const [isRefreshingDocuments, setIsRefreshingDocuments] = useState(false);
   const [showProjects, setShowProjects] = useState(false);
   const [showProjectSearch, setShowProjectSearch] = useState(false);
   const [selectedProject, setSelectedProject] = useState(null);
@@ -59,7 +61,7 @@ export default function App() {
   function getBackendApiUrl() {
     // Development: local backend
     if (__DEV__) {
-      return 'http://localhost:3002/api';
+      return `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000'}/api`;
     }
     // Production: deployed backend URL
     return Constants.expoConfig.extra.backendUrl || 'https://your-backend-url.com/api';
@@ -860,8 +862,13 @@ export default function App() {
   }, [user]);
 
   // Load user documents from backend
-  const loadUserDocuments = async () => {
+  const loadUserDocuments = async (showLoader = false) => {
+    if (showLoader) {
+      setIsRefreshingDocuments(true);
+    }
+    
     try {
+      console.log('📄 Loading user documents...');
       const response = await apiCall('/documents');
       const userDocuments = response.documents || [];
       console.log('📄 Raw documents from API:', userDocuments);
@@ -873,12 +880,133 @@ export default function App() {
       }));
       
       console.log('📄 Processed documents:', processedDocuments);
+      
+      // Log status for debugging
+      processedDocuments.forEach(doc => {
+        console.log(`📄 Document ${doc.fileName}: status=${doc.status}, isCompleted=${doc.status === 'completed'}`);
+      });
+      
       setDocuments(processedDocuments);
     } catch (error) {
-      console.error('Error loading documents:', error);
+      console.error('❌ Error loading documents:', error);
       setDocuments([]);
+    } finally {
+      if (showLoader) {
+        setIsRefreshingDocuments(false);
+      }
     }
   };
+
+  // Auto-refresh documents to show status updates  
+  React.useEffect(() => {
+    if (!user) {
+      console.log('📄 Auto-refresh: Skipping - no user');
+      return;
+    }
+
+    console.log('📄 Auto-refresh: Checking if refresh needed...');
+    console.log('📄 Auto-refresh: User:', user.uid);
+    console.log('📄 Auto-refresh: Documents count:', documents.length);
+
+    // Always set up refresh if user is present - we'll check processing status inside the interval
+    console.log('📄 Auto-refresh: Setting up refresh timer (every 5 seconds for debugging)');
+    
+    // Set up interval to check for status updates every 5 seconds (faster for debugging)
+    const refreshInterval = setInterval(() => {
+      // Check if we have any processing documents before refreshing
+      const hasProcessingDocs = documents.some(doc => 
+        doc.status === 'processing' || 
+        doc.status === 'queued_for_processing' ||
+        doc.status === 'queued' ||
+        (doc.status !== 'completed' && doc.status !== 'failed')
+      );
+
+      if (hasProcessingDocs) {
+        console.log('📄 Auto-refresh: Timer triggered - found processing docs, refreshing...');
+        loadUserDocuments();
+      } else {
+        console.log('📄 Auto-refresh: Timer triggered - no processing docs, skipping refresh');
+      }
+    }, 5000); // 5 seconds for debugging
+
+    // Clean up interval after 5 minutes for debugging
+    const maxRefreshTimeout = setTimeout(() => {
+      console.log('📄 Auto-refresh: Maximum refresh time reached, stopping auto-refresh');
+      clearInterval(refreshInterval);
+    }, 300000); // 5 minutes
+
+    return () => {
+      console.log('📄 Auto-refresh: Cleaning up timers');
+      clearInterval(refreshInterval);
+      clearTimeout(maxRefreshTimeout);
+    };
+  }, [user?.uid]); // Only depend on user ID, not documents array
+
+  // WebSocket setup for real-time document updates
+  React.useEffect(() => {
+    if (!user) return;
+
+    let cleanup = null;
+
+    const setupWebSocket = async () => {
+      try {
+        console.log('📡 Setting up WebSocket for document updates...');
+        await webSocketService.connect();
+        
+        // Listen for document processing updates
+        const handleDocumentProcessed = (data) => {
+          console.log('📄 WebSocket: Document processed event received:', data);
+          // Refresh documents list when we get an update
+          loadUserDocuments();
+        };
+
+        const handleJobProgress = (data) => {
+          console.log('📄 WebSocket: Job progress event received:', data);
+          // Refresh on completion or failure
+          if (data.status === 'completed' || data.status === 'failed') {
+            console.log('📄 WebSocket: Job completed/failed, refreshing documents...');
+            loadUserDocuments();
+          }
+        };
+
+        const handleMessage = (message) => {
+          console.log('📄 WebSocket: Raw message received:', message);
+          // Handle different message types that might be sent
+          if (message.type === 'document_status_update' || message.type === 'document_processed') {
+            console.log('📄 WebSocket: Document status update detected, refreshing...');
+            loadUserDocuments();
+          }
+        };
+
+        // Register multiple event listeners to catch different event types
+        webSocketService.on('document_processed', handleDocumentProcessed);
+        webSocketService.on('job_progress', handleJobProgress);
+        webSocketService.on('message', handleMessage);
+
+        console.log('✅ WebSocket listeners registered for document updates');
+
+        // Return cleanup function
+        cleanup = () => {
+          console.log('🧹 Cleaning up WebSocket listeners...');
+          webSocketService.off('document_processed', handleDocumentProcessed);
+          webSocketService.off('job_progress', handleJobProgress);
+          webSocketService.off('message', handleMessage);
+        };
+
+        return cleanup;
+      } catch (error) {
+        console.error('❌ Failed to setup WebSocket for document updates:', error);
+      }
+    };
+
+    setupWebSocket();
+    
+    return () => {
+      if (cleanup && typeof cleanup === 'function') {
+        cleanup();
+      }
+    };
+  }, [user]);
 
   // Load conversation history when user signs in/out
   React.useEffect(() => {
@@ -1060,7 +1188,12 @@ export default function App() {
               onUpload={handleDocumentUpload}
               onDelete={handleDocumentDelete}
               onClose={() => navigateToPanel('chat')}
+              onRefresh={() => {
+                console.log('🔄 Manual refresh triggered from DocumentManagement');
+                loadUserDocuments(true);
+              }}
               isUploading={isUploading}
+              isRefreshing={isRefreshingDocuments}
             />
           ) : selectedProject ? (
             <ProjectDetails

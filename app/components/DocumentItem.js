@@ -33,7 +33,7 @@ const DocumentItem = ({ document, onDelete, onSelect }) => {
   return (
     <TouchableOpacity style={styles.documentItem} onPress={() => onSelect(document)}>
       <View style={styles.documentItemHeader}>
-        <Ionicons name={getFileIcon(document.fileType)} size={24} color="#007AFF" />
+        <Ionicons name={getFileIcon(document.mimeType || document.fileType)} size={24} color="#007AFF" />
         <View style={styles.documentItemInfo}>
           <Text style={styles.documentItemName} numberOfLines={1}>
             {document.fileName}
@@ -50,15 +50,35 @@ const DocumentItem = ({ document, onDelete, onSelect }) => {
         </TouchableOpacity>
       </View>
       <View style={styles.documentItemStatus}>
-        {document.isProcessed ? (
+        {document.status === 'completed' ? (
           <View style={styles.statusBadge}>
             <Ionicons name="checkmark-circle" size={16} color="#28a745" />
             <Text style={styles.statusText}>Ready for Q&A</Text>
+            {(document.chunkCount || document.vectorCount) && (
+              <Text style={styles.statusSubtext}>• {document.chunkCount || document.vectorCount} chunks</Text>
+            )}
           </View>
-        ) : document.processingError ? (
+        ) : document.errorMessage || document.status === 'failed' ? (
           <View style={[styles.statusBadge, styles.statusError]}>
             <Ionicons name="alert-circle" size={16} color="#FF3B30" />
             <Text style={[styles.statusText, styles.statusErrorText]}>Processing Error</Text>
+            {document.errorMessage && (
+              <Text style={styles.errorSubtext}>• {document.errorMessage}</Text>
+            )}
+          </View>
+        ) : document.status === 'processing' ? (
+          <View style={[styles.statusBadge, styles.statusProcessing]}>
+            <Ionicons name="cog" size={16} color="#FF9500" />
+            <Text style={[styles.statusText, styles.statusProcessingText]}>Processing...</Text>
+            {document.message && (
+              <Text style={styles.processingSubtext}>• {document.message}</Text>
+            )}
+          </View>
+        ) : document.status === 'queued_for_processing' ? (
+          <View style={[styles.statusBadge, styles.statusQueued]}>
+            <Ionicons name="time-outline" size={16} color="#6c757d" />
+            <Text style={[styles.statusText, styles.statusQueuedText]}>Queued</Text>
+            <Text style={styles.queuedSubtext}>• Waiting to process</Text>
           </View>
         ) : (
           <View style={[styles.statusBadge, styles.statusProcessing]}>
@@ -124,16 +144,47 @@ const styles = StyleSheet.create({
   statusProcessing: {
     backgroundColor: '#fff3e0',
   },
+  statusQueued: {
+    backgroundColor: '#f8f9fa',
+    borderColor: '#6c757d',
+    borderWidth: 1,
+  },
   statusText: {
     fontSize: 12,
     fontWeight: '500',
     color: '#28a745',
+  },
+  statusSubtext: {
+    fontSize: 10,
+    color: '#666',
+    marginLeft: 4,
   },
   statusErrorText: {
     color: '#FF3B30',
   },
   statusProcessingText: {
     color: '#FF9500',
+  },
+  statusQueuedText: {
+    color: '#6c757d',
+  },
+  errorSubtext: {
+    fontSize: 10,
+    color: '#FF3B30',
+    marginLeft: 4,
+    marginTop: 2,
+  },
+  processingSubtext: {
+    fontSize: 10,
+    color: '#FF9500',
+    marginLeft: 4,
+    marginTop: 2,
+  },
+  queuedSubtext: {
+    fontSize: 10,
+    color: '#6c757d',
+    marginLeft: 4,
+    marginTop: 2,
   },
 });
 

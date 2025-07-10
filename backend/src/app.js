@@ -2,6 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const helmet = require('helmet');
 const rateLimit = require('express-rate-limit');
+const http = require('http');
 require('dotenv').config();
 
 const authMiddleware = require('./middleware/authMiddleware');
@@ -10,6 +11,8 @@ const documentController = require('./controllers/documentController');
 const vectorController = require('./controllers/vectorController');
 const projectsController = require('./controllers/projectsController');
 const userController = require('./controllers/userController');
+const webSocketManager = require('./services/webSocketManager');
+const vectorizationWorker = require('./services/vectorizationWorker');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -98,8 +101,36 @@ app.use('*', (req, res) => {
   });
 });
 
-app.listen(PORT, () => {
-  console.log(`PowerNOVA Backend API running on port ${PORT}`);
+// app.listen(PORT, () => {
+//   console.log(`PowerNOVA Backend API running on port ${PORT}`);
+//   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
+// });
+
+// Create HTTP server for WebSocket support
+const server = http.createServer(app);
+
+// Initialize WebSocket
+webSocketManager.initialize(server);
+
+// Start vectorization worker
+vectorizationWorker.start().catch(console.error);
+
+// Handle graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('🛑 SIGTERM received, shutting down gracefully...');
+  await vectorizationWorker.stop();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('🛑 SIGINT received, shutting down gracefully...');
+  await vectorizationWorker.stop();
+  process.exit(0);
+});
+
+// Start server
+server.listen(PORT, () => {
+  console.log(`🚀 PowerNOVA Backend with WebSocket running on port ${PORT}`);
   console.log(`Environment: ${process.env.NODE_ENV || 'development'}`);
 });
 

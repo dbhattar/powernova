@@ -4,12 +4,42 @@ import { Ionicons } from '@expo/vector-icons';
 import DocumentUpload from './DocumentUpload';
 import DocumentItem from './DocumentItem';
 
-const DocumentManagement = ({ documents, onUpload, onDelete, onClose, isUploading }) => {
+const DocumentManagement = ({ documents, onUpload, onDelete, onClose, isUploading, onRefresh, isRefreshing }) => {
   const [searchTerm, setSearchTerm] = useState('');
+  const [refreshing, setRefreshing] = useState(false);
   
   const filteredDocuments = documents.filter(doc =>
     doc.fileName.toLowerCase().includes(searchTerm.toLowerCase())
   );
+
+  const handleRefresh = async () => {
+    if (onRefresh) {
+      console.log('🔄 DocumentManagement: Manual refresh triggered');
+      setRefreshing(true);
+      try {
+        await onRefresh();
+      } finally {
+        setRefreshing(false);
+      }
+    }
+  };
+
+  const handleDebugRefresh = async () => {
+    console.log('🐛 DEBUG: Testing document refresh...');
+    console.log('🐛 Current documents:', documents.length);
+    documents.forEach(doc => {
+      console.log(`🐛 Document: ${doc.fileName} - Status: ${doc.status} - Completed: ${doc.status === 'completed'}`);
+    });
+    
+    if (onRefresh) {
+      console.log('🐛 Calling onRefresh...');
+      await onRefresh();
+    } else {
+      console.log('🐛 No onRefresh function provided');
+    }
+  };
+
+  const actuallyRefreshing = refreshing || isRefreshing;
 
   const renderDocumentItem = ({ item }) => (
     <DocumentItem
@@ -23,9 +53,28 @@ const DocumentManagement = ({ documents, onUpload, onDelete, onClose, isUploadin
     <View style={styles.documentManagementContainer}>
       <View style={styles.documentHeader}>
         <Text style={styles.documentTitle}>Document Library</Text>
-        <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-          <Ionicons name="close" size={24} color="#007AFF" />
-        </TouchableOpacity>
+        <View style={styles.headerButtons}>
+          <TouchableOpacity 
+            onPress={handleDebugRefresh} 
+            style={styles.debugButton}
+          >
+            <Ionicons name="bug" size={16} color="#FF9500" />
+          </TouchableOpacity>
+          <TouchableOpacity 
+            onPress={handleRefresh} 
+            style={styles.refreshButton}
+            disabled={actuallyRefreshing}
+          >
+            <Ionicons 
+              name="refresh" 
+              size={20} 
+              color={actuallyRefreshing ? "#ccc" : "#007AFF"} 
+            />
+          </TouchableOpacity>
+          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+            <Ionicons name="close" size={24} color="#007AFF" />
+          </TouchableOpacity>
+        </View>
       </View>
 
       <DocumentUpload onUpload={onUpload} isUploading={isUploading} />
@@ -74,6 +123,22 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     marginBottom: 20,
+  },
+  headerButtons: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  refreshButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#f0f0f0',
+  },
+  debugButton: {
+    padding: 8,
+    borderRadius: 20,
+    backgroundColor: '#fff3e0',
+    marginRight: 4,
   },
   documentTitle: {
     fontSize: 24,

@@ -37,7 +37,7 @@ export const checkDocumentsInFirestore = async () => {
           id: doc.id,
           fileName: data.fileName,
           uploadedAt: data.uploadedAt?.toDate?.() || data.uploadedAt,
-          isProcessed: data.isProcessed,
+          status: data.status,
           uid: data.uid
         });
       });

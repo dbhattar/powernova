@@ -135,7 +135,7 @@ const ProjectDashboard = ({ navigation, onClose }) => {
   const [selectedISO, setSelectedISO] = useState(null);
   const [error, setError] = useState(null);
 
-  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:3002';
+  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000';
 
   const fetchProjects = async (iso = null) => {
     if (!user) {

@@ -84,6 +84,16 @@ However, if a question has any connection to energy, power systems, or related p
     try {
       const textArray = Array.isArray(texts) ? texts : [texts];
       
+      // Validate all texts
+      for (let i = 0; i < textArray.length; i++) {
+        if (!textArray[i] || typeof textArray[i] !== 'string') {
+          throw new Error(`Invalid text at index ${i}: ${typeof textArray[i]} (expected string)`);
+        }
+        if (textArray[i].length === 0) {
+          throw new Error(`Empty text at index ${i}`);
+        }
+      }
+      
       // Check token limits
       const totalTokens = textArray.reduce((sum, text) => sum + this.estimateTokenCount(text), 0);
       
@@ -109,6 +119,9 @@ However, if a question has any connection to energy, power systems, or related p
    * Estimate token count for text (approximate)
    */
   estimateTokenCount(text) {
+    if (!text || typeof text !== 'string') {
+      return 0;
+    }
     // Rough estimation: 1 token ≈ 4 characters for English text
     return Math.ceil(text.length / 4);
   }
