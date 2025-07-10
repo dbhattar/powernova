@@ -1,12 +1,13 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   View,
   Text,
   TouchableOpacity,
-  Alert,
   StyleSheet,
   ActivityIndicator,
-  Platform
+  Platform,
+  Animated,
+  Alert
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
@@ -15,8 +16,36 @@ import { webSocketService } from '../services/webSocketService';
 
 const DocumentUpload = ({ onUpload, isUploading: externalUploading }) => {
   const [uploading, setUploading] = useState(false);
+  const [feedbackMessage, setFeedbackMessage] = useState('');
+  const [feedbackType, setFeedbackType] = useState(''); // 'success', 'error', 'duplicate'
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   const isUploading = externalUploading || uploading;
+
+  // Function to show feedback message with fade animation
+  const showFeedback = (message, type = 'success') => {
+    setFeedbackMessage(message);
+    setFeedbackType(type);
+    
+    // Fade in
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 300,
+      useNativeDriver: true,
+    }).start();
+    
+    // Fade out after 4 seconds
+    setTimeout(() => {
+      Animated.timing(fadeAnim, {
+        toValue: 0,
+        duration: 500,
+        useNativeDriver: true,
+      }).start(() => {
+        setFeedbackMessage('');
+        setFeedbackType('');
+      });
+    }, 4000);
+  };
 
   useEffect(() => {
     // Connect to WebSocket when component mounts
@@ -71,20 +100,7 @@ const DocumentUpload = ({ onUpload, isUploading: externalUploading }) => {
 
       const file = result.assets[0];
       
-      // If onUpload prop is provided, use it (legacy support)
-      if (onUpload) {
-        if (Platform.OS === 'web' && file.file) {
-          onUpload({
-            ...file,
-            type: file.mimeType || file.type
-          });
-        } else {
-          onUpload(file);
-        }
-        return;
-      }
-
-      // Otherwise, handle upload internally
+      // Always handle upload internally to show feedback
       await uploadDocument(file);
     } catch (error) {
       console.error('Error picking document:', error);
@@ -109,45 +125,161 @@ const DocumentUpload = ({ onUpload, isUploading: externalUploading }) => {
 
       // Create form data
       const formData = new FormData();
-      formData.append('document', {
-        uri: file.uri,
-        type: file.mimeType,
-        name: file.name,
-      });
+      
+      // Handle different platforms
+      if (Platform.OS === 'web') {
+        if (file.file) {
+          formData.append('document', file.file, file.name);
+        } else {
+          // Try to create a blob from the URI
+          const response = await fetch(file.uri);
+          const blob = await response.blob();
+          formData.append('document', blob, file.name);
+        }
+      } else {
+        // For native platforms
+        formData.append('document', {
+          uri: file.uri,
+          type: file.mimeType || file.type,
+          name: file.name,
+        });
+      }
 
-      console.log('� Uploading document:', file.name);
+      console.log('📤 Uploading document:', file.name);
+      console.log('📤 File details:', {
+        name: file.name,
+        mimeType: file.mimeType,
+        type: file.type,
+        size: file.size,
+        uri: file.uri
+      });
 
       const response = await fetch(`${apiUrl}/api/documents/upload`, {
         method: 'POST',
         headers: {
           'Authorization': `Bearer ${token}`,
+          // Don't set Content-Type - let the browser set it with boundary for multipart/form-data
         },
         body: formData,
       });
 
+      console.log('📤 Response status:', response.status);
+      console.log('📤 Response headers:', Object.fromEntries(response.headers.entries()));
+
       if (response.ok) {
         const result = await response.json();
+        console.log('📤 Upload response:', JSON.stringify(result, null, 2));
         
-        Alert.alert('Success', 'Document uploaded and queued for processing!');
-        
-        // Notify parent component about the upload
-        if (onUpload) {
-          onUpload(result);
+        if (result.isDuplicate) {
+          console.log('🔄 Duplicate file detected, showing feedback');
+          // Handle duplicate file with clear, friendly message
+          showFeedback(
+            `Not uploaded - "${result.existingDocument.fileName}" already exists in your documents`,
+            'duplicate'
+          );
+          
+          // Notify parent component to refresh and potentially highlight the existing document
+          if (onUpload) {
+            onUpload({
+              ...result.existingDocument,
+              isExisting: true,
+              isDuplicate: true
+            });
+          }
+        } else {
+          console.log('✅ New document uploaded successfully');
+          // Handle new document upload
+          showFeedback('Document uploaded and queued for processing!', 'success');
+          
+          // Notify parent component about the upload
+          if (onUpload) {
+            onUpload(result);
+          }
         }
       } else {
         const error = await response.json();
-        Alert.alert('Upload Failed', error.message || 'Failed to upload document');
+        console.log('❌ Upload failed:', error);
+        showFeedback(error.message || 'Failed to upload document', 'error');
       }
     } catch (error) {
       console.error('Upload error:', error);
-      Alert.alert('Error', 'Failed to upload document');
+      showFeedback('Failed to upload document', 'error');
     } finally {
       setUploading(false);
     }
   };
 
+  const getFeedbackIcon = () => {
+    switch (feedbackType) {
+      case 'success':
+        return 'checkmark-circle';
+      case 'duplicate':
+        return 'information-circle';
+      case 'error':
+        return 'alert-circle';
+      default:
+        return 'information-circle';
+    }
+  };
+
+  const getFeedbackStyle = () => {
+    switch (feedbackType) {
+      case 'success':
+        return styles.feedbackSuccess;
+      case 'duplicate':
+        return styles.feedbackDuplicate;
+      case 'error':
+        return styles.feedbackError;
+      default:
+        return styles.feedbackSuccess;
+    }
+  };
+
+  const getFeedbackTextStyle = () => {
+    switch (feedbackType) {
+      case 'success':
+        return styles.feedbackTextSuccess;
+      case 'duplicate':
+        return styles.feedbackTextDuplicate;
+      case 'error':
+        return styles.feedbackTextError;
+      default:
+        return styles.feedbackTextSuccess;
+    }
+  };
+
   return (
     <View style={styles.container}>
+      {/* Animated Feedback Message */}
+      {feedbackMessage ? (
+        <Animated.View
+          style={[
+            styles.feedbackContainer,
+            getFeedbackStyle(),
+            {
+              opacity: fadeAnim,
+              transform: [
+                {
+                  translateY: fadeAnim.interpolate({
+                    inputRange: [0, 1],
+                    outputRange: [-10, 0],
+                  }),
+                },
+              ],
+            },
+          ]}
+        >
+          <Ionicons
+            name={getFeedbackIcon()}
+            size={20}
+            color={StyleSheet.flatten(getFeedbackTextStyle()).color}
+          />
+          <Text style={[styles.feedbackText, getFeedbackTextStyle()]}>
+            {feedbackMessage}
+          </Text>
+        </Animated.View>
+      ) : null}
+      
       <TouchableOpacity
         style={[styles.uploadButton, isUploading && styles.uploadButtonDisabled]}
         onPress={handleDocumentPick}
@@ -197,6 +329,45 @@ const styles = StyleSheet.create({
     color: '#666',
     textAlign: 'center',
     fontStyle: 'italic',
+  },
+  feedbackContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 10,
+    borderRadius: 6,
+    marginBottom: 12,
+    gap: 6,
+  },
+  feedbackSuccess: {
+    backgroundColor: '#d4edda',
+    borderColor: '#c3e6cb',
+    borderWidth: 1,
+  },
+  feedbackDuplicate: {
+    backgroundColor: '#fafafa',
+    borderColor: '#e0e0e0',
+    borderWidth: 1,
+  },
+  feedbackError: {
+    backgroundColor: '#f8d7da',
+    borderColor: '#f5c6cb',
+    borderWidth: 1,
+  },
+  feedbackText: {
+    fontSize: 13,
+    fontWeight: '400',
+    textAlign: 'center',
+    flex: 1,
+  },
+  feedbackTextSuccess: {
+    color: '#155724',
+  },
+  feedbackTextDuplicate: {
+    color: '#757575',
+  },
+  feedbackTextError: {
+    color: '#721c24',
   },
 });
 

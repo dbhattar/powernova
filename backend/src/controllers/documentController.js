@@ -2,6 +2,7 @@ const express = require('express');
 const multer = require('multer');
 const pdfParse = require('pdf-parse');
 const mammoth = require('mammoth');
+const crypto = require('crypto');
 const vectorService = require('../services/vectorService');
 const firebaseService = require('../services/firebaseService');
 const jobQueue = require('../services/jobQueue');
@@ -58,6 +59,26 @@ router.post('/upload', upload.single('document'), async (req, res) => {
     const userId = req.user.uid;
     const file = req.file;
     
+    // Generate file hash for duplicate detection
+    const fileHash = crypto.createHash('sha256').update(file.buffer).digest('hex');
+    console.log(`📄 File hash: ${fileHash}`);
+    
+    // Check for duplicate files
+    const existingDocument = await firebaseService.findDocumentByHash(userId, fileHash);
+    if (existingDocument) {
+      console.log(`📄 Duplicate file detected: ${file.originalname} (hash: ${fileHash})`);
+      return res.status(200).json({
+        message: 'This document has already been uploaded',
+        isDuplicate: true,
+        existingDocument: {
+          id: existingDocument.id,
+          fileName: existingDocument.fileName,
+          uploadedAt: existingDocument.uploadedAt,
+          status: existingDocument.status
+        }
+      });
+    }
+    
     // Extract text content for validation
     let textContent = '';
     try {
@@ -102,6 +123,7 @@ router.post('/upload', upload.single('document'), async (req, res) => {
       fileName: file.originalname,
       fileSize: file.size,
       mimeType: file.mimetype,
+      fileHash: fileHash,
       status: 'queued_for_processing',
       jobId: jobId,
       uploadedAt: new Date()

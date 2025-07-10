@@ -1,0 +1,10 @@
+This is a test document for testing duplicate detection.
+
+The content of this file will remain the same, so it should generate the same SHA-256 hash every time.
+
+Test content:
+- Line 1
+- Line 2  
+- Line 3
+
+This should help us verify that the duplicate detection mechanism is working correctly in both the backend and frontend.

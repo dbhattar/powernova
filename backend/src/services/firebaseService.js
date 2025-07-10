@@ -358,6 +358,45 @@ class FirebaseService {
       throw new Error(`Failed to delete file: ${error.message}`);
     }
   }
+
+  /**
+   * Find document by file hash for duplicate detection
+   */
+  async findDocumentByHash(userId, fileHash) {
+    try {
+      console.log('🔍 Checking for duplicate file with hash:', fileHash);
+      
+      const snapshot = await this.db
+        .collection('documents')
+        .where('userId', '==', userId)
+        .where('fileHash', '==', fileHash)
+        .limit(1)
+        .get();
+
+      if (snapshot.empty) {
+        console.log('📄 No duplicate found for hash:', fileHash);
+        return null;
+      }
+
+      const doc = snapshot.docs[0];
+      const data = doc.data();
+      
+      console.log('📄 Duplicate document found:', {
+        id: doc.id,
+        fileName: data.fileName,
+        uploadedAt: data.uploadedAt
+      });
+
+      return {
+        id: doc.id,
+        ...data,
+        uploadedAt: data.uploadedAt?.toDate() || new Date()
+      };
+    } catch (error) {
+      console.error('Error checking for duplicate document:', error);
+      throw new Error(`Failed to check for duplicate document: ${error.message}`);
+    }
+  }
 }
 
 module.exports = new FirebaseService();

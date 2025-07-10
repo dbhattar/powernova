@@ -687,68 +687,26 @@ export default function App() {
   };
 
   // Document upload handler - now uses backend API
-  const handleDocumentUpload = async (file) => {
+  const handleDocumentUpload = async (result) => {
     if (!user) {
       Alert.alert('Error', 'Please sign in to upload documents');
       return;
     }
 
-    setIsUploading(true);
     try {
-      console.log('📤 Starting document upload:', file);
+      console.log('📤 Document upload result received:', result);
       
-      // Create FormData for file upload
-      const formData = new FormData();
-      
-      // Handle different file formats for web vs native
-      if (Platform.OS === 'web') {
-        // For web, the file should be a File object
-        if (file.file) {
-          formData.append('document', file.file, file.name);
-        } else {
-          // Try to create a blob from the URI
-          const response = await fetch(file.uri);
-          const blob = await response.blob();
-          formData.append('document', blob, file.name);
-        }
+      if (result.isDuplicate || result.isExisting) {
+        console.log('🔄 Duplicate file - refreshing document list');
+        // For duplicates, just refresh the list to potentially highlight the existing document
+        await loadUserDocuments(true);
       } else {
-        // For native platforms
-        formData.append('document', {
-          uri: file.uri,
-          type: file.mimeType || file.type,
-          name: file.name,
-        });
+        console.log('✅ New document uploaded - refreshing document list');
+        // For new uploads, refresh the document list
+        await loadUserDocuments(true);
       }
-
-      // Upload via backend API - don't set Content-Type header manually
-      const token = await getUserToken();
-      const response = await fetch(`${BACKEND_API_URL}/documents/upload`, {
-        method: 'POST',
-        body: formData,
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          // Don't set Content-Type - let browser set it with boundary
-        },
-      });
-
-      console.log('📡 Upload response status:', response.status);
-
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({}));
-        console.error('❌ Upload error:', errorData);
-        throw new Error(errorData.error || `HTTP ${response.status}: ${response.statusText}`);
-      }
-
-      const data = await response.json();
-      console.log('✅ Document uploaded successfully:', data);
-      Alert.alert('Success', 'Document uploaded successfully!');
-      // Refresh documents list
-      loadUserDocuments();
     } catch (error) {
-      console.error('Upload error:', error);
-      Alert.alert('Upload Error', error.message || 'Failed to upload document');
-    } finally {
-      setIsUploading(false);
+      console.error('Error handling upload result:', error);
     }
   };
 
