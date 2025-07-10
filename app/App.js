@@ -49,7 +49,7 @@ export default function App() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   // New state for enhanced UI
-  const [currentPanel, setCurrentPanel] = useState('chat');
+  const [currentPanel, setCurrentPanel] = useState('dashboard');
   const [showSidebar, setShowSidebar] = useState(false);
 
   // Initialize Google Auth Provider
@@ -1040,16 +1040,43 @@ export default function App() {
               {user ? (
                 <>
                   <TouchableOpacity
-                    style={styles.historyButton}
-                    onPress={() => navigateToPanel('history')}
+                    style={[styles.navButton, currentPanel === 'dashboard' && styles.navButtonActive]}
+                    onPress={() => navigateToPanel('dashboard')}
                   >
-                    <Ionicons name="time-outline" size={20} color="#007AFF" />
+                    <Ionicons 
+                      name={currentPanel === 'dashboard' ? "home" : "home-outline"} 
+                      size={18} 
+                      color={currentPanel === 'dashboard' ? "#007AFF" : "#666"} 
+                    />
+                    <Text style={[styles.navButtonText, currentPanel === 'dashboard' && styles.navButtonTextActive]}>
+                      Dashboard
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={styles.documentsButton}
+                    style={[styles.navButton, currentPanel === 'chat' && styles.navButtonActive]}
+                    onPress={() => navigateToPanel('chat')}
+                  >
+                    <Ionicons 
+                      name={currentPanel === 'chat' ? "chatbubble" : "chatbubble-outline"} 
+                      size={18} 
+                      color={currentPanel === 'chat' ? "#007AFF" : "#666"} 
+                    />
+                    <Text style={[styles.navButtonText, currentPanel === 'chat' && styles.navButtonTextActive]}>
+                      Chat
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.navButton, currentPanel === 'documents' && styles.navButtonActive]}
                     onPress={() => navigateToPanel('documents')}
                   >
-                    <Ionicons name="document-text-outline" size={20} color="#007AFF" />
+                    <Ionicons 
+                      name={currentPanel === 'documents' ? "document-text" : "document-text-outline"} 
+                      size={18} 
+                      color={currentPanel === 'documents' ? "#007AFF" : "#666"} 
+                    />
+                    <Text style={[styles.navButtonText, currentPanel === 'documents' && styles.navButtonTextActive]}>
+                      Documents
+                    </Text>
                     {documents.length > 0 ? (
                       <View style={styles.documentBadge}>
                         <Text style={styles.documentBadgeText}>{documents.length}</Text>
@@ -1057,22 +1084,43 @@ export default function App() {
                     ) : null}
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={styles.projectsButton}
+                    style={[styles.navButton, currentPanel === 'projects' && styles.navButtonActive]}
                     onPress={() => navigateToPanel('projects')}
                   >
-                    <Ionicons name="business-outline" size={20} color="#007AFF" />
+                    <Ionicons 
+                      name={currentPanel === 'projects' ? "business" : "business-outline"} 
+                      size={18} 
+                      color={currentPanel === 'projects' ? "#007AFF" : "#666"} 
+                    />
+                    <Text style={[styles.navButtonText, currentPanel === 'projects' && styles.navButtonTextActive]}>
+                      Projects
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={styles.searchButton}
+                    style={[styles.navButton, currentPanel === 'search' && styles.navButtonActive]}
                     onPress={() => navigateToPanel('search')}
                   >
-                    <Ionicons name="search-outline" size={20} color="#007AFF" />
+                    <Ionicons 
+                      name={currentPanel === 'search' ? "search" : "search-outline"} 
+                      size={18} 
+                      color={currentPanel === 'search' ? "#007AFF" : "#666"} 
+                    />
+                    <Text style={[styles.navButtonText, currentPanel === 'search' && styles.navButtonTextActive]}>
+                      Search
+                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
-                    style={styles.dashboardButton}
-                    onPress={() => navigateToPanel('dashboard')}
+                    style={[styles.navButton, currentPanel === 'history' && styles.navButtonActive]}
+                    onPress={() => navigateToPanel('history')}
                   >
-                    <Ionicons name="grid-outline" size={20} color="#007AFF" />
+                    <Ionicons 
+                      name={currentPanel === 'history' ? "time" : "time-outline"} 
+                      size={18} 
+                      color={currentPanel === 'history' ? "#007AFF" : "#666"} 
+                    />
+                    <Text style={[styles.navButtonText, currentPanel === 'history' && styles.navButtonTextActive]}>
+                      History
+                    </Text>
                   </TouchableOpacity>
                 </>
               ) : null}
@@ -1351,6 +1399,7 @@ const styles = StyleSheet.create({
     marginTop: 8,
     marginBottom: 8,
     minHeight: 60,
+    flexWrap: 'wrap',
   },
   headerLeft: {
     flex: 1,
@@ -1358,78 +1407,44 @@ const styles = StyleSheet.create({
   headerRight: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
+    flexWrap: 'wrap',
   },
-  historyButton: {
-    backgroundColor: '#f0f0f0',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
+  navButton: {
+    flexDirection: 'column',
     alignItems: 'center',
     justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
-  },
-  documentsButton: {
-    backgroundColor: '#f0f0f0',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    backgroundColor: '#f8f9fa',
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+    borderRadius: 8,
+    minWidth: 60,
     position: 'relative',
-  },
-  projectsButton: {
-    backgroundColor: '#f0f0f0',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
+    shadowOpacity: 0.05,
     shadowRadius: 2,
-    elevation: 2,
+    elevation: 1,
   },
-  searchButton: {
-    backgroundColor: '#f0f0f0',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
+  navButtonActive: {
+    backgroundColor: '#e3f2fd',
     shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
   },
-  dashboardButton: {
-    backgroundColor: '#f0f0f0',
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+  navButtonText: {
+    fontSize: 10,
+    color: '#666',
+    fontWeight: '500',
+    marginTop: 2,
+    textAlign: 'center',
+  },
+  navButtonTextActive: {
+    color: '#007AFF',
+    fontWeight: '600',
   },
   documentBadge: {
     position: 'absolute',
-    top: -4,
-    right: -4,
+    top: -2,
+    right: -2,
     backgroundColor: '#FF3B30',
     borderRadius: 8,
     minWidth: 16,
