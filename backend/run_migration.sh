@@ -1,4 +1,4 @@
-#!/bin/bash
+ls#!/bin/bash
 # filepath: backend/run_migration.sh
 
 # Load environment variables from .env file
