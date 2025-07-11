@@ -27,12 +27,33 @@ npm install
 
 ### 2. Environment Setup
 
-Copy the example environment file:
+Copy the example environment file and configure it:
 ```bash
 cp .env.example .env
+# Edit .env with your actual configuration
 ```
 
-Configure your `.env` file:
+**Important**: Make sure to set the database credentials in `.env`:
+```env
+POWERNOVA_HOST=localhost
+POWERNOVA_PORT=5432
+POWERNOVA_DB=powernova
+POWERNOVA_USER=postgres
+POWERNOVA_PASSWORD=your_actual_password
+```
+
+### 3. Database Setup
+
+Run the database migration to create all necessary tables:
+```bash
+npm run migrate
+```
+
+This will:
+- Test database connection
+- Create the database if it doesn't exist
+- Create all tables (users, user_settings, QueueInfo)
+- Set up indexes and triggers
 
 ```env
 # Server Configuration
@@ -271,12 +292,24 @@ The backend includes:
    - Monitor usage limits
    - Verify model availability
 
-### Debug Mode
+## 🚨 Troubleshooting Environment Variables
 
-Enable debug logging:
-```env
-NODE_ENV=development
-DEBUG=*
+If you encounter errors like:
+- `psql: error: could not translate host name "-U" to address`
+- `Python script connecting to localhost instead of your database`
+- `Environment variables not found`
+
+**Quick fix:**
+1. Ensure `.env` file exists: `cp .env.example .env`
+2. Edit `.env` with your actual database credentials
+3. Use the provided scripts that properly load environment variables
+
+**For detailed troubleshooting:** See [ENV_TROUBLESHOOTING.md](./ENV_TROUBLESHOOTING.md)
+
+**Debug tools:**
+```bash
+npm run debug-queue-env  # Debug environment variable loading
+npm run test-integration # Test the complete setup
 ```
 
 ## Frontend Integration
@@ -301,3 +334,58 @@ Update your frontend's `app.json`:
 3. Add WebSocket support for real-time updates
 4. Implement advanced vector search features
 5. Add API documentation with Swagger/OpenAPI
+
+## 🔥 New: ISO/RTO Queue Projects Integration
+
+PowerNOVA now supports real-time ISO/RTO interconnection queue data integration! The system can automatically fetch and serve project data from major grid operators.
+
+### Quick Setup for Queue Projects
+
+```bash
+# 1. Set up Python environment and dependencies
+npm run setup-queue-projects
+
+# 2. Test the integration
+npm run test-integration
+
+# 3. Populate data for specific ISO (e.g., CAISO)
+npm run populate-queue-data populate CAISO
+
+# 4. Or populate all available ISOs
+npm run populate-all-isos
+```
+
+### Available Queue Project Commands
+
+| Command | Description |
+|---------|-------------|
+| `npm run setup-queue-projects` | Initial setup of Python environment |
+| `npm run test-integration` | Test the complete integration |
+| `npm run populate-queue-data <iso>` | Populate specific ISO data |
+| `npm run populate-all-isos` | Populate all available ISOs |
+| `npm run list-isos` | List available ISOs |
+
+### Enhanced Progress Feedback 🚀
+
+The queue data population scripts now provide comprehensive progress feedback:
+
+- **Real-time Progress Bar**: Visual indication of completion percentage
+- **Processing Metrics**: Records per second, ETA, batch completion status
+- **Detailed Statistics**: Fetch time, processing time, success/error counts
+- **Multi-ISO Summary**: Overall statistics when populating all ISOs
+
+Example output:
+```
+📊 NYISO: [███████████████████░░░░░░░░░░░] 66.1% (1,400/2,119) - 16 rec/s - ETA: 0.8m - ✅1400 ❌0
+
+🎉 NYISO Population Complete!
+   📊 Successfully processed: 2,119/2,119 records (100.0%)
+   ⏱️  Total time: 137.9s (fetch: 2.3s, process: 135.7s)
+   🚀 Processing rate: 16 records/second
+```
+
+**📖 For progress feedback details, see [PROGRESS_FEEDBACK_IMPROVEMENTS.md](./PROGRESS_FEEDBACK_IMPROVEMENTS.md)**
+
+**📖 For detailed setup instructions, see [QUEUE_PROJECTS_INTEGRATION.md](./QUEUE_PROJECTS_INTEGRATION.md)**
+
+---

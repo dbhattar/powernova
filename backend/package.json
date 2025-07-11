@@ -8,8 +8,18 @@
     "dev": "nodemon src/app.js",
     "test": "jest",
     "setup-db": "node scripts/setup-database.js",
+    "migrate": "./scripts/migrate-database.sh",
     "populate-db": "node scripts/populate-database.js",
-    "install-deps": "npm install"
+    "install-deps": "npm install",
+    "setup-queue-projects": "./scripts/setup-queue-projects.sh",
+    "populate-queue-data": "./scripts/populate-queue-data.sh",
+    "populate-all-isos": "./scripts/populate-queue-data.sh all",
+    "test-queue-connection": "./scripts/populate-queue-data.sh test",
+    "debug-queue-env": "./scripts/debug-env.sh",
+    "inspect-iso": "./scripts/populate-queue-data.sh inspect",
+    "test-api-filtering": "./scripts/test-api-filtering.sh",
+    "list-isos": "./scripts/populate-queue-data.sh list",
+    "test-integration": "./scripts/test-integration.sh"
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^6.1.1",

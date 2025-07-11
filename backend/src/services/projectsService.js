@@ -17,8 +17,8 @@ class ProjectsService {
       let params = [];
 
       if (iso) {
-        countQuery = "SELECT COUNT(*) FROM QueueInfo WHERE UPPER(Status) = 'ACTIVE' AND IsoID = $1";
-        dataQuery = `SELECT * FROM QueueInfo WHERE UPPER(Status) = 'ACTIVE' AND IsoID = $1 
+        countQuery = "SELECT COUNT(*) FROM QueueInfo WHERE UPPER(Status) = 'ACTIVE' AND UPPER(IsoID) = UPPER($1)";
+        dataQuery = `SELECT * FROM QueueInfo WHERE UPPER(Status) = 'ACTIVE' AND UPPER(IsoID) = UPPER($1) 
                      ORDER BY QueueDate DESC LIMIT $2 OFFSET $3`;
         params = [iso, limit, offset];
       } else {
@@ -71,7 +71,7 @@ class ProjectsService {
   async getProjectDetails(isoId, queueId) {
     try {
       const result = await query(
-        "SELECT * FROM QueueInfo WHERE IsoId = $1 AND QueueId = $2",
+        "SELECT * FROM QueueInfo WHERE UPPER(IsoId) = UPPER($1) AND UPPER(QueueId) = UPPER($2)",
         [isoId, queueId]
       );
 

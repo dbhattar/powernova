@@ -88,6 +88,49 @@ ALTER TABLE user_settings
 ADD CONSTRAINT check_default_view 
 CHECK (default_view IN ('chat', 'dashboard', 'projects', 'history', 'documents'));
 
+-- Create QueueInfo table for ISO/RTO interconnection queue projects
+CREATE TABLE IF NOT EXISTS QueueInfo (
+    id SERIAL PRIMARY KEY,
+    IsoID VARCHAR(20) NOT NULL,
+    QueueID VARCHAR(100) NOT NULL,
+    ProjectName VARCHAR(255),
+    InterconnectingEntity VARCHAR(255),
+    County VARCHAR(100),
+    StateName VARCHAR(100),
+    InterconnectionLocation VARCHAR(255),
+    TransmissionOwner VARCHAR(255),
+    GenerationType VARCHAR(100),
+    CapacityMW DECIMAL(10,2),
+    SummerCapacity DECIMAL(10,2),
+    WinterCapacityMW DECIMAL(10,2),
+    QueueDate DATE,
+    Status VARCHAR(50),
+    ProposedCompletionDate DATE,
+    WithdrawnDate DATE,
+    WithdrawalComment TEXT,
+    ActualCompletionDate DATE,
+    AdditionalInfo JSONB,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    UNIQUE(IsoID, QueueID)
+);
+
+-- Create indexes for QueueInfo table performance
+CREATE INDEX IF NOT EXISTS idx_queueinfo_iso_id ON QueueInfo(IsoID);
+CREATE INDEX IF NOT EXISTS idx_queueinfo_status ON QueueInfo(Status);
+CREATE INDEX IF NOT EXISTS idx_queueinfo_generation_type ON QueueInfo(GenerationType);
+CREATE INDEX IF NOT EXISTS idx_queueinfo_county ON QueueInfo(County);
+CREATE INDEX IF NOT EXISTS idx_queueinfo_state ON QueueInfo(StateName);
+CREATE INDEX IF NOT EXISTS idx_queueinfo_queue_date ON QueueInfo(QueueDate);
+CREATE INDEX IF NOT EXISTS idx_queueinfo_capacity ON QueueInfo(CapacityMW);
+
+-- Create trigger for QueueInfo updated_at
+DROP TRIGGER IF EXISTS update_queueinfo_updated_at ON QueueInfo;
+CREATE TRIGGER update_queueinfo_updated_at
+    BEFORE UPDATE ON QueueInfo
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- Sample data (optional - remove in production)
 -- This will create a test user with default settings
 -- INSERT INTO users (firebase_uid, email, display_name) 

@@ -1,0 +1,11 @@
+# PowerNOVA Backend Python Dependencies
+# These packages are required for populating ISO/RTO queue data
+
+# Core dependencies
+gridstatus==0.30.1      # ISO/RTO data fetching
+psycopg2-binary==2.9.9  # PostgreSQL connectivity
+pandas==2.2.3           # Data processing
+numpy==1.24.3           # Numerical operations
+
+# Optional: For enhanced logging and monitoring
+requests==2.32.2        # HTTP requests (used by gridstatus)
