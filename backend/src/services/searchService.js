@@ -12,13 +12,13 @@ class SearchService {
       
       try {
         this.client = new Typesense.Client({
-          'api_key': process.env.TYPESENSE_API_KEY,
-          'nodes': [{
-            'host': process.env.TYPESENSE_HOST,
-            'port': process.env.TYPESENSE_PORT,
-            'protocol': process.env.TYPESENSE_PROTOCOL || 'http'
+          apiKey: process.env.TYPESENSE_API_KEY,
+          nodes: [{
+            host: process.env.TYPESENSE_HOST,
+            port: process.env.TYPESENSE_PORT,
+            protocol: process.env.TYPESENSE_PROTOCOL || 'http'
           }],
-          'connection_timeout_seconds': 2
+          connectionTimeoutSeconds: 2
         });
         this.isEnabled = true;
         console.log('✅ Typesense search service initialized');
@@ -31,14 +31,14 @@ class SearchService {
     }
 
     this.schema = {
-      'name': 'projects',
-      'fields': [
-        { 'name': 'iso', 'type': 'string' },
-        { 'name': 'queueid', 'type': 'string'},
-        { 'name': 'county', 'type': 'string' },
-        { 'name': 'state', 'type': 'string' },
-        { 'name': 'gentype', 'type': 'string' },
-        { 'name': 'description', 'type': 'string' }
+      name: 'projects',
+      fields: [
+        { name: 'iso', type: 'string' },
+        { name: 'queueid', type: 'string'},
+        { name: 'county', type: 'string' },
+        { name: 'state', type: 'string' },
+        { name: 'gentype', type: 'string' },
+        { name: 'description', type: 'string' }
       ]
     };
   }

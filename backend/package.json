@@ -19,7 +19,11 @@
     "inspect-iso": "./scripts/populate-queue-data.sh inspect",
     "test-api-filtering": "./scripts/test-api-filtering.sh",
     "list-isos": "./scripts/populate-queue-data.sh list",
-    "test-integration": "./scripts/test-integration.sh"
+    "test-integration": "./scripts/test-integration.sh",
+    "typesense:setup": "TYPESENSE_API_KEY=powernova-api-key node scripts/sync-typesense.js setup",
+    "typesense:sync": "TYPESENSE_API_KEY=powernova-api-key node scripts/sync-typesense.js sync",
+    "typesense:drop": "TYPESENSE_API_KEY=powernova-api-key node scripts/sync-typesense.js drop",
+    "typesense:status": "TYPESENSE_API_KEY=powernova-api-key node scripts/sync-typesense.js status"
   },
   "dependencies": {
     "@pinecone-database/pinecone": "^6.1.1",

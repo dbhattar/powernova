@@ -17,6 +17,27 @@ services:
       retries: 3
       start_period: 30s
 
+  typesense:
+    image: typesense/typesense:28.0
+    container_name: powernova-typesense
+    environment:
+      TYPESENSE_API_KEY: ${TYPESENSE_API_KEY:-powernova-api-key}
+      TYPESENSE_DATA_DIR: /data
+    ports:
+      - "8108:8108"
+    volumes:
+      - typesense_data:/data
+    restart: unless-stopped
+    command: --data-dir /data --api-key=${TYPESENSE_API_KEY:-powernova-api-key} --enable-cors
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8108/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 40s
+
 volumes:
   redis_data:
+    driver: local
+  typesense_data:
     driver: local

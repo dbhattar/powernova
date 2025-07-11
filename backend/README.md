@@ -99,7 +99,45 @@ CORS_ORIGIN=http://localhost:8081,exp://192.168.1.100:8081
    - **Pod Type**: `s1.x1` (starter)
 3. Get your API key and environment from the dashboard
 
-### 5. Start the Server
+### 5. Typesense Setup (Search Engine)
+
+Typesense provides fast project search functionality. First, make sure the service is running:
+
+```bash
+# Start Typesense container (from project root)
+cd .. && ./start-typesense.sh
+```
+
+Or manually with docker-compose:
+```bash
+cd .. && TYPESENSE_API_KEY=powernova-api-key docker-compose up typesense -d
+```
+
+Then initialize and sync data:
+```bash
+# Set up collection and sync all project data
+npm run typesense:setup
+
+# Check collection status
+npm run typesense:status
+
+# Sync data from database (incremental)
+npm run typesense:sync
+
+# Drop collection (removes all data)
+npm run typesense:drop
+```
+
+Configuration in `.env`:
+```env
+# Typesense Configuration
+TYPESENSE_HOST=localhost
+TYPESENSE_PORT=8108
+TYPESENSE_PROTOCOL=http
+TYPESENSE_API_KEY=powernova-api-key
+```
+
+### 6. Start the Server
 
 Development mode:
 ```bash
