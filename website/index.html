@@ -1,0 +1,473 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PowerNOVA - Power Generation Intelligence Platform</title>
+    <meta name="description" content="Advanced analytics and intelligence platform for power generation projects across all ISO/RTO markets. Real-time data, predictive insights, and comprehensive project tracking.">
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar" id="navbar">
+        <div class="nav-container">
+            <div class="nav-logo">
+                <i class="fas fa-bolt"></i>
+                <span>PowerNOVA</span>
+            </div>
+            <div class="nav-menu" id="nav-menu">
+                <a href="#home" class="nav-link">Home</a>
+                <a href="#features" class="nav-link">Features</a>
+                <a href="#technology" class="nav-link">Technology</a>
+                <a href="#about" class="nav-link">About</a>
+                <a href="#contact" class="nav-link">Contact</a>
+            </div>
+            <div class="nav-toggle" id="nav-toggle">
+                <span class="bar"></span>
+                <span class="bar"></span>
+                <span class="bar"></span>
+            </div>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section id="home" class="hero">
+        <div class="hero-container">
+            <div class="hero-content">
+                <h1 class="hero-title">
+                    Power Generation Intelligence
+                    <span class="gradient-text">Redefined</span>
+                </h1>
+                <p class="hero-subtitle">
+                    Advanced analytics platform providing real-time insights into power generation projects across all ISO/RTO markets. Track interconnection queues, analyze market trends, and make data-driven decisions with unprecedented clarity.
+                </p>
+                <div class="hero-buttons">
+                    <button class="btn btn-primary">
+                        <i class="fas fa-rocket"></i>
+                        Get Started
+                    </button>
+                    <button class="btn btn-secondary">
+                        <i class="fas fa-play"></i>
+                        Watch Demo
+                    </button>
+                </div>
+                <div class="hero-stats">
+                    <div class="stat-item">
+                        <div class="stat-number">13,761+</div>
+                        <div class="stat-label">Projects Tracked</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">7</div>
+                        <div class="stat-label">ISO/RTO Markets</div>
+                    </div>
+                    <div class="stat-item">
+                        <div class="stat-number">Real-time</div>
+                        <div class="stat-label">Data Updates</div>
+                    </div>
+                </div>
+            </div>
+            <div class="hero-visual">
+                <div class="energy-grid">
+                    <div class="grid-node active"></div>
+                    <div class="grid-node"></div>
+                    <div class="grid-node active"></div>
+                    <div class="grid-node"></div>
+                    <div class="grid-node active"></div>
+                    <div class="grid-node"></div>
+                    <div class="grid-line"></div>
+                    <div class="grid-line"></div>
+                    <div class="grid-line"></div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Comprehensive Platform Features</h2>
+                <p class="section-subtitle">
+                    Everything you need to analyze and track power generation projects across North American markets
+                </p>
+            </div>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-search"></i>
+                    </div>
+                    <h3 class="feature-title">Advanced Search & Analytics</h3>
+                    <p class="feature-description">
+                        Lightning-fast search powered by Typesense across 13,000+ projects. Filter by location, technology type, capacity, and interconnection status with sub-second response times.
+                    </p>
+                    <div class="feature-tech">
+                        <span class="tech-tag">Typesense</span>
+                        <span class="tech-tag">PostgreSQL</span>
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-chart-line"></i>
+                    </div>
+                    <h3 class="feature-title">Real-time Market Intelligence</h3>
+                    <p class="feature-description">
+                        Live tracking of interconnection queues across CAISO, ERCOT, MISO, SPP, NYISO, PJM, and ISO-NE. Monitor project status changes, capacity additions, and market trends.
+                    </p>
+                    <div class="feature-tech">
+                        <span class="tech-tag">React Native</span>
+                        <span class="tech-tag">Firebase</span>
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-database"></i>
+                    </div>
+                    <h3 class="feature-title">Comprehensive Data Integration</h3>
+                    <p class="feature-description">
+                        Automated data collection and processing from multiple ISO/RTO sources. Standardized schema ensures consistent analysis across different market structures.
+                    </p>
+                    <div class="feature-tech">
+                        <span class="tech-tag">Node.js</span>
+                        <span class="tech-tag">Docker</span>
+                    </div>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">
+                        <i class="fas fa-mobile-alt"></i>
+                    </div>
+                    <h3 class="feature-title">Cross-Platform Access</h3>
+                    <p class="feature-description">
+                        Native mobile applications and web dashboard provide seamless access to your data anywhere. Optimized for both field work and office analysis.
+                    </p>
+                    <div class="feature-tech">
+                        <span class="tech-tag">Expo</span>
+                        <span class="tech-tag">FastAPI</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Technology Section -->
+    <section id="technology" class="technology">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Built with Modern Technology</h2>
+                <p class="section-subtitle">
+                    Enterprise-grade architecture designed for scalability, performance, and reliability
+                </p>
+            </div>
+            <div class="tech-architecture">
+                <div class="tech-layer">
+                    <h3 class="layer-title">Frontend & Mobile</h3>
+                    <div class="tech-stack">
+                        <div class="tech-item">
+                            <i class="fab fa-react"></i>
+                            <span>React Native</span>
+                        </div>
+                        <div class="tech-item">
+                            <i class="fas fa-mobile"></i>
+                            <span>Expo</span>
+                        </div>
+                        <div class="tech-item">
+                            <i class="fas fa-paint-brush"></i>
+                            <span>Tailwind CSS</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="tech-layer">
+                    <h3 class="layer-title">Backend Services</h3>
+                    <div class="tech-stack">
+                        <div class="tech-item">
+                            <i class="fab fa-node-js"></i>
+                            <span>Node.js</span>
+                        </div>
+                        <div class="tech-item">
+                            <i class="fas fa-rocket"></i>
+                            <span>FastAPI</span>
+                        </div>
+                        <div class="tech-item">
+                            <i class="fas fa-fire"></i>
+                            <span>Firebase</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="tech-layer">
+                    <h3 class="layer-title">Data & Search</h3>
+                    <div class="tech-stack">
+                        <div class="tech-item">
+                            <i class="fas fa-database"></i>
+                            <span>PostgreSQL</span>
+                        </div>
+                        <div class="tech-item">
+                            <i class="fas fa-search"></i>
+                            <span>Typesense</span>
+                        </div>
+                        <div class="tech-item">
+                            <i class="fas fa-memory"></i>
+                            <span>Redis</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="tech-layer">
+                    <h3 class="layer-title">Infrastructure</h3>
+                    <div class="tech-stack">
+                        <div class="tech-item">
+                            <i class="fab fa-docker"></i>
+                            <span>Docker</span>
+                        </div>
+                        <div class="tech-item">
+                            <i class="fas fa-cloud"></i>
+                            <span>Cloud Native</span>
+                        </div>
+                        <div class="tech-item">
+                            <i class="fas fa-shield-alt"></i>
+                            <span>Enterprise Security</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Market Coverage Section -->
+    <section id="markets" class="markets">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Complete Market Coverage</h2>
+                <p class="section-subtitle">
+                    Comprehensive data from all major North American electricity markets
+                </p>
+            </div>
+            <div class="markets-grid">
+                <div class="market-card">
+                    <h3 class="market-name">CAISO</h3>
+                    <p class="market-desc">California Independent System Operator</p>
+                    <div class="market-stats">
+                        <div class="market-stat">
+                            <span class="stat-label">Coverage:</span>
+                            <span class="stat-value">Complete</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="market-card">
+                    <h3 class="market-name">ERCOT</h3>
+                    <p class="market-desc">Electric Reliability Council of Texas</p>
+                    <div class="market-stats">
+                        <div class="market-stat">
+                            <span class="stat-label">Coverage:</span>
+                            <span class="stat-value">Complete</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="market-card">
+                    <h3 class="market-name">PJM</h3>
+                    <p class="market-desc">PJM Interconnection</p>
+                    <div class="market-stats">
+                        <div class="market-stat">
+                            <span class="stat-label">Coverage:</span>
+                            <span class="stat-value">Complete</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="market-card">
+                    <h3 class="market-name">MISO</h3>
+                    <p class="market-desc">Midcontinent Independent System Operator</p>
+                    <div class="market-stats">
+                        <div class="market-stat">
+                            <span class="stat-label">Coverage:</span>
+                            <span class="stat-value">Complete</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="market-card">
+                    <h3 class="market-name">SPP</h3>
+                    <p class="market-desc">Southwest Power Pool</p>
+                    <div class="market-stats">
+                        <div class="market-stat">
+                            <span class="stat-label">Coverage:</span>
+                            <span class="stat-value">Complete</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="market-card">
+                    <h3 class="market-name">NYISO</h3>
+                    <p class="market-desc">New York Independent System Operator</p>
+                    <div class="market-stats">
+                        <div class="market-stat">
+                            <span class="stat-label">Coverage:</span>
+                            <span class="stat-value">Complete</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- About Section -->
+    <section id="about" class="about">
+        <div class="container">
+            <div class="about-content">
+                <div class="about-text">
+                    <h2 class="section-title">About PowerNOVA</h2>
+                    <p class="about-description">
+                        PowerNOVA is the next-generation intelligence platform for the power generation industry. 
+                        We aggregate, analyze, and present critical data from interconnection queues across all major 
+                        ISO/RTO markets in North America.
+                    </p>
+                    <p class="about-description">
+                        Our platform combines advanced search capabilities, real-time data processing, and intuitive 
+                        user interfaces to provide unprecedented visibility into the evolving energy landscape. 
+                        From renewable energy developers to grid operators, PowerNOVA empowers stakeholders to make 
+                        informed decisions in an increasingly complex market.
+                    </p>
+                    <div class="about-highlights">
+                        <div class="highlight-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Real-time queue monitoring</span>
+                        </div>
+                        <div class="highlight-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Advanced analytics & reporting</span>
+                        </div>
+                        <div class="highlight-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Cross-platform accessibility</span>
+                        </div>
+                        <div class="highlight-item">
+                            <i class="fas fa-check-circle"></i>
+                            <span>Enterprise-grade security</span>
+                        </div>
+                    </div>
+                </div>
+                <div class="about-visual">
+                    <div class="stats-dashboard">
+                        <div class="dashboard-header">
+                            <h4>Live Dashboard Preview</h4>
+                        </div>
+                        <div class="dashboard-metrics">
+                            <div class="metric">
+                                <div class="metric-value">2,847</div>
+                                <div class="metric-label">Active Projects</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">156 GW</div>
+                                <div class="metric-label">Total Capacity</div>
+                            </div>
+                            <div class="metric">
+                                <div class="metric-value">23%</div>
+                                <div class="metric-label">Renewable Share</div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Contact Section -->
+    <section id="contact" class="contact">
+        <div class="container">
+            <div class="section-header">
+                <h2 class="section-title">Get Started Today</h2>
+                <p class="section-subtitle">
+                    Ready to transform your power market intelligence? Contact us to learn more.
+                </p>
+            </div>
+            <div class="contact-content">
+                <div class="contact-form">
+                    <form id="contactForm">
+                        <div class="form-group">
+                            <input type="text" id="name" name="name" placeholder="Your Name" required>
+                        </div>
+                        <div class="form-group">
+                            <input type="email" id="email" name="email" placeholder="Your Email" required>
+                        </div>
+                        <div class="form-group">
+                            <input type="text" id="company" name="company" placeholder="Company Name">
+                        </div>
+                        <div class="form-group">
+                            <textarea id="message" name="message" placeholder="Tell us about your needs" rows="5" required></textarea>
+                        </div>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-paper-plane"></i>
+                            Send Message
+                        </button>
+                    </form>
+                </div>
+                <div class="contact-info">
+                    <div class="contact-item">
+                        <i class="fas fa-envelope"></i>
+                        <div>
+                            <h4>Email</h4>
+                            <p>info@powernova.com</p>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <i class="fas fa-phone"></i>
+                        <div>
+                            <h4>Phone</h4>
+                            <p>+1 (555) 123-4567</p>
+                        </div>
+                    </div>
+                    <div class="contact-item">
+                        <i class="fas fa-map-marker-alt"></i>
+                        <div>
+                            <h4>Location</h4>
+                            <p>Austin, TX<br>Energy Innovation Hub</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-section">
+                    <div class="footer-logo">
+                        <i class="fas fa-bolt"></i>
+                        <span>PowerNOVA</span>
+                    </div>
+                    <p class="footer-description">
+                        Advanced power generation intelligence platform for the modern energy market.
+                    </p>
+                </div>
+                <div class="footer-section">
+                    <h4>Platform</h4>
+                    <ul>
+                        <li><a href="#features">Features</a></li>
+                        <li><a href="#technology">Technology</a></li>
+                        <li><a href="#markets">Market Coverage</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Company</h4>
+                    <ul>
+                        <li><a href="#about">About</a></li>
+                        <li><a href="#contact">Contact</a></li>
+                        <li><a href="#">Privacy Policy</a></li>
+                    </ul>
+                </div>
+                <div class="footer-section">
+                    <h4>Connect</h4>
+                    <div class="social-links">
+                        <a href="#"><i class="fab fa-linkedin"></i></a>
+                        <a href="#"><i class="fab fa-twitter"></i></a>
+                        <a href="#"><i class="fab fa-github"></i></a>
+                    </div>
+                </div>
+            </div>
+            <div class="footer-bottom">
+                <p>&copy; 2025 PowerNOVA. All rights reserved.</p>
+            </div>
+        </div>
+    </footer>
+
+    <script src="js/script.js"></script>
+</body>
+</html>
