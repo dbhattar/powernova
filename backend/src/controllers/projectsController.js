@@ -115,6 +115,19 @@ router.get('/gis/rto-iso-map/:rtoIso?', async (req, res) => {
   }
 });
 
+// Get project statistics
+router.get('/statistics/:iso?', async (req, res) => {
+  try {
+    const { iso } = req.params;
+
+    const statistics = await projectsService.getProjectStatistics(iso);
+    res.json(statistics);
+  } catch (error) {
+    console.error('Error in statistics endpoint:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Health check for projects service
 router.get('/health', (req, res) => {
   res.json({ 

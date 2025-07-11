@@ -23,7 +23,7 @@ export const DashboardScreen = ({ user, conversations, documents, onNavigate }) 
   const [dashboardData, setDashboardData] = useState({
     recentConversations: 0,
     documentsCount: 0,
-    projectsCount: 0,
+    projectsCount: '...', // Show loading indicator initially
     lmpData: {
       labels: ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun'],
       values: [45, 52, 48, 61, 55, 67],
@@ -38,6 +38,42 @@ export const DashboardScreen = ({ user, conversations, documents, onNavigate }) 
       documentsCount: documents?.length || 0,
     }));
   }, [conversations, documents]);
+
+  useEffect(() => {
+    // Fetch projects count from backend on user change
+    fetchProjectsCount();
+  }, [user]);
+
+  const fetchProjectsCount = async () => {
+    if (!user) return;
+    
+    try {
+      const token = await user.getIdToken();
+      const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000';
+      
+      const response = await fetch(`${API_BASE_URL}/api/projects/statistics`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (response.ok) {
+        const statistics = await response.json();
+        setDashboardData(prev => ({
+          ...prev,
+          projectsCount: statistics.overview?.totalProjects || 0,
+        }));
+      }
+    } catch (error) {
+      console.log('Failed to fetch projects count:', error);
+      // Fallback to a reasonable default if the API is not available
+      setDashboardData(prev => ({
+        ...prev,
+        projectsCount: 'N/A',
+      }));
+    }
+  };
 
   const getRecentConversations = () => {
     if (!conversations || conversations.length === 0) {
@@ -224,10 +260,14 @@ export const DashboardScreen = ({ user, conversations, documents, onNavigate }) 
 
   const onRefresh = async () => {
     setRefreshing(true);
-    // Simulate data refresh
-    setTimeout(() => {
+    try {
+      // Refresh projects count
+      await fetchProjectsCount();
+    } catch (error) {
+      console.log('Error refreshing dashboard:', error);
+    } finally {
       setRefreshing(false);
-    }, 1000);
+    }
   };
 
   return (

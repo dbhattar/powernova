@@ -50,32 +50,62 @@ const ISOSelector = ({ selectedISO, onISOChange }) => {
   );
 };
 
-const ProjectStats = ({ projects }) => {
-  const totalProjects = projects.length;
-  const totalCapacity = projects.reduce((sum, p) => sum + (parseFloat(p.CapacityMW) || 0), 0);
-  const avgSize = totalProjects > 0 ? totalCapacity / totalProjects : 0;
+const ProjectStats = ({ statistics, loading }) => {
+  if (loading || !statistics) {
+    return (
+      <View style={styles.statsContainer}>
+        <Text style={styles.sectionTitle}>Project Statistics</Text>
+        <View style={styles.statsGrid}>
+          <View style={styles.statCard}>
+            <ActivityIndicator size="small" color="#3B82F6" />
+            <Text style={styles.statLabel}>Loading...</Text>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
-  const activeProjects = projects.filter(p => p.Status?.toUpperCase() === 'ACTIVE').length;
+  const { overview } = statistics;
 
   return (
     <View style={styles.statsContainer}>
       <Text style={styles.sectionTitle}>Project Statistics</Text>
       <View style={styles.statsGrid}>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>{totalProjects.toLocaleString()}</Text>
+          <Text style={styles.statValue}>{overview.totalProjects.toLocaleString()}</Text>
           <Text style={styles.statLabel}>Total Projects</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>{activeProjects.toLocaleString()}</Text>
+          <Text style={styles.statValue}>{overview.activeProjects.toLocaleString()}</Text>
           <Text style={styles.statLabel}>Active Projects</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>{totalCapacity.toLocaleString()}</Text>
+          <Text style={styles.statValue}>{Math.round(overview.totalCapacityMW).toLocaleString()}</Text>
           <Text style={styles.statLabel}>Total Capacity (MW)</Text>
         </View>
         <View style={styles.statCard}>
-          <Text style={styles.statValue}>{avgSize.toFixed(1)}</Text>
+          <Text style={styles.statValue}>{overview.avgCapacityMW.toFixed(1)}</Text>
           <Text style={styles.statLabel}>Avg. Size (MW)</Text>
+        </View>
+      </View>
+      
+      {/* Additional stats row */}
+      <View style={styles.statsGrid}>
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{overview.withdrawnProjects.toLocaleString()}</Text>
+          <Text style={styles.statLabel}>Withdrawn</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{overview.suspendedProjects.toLocaleString()}</Text>
+          <Text style={styles.statLabel}>Suspended</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{overview.uniqueStates}</Text>
+          <Text style={styles.statLabel}>States</Text>
+        </View>
+        <View style={styles.statCard}>
+          <Text style={styles.statValue}>{overview.uniqueGenerationTypes}</Text>
+          <Text style={styles.statLabel}>Gen Types</Text>
         </View>
       </View>
     </View>
@@ -128,16 +158,100 @@ const ProjectItem = ({ project, onPress }) => {
   );
 };
 
+const PaginationControls = ({ currentPage, totalProjects, projectsPerPage, onPageChange, loading }) => {
+  const totalPages = Math.ceil(totalProjects / projectsPerPage);
+  const startProject = (currentPage - 1) * projectsPerPage + 1;
+  const endProject = Math.min(currentPage * projectsPerPage, totalProjects);
+
+  if (totalPages <= 1) return null;
+
+  return (
+    <View style={styles.paginationContainer}>
+      <View style={styles.paginationInfo}>
+        <Text style={styles.paginationText}>
+          Showing {startProject}-{endProject} of {totalProjects.toLocaleString()} projects
+        </Text>
+      </View>
+      
+      <View style={styles.paginationControls}>
+        <TouchableOpacity
+          style={[styles.paginationButton, currentPage === 1 && styles.paginationButtonDisabled]}
+          onPress={() => onPageChange(currentPage - 1)}
+          disabled={currentPage === 1 || loading}
+        >
+          <Ionicons name="chevron-back" size={18} color={currentPage === 1 ? "#9CA3AF" : "#3B82F6"} />
+          <Text style={[styles.paginationButtonText, currentPage === 1 && styles.paginationButtonTextDisabled]}>
+            Previous
+          </Text>
+        </TouchableOpacity>
+
+        <View style={styles.pageIndicator}>
+          <Text style={styles.pageText}>
+            Page {currentPage} of {totalPages}
+          </Text>
+        </View>
+
+        <TouchableOpacity
+          style={[styles.paginationButton, currentPage === totalPages && styles.paginationButtonDisabled]}
+          onPress={() => onPageChange(currentPage + 1)}
+          disabled={currentPage === totalPages || loading}
+        >
+          <Text style={[styles.paginationButtonText, currentPage === totalPages && styles.paginationButtonTextDisabled]}>
+            Next
+          </Text>
+          <Ionicons name="chevron-forward" size={18} color={currentPage === totalPages ? "#9CA3AF" : "#3B82F6"} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+};
+
 const ProjectDashboard = ({ navigation, onClose }) => {
   const [user, setUser] = useState(null);
   const [projects, setProjects] = useState([]);
+  const [statistics, setStatistics] = useState(null);
   const [loading, setLoading] = useState(false);
+  const [statsLoading, setStatsLoading] = useState(false);
   const [selectedISO, setSelectedISO] = useState(null);
   const [error, setError] = useState(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [totalProjects, setTotalProjects] = useState(0);
+  const projectsPerPage = 50;
 
   const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000';
 
-  const fetchProjects = async (iso = null) => {
+  const fetchStatistics = async (iso = null) => {
+    if (!user) return;
+    
+    setStatsLoading(true);
+    try {
+      const token = await user.getIdToken();
+      const url = iso 
+        ? `${API_BASE_URL}/api/projects/statistics/${iso}`
+        : `${API_BASE_URL}/api/projects/statistics`;
+      
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
+      const data = await response.json();
+      setStatistics(data);
+    } catch (err) {
+      console.error('Error fetching statistics:', err);
+      // Don't show error for statistics - it's supplementary info
+    } finally {
+      setStatsLoading(false);
+    }
+  };
+
+  const fetchProjects = async (iso = null, page = 1) => {
     if (!user) {
       console.log('No user authenticated, skipping fetch');
       return;
@@ -148,9 +262,10 @@ const ProjectDashboard = ({ navigation, onClose }) => {
     
     try {
       const token = await user.getIdToken();
+      const offset = (page - 1) * projectsPerPage;
       const url = iso 
-        ? `${API_BASE_URL}/api/projects/projects/${iso}?limit=50`
-        : `${API_BASE_URL}/api/projects/projects?limit=50`;
+        ? `${API_BASE_URL}/api/projects/projects/${iso}?limit=${projectsPerPage}&offset=${offset}`
+        : `${API_BASE_URL}/api/projects/projects?limit=${projectsPerPage}&offset=${offset}`;
       
       const response = await fetch(url, {
         headers: {
@@ -165,6 +280,7 @@ const ProjectDashboard = ({ navigation, onClose }) => {
 
       const data = await response.json();
       setProjects(data.results || []);
+      setTotalProjects(data.count || 0);
     } catch (err) {
       console.error('Error fetching projects:', err);
       setError(err.message);
@@ -176,11 +292,20 @@ const ProjectDashboard = ({ navigation, onClose }) => {
 
   const handleISOChange = (iso) => {
     setSelectedISO(iso);
-    fetchProjects(iso);
+    setCurrentPage(1);
+    fetchProjects(iso, 1);
+    fetchStatistics(iso);
   };
 
   const handleProjectPress = (project) => {
     navigation.navigate('ProjectDetails', { project });
+  };
+
+  const handlePageChange = (newPage) => {
+    if (newPage >= 1 && newPage <= Math.ceil(totalProjects / projectsPerPage)) {
+      setCurrentPage(newPage);
+      fetchProjects(selectedISO, newPage);
+    }
   };
 
   useEffect(() => {
@@ -190,10 +315,11 @@ const ProjectDashboard = ({ navigation, onClose }) => {
     return () => unsubscribe();
   }, []);
 
-  // Separate effect to fetch projects when user is available
+  // Fetch initial data when user is available
   useEffect(() => {
     if (user) {
-      fetchProjects(null); // Fetch all projects initially
+      fetchProjects(null, 1);
+      fetchStatistics(null);
     }
   }, [user]);
 
@@ -232,14 +358,17 @@ const ProjectDashboard = ({ navigation, onClose }) => {
 
       <ISOSelector selectedISO={selectedISO} onISOChange={handleISOChange} />
 
-      {projects.length > 0 && <ProjectStats projects={projects} />}
+      <ProjectStats statistics={statistics} loading={statsLoading} />
 
       {error && (
         <View style={styles.errorContainer}>
           <Text style={styles.errorText}>Error: {error}</Text>
           <TouchableOpacity 
             style={styles.retryButton}
-            onPress={() => fetchProjects(selectedISO)}
+            onPress={() => {
+              fetchProjects(selectedISO, currentPage);
+              fetchStatistics(selectedISO);
+            }}
           >
             <Text style={styles.retryButtonText}>Retry</Text>
           </TouchableOpacity>
@@ -250,6 +379,16 @@ const ProjectDashboard = ({ navigation, onClose }) => {
         <Text style={styles.sectionTitle}>
           Projects {selectedISO ? `(${selectedISO})` : '(All ISOs)'}
         </Text>
+        
+        {totalProjects > 0 && (
+          <PaginationControls
+            currentPage={currentPage}
+            totalProjects={totalProjects}
+            projectsPerPage={projectsPerPage}
+            onPageChange={handlePageChange}
+            loading={loading}
+          />
+        )}
         
         {loading && (
           <View style={styles.loadingOverlay}>
@@ -270,6 +409,14 @@ const ProjectDashboard = ({ navigation, onClose }) => {
             onPress={handleProjectPress}
           />
         ))}
+
+        <PaginationControls 
+          currentPage={currentPage}
+          totalProjects={totalProjects}
+          projectsPerPage={projectsPerPage}
+          onPageChange={handlePageChange}
+          loading={loading}
+        />
       </View>
     </ScrollView>
   );
@@ -500,6 +647,55 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 14,
     fontWeight: '600',
+  },
+  // Pagination styles
+  paginationContainer: {
+    backgroundColor: '#F9FAFB',
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    marginTop: 16,
+  },
+  paginationInfo: {
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  paginationText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  paginationControls: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  paginationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+    backgroundColor: '#FFFFFF',
+    gap: 4,
+  },
+  paginationButtonDisabled: {
+    backgroundColor: '#F3F4F6',
+    borderColor: '#E5E7EB',
+  },
+  paginationButtonText: {
+    fontSize: 14,
+    color: '#3B82F6',
+    fontWeight: '500',
+  },
+  paginationButtonTextDisabled: {
+    color: '#9CA3AF',
+  },
+  pageIndicator: {
+    paddingVertical: 8,
+    paddingHorizontal: 16,
   },
 });
 

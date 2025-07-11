@@ -205,6 +205,102 @@ class ProjectsService {
     }
   }
 
+  async getProjectStatistics(iso = null) {
+    try {
+      let params = [];
+      let whereClause = '';
+      
+      if (iso) {
+        whereClause = 'WHERE UPPER(IsoID) = UPPER($1)';
+        params = [iso];
+      }
+
+      // Get comprehensive statistics
+      const statsQuery = `
+        SELECT 
+          COUNT(*) as total_projects,
+          COUNT(CASE WHEN UPPER(Status) = 'ACTIVE' THEN 1 END) as active_projects,
+          COUNT(CASE WHEN UPPER(Status) = 'WITHDRAWN' THEN 1 END) as withdrawn_projects,
+          COUNT(CASE WHEN UPPER(Status) = 'SUSPENDED' THEN 1 END) as suspended_projects,
+          SUM(CASE WHEN CapacityMW IS NOT NULL THEN CapacityMW ELSE 0 END) as total_capacity_mw,
+          AVG(CASE WHEN CapacityMW IS NOT NULL AND CapacityMW > 0 THEN CapacityMW END) as avg_capacity_mw,
+          COUNT(DISTINCT IsoID) as unique_isos,
+          COUNT(DISTINCT StateName) as unique_states,
+          COUNT(DISTINCT GenerationType) as unique_generation_types
+        FROM QueueInfo 
+        ${whereClause}
+      `;
+
+      const result = await query(statsQuery, params);
+      const stats = result.rows[0];
+
+      // Get top generation types
+      const genTypesQuery = `
+        SELECT 
+          GenerationType, 
+          COUNT(*) as count,
+          SUM(CASE WHEN CapacityMW IS NOT NULL THEN CapacityMW ELSE 0 END) as total_capacity
+        FROM QueueInfo 
+        ${whereClause}
+        ${whereClause ? 'AND' : 'WHERE'} GenerationType IS NOT NULL 
+        GROUP BY GenerationType 
+        ORDER BY count DESC 
+        LIMIT 10
+      `;
+
+      const genTypesResult = await query(genTypesQuery, params);
+
+      // Get ISO breakdown if not filtering by ISO
+      let isoBreakdown = [];
+      if (!iso) {
+        const isoQuery = `
+          SELECT 
+            IsoID, 
+            COUNT(*) as count,
+            COUNT(CASE WHEN UPPER(Status) = 'ACTIVE' THEN 1 END) as active_count,
+            SUM(CASE WHEN CapacityMW IS NOT NULL THEN CapacityMW ELSE 0 END) as total_capacity
+          FROM QueueInfo 
+          GROUP BY IsoID 
+          ORDER BY count DESC
+        `;
+
+        const isoResult = await query(isoQuery);
+        isoBreakdown = isoResult.rows.map(row => ({
+          iso: row.isoid,
+          totalProjects: parseInt(row.count),
+          activeProjects: parseInt(row.active_count),
+          totalCapacity: parseFloat(row.total_capacity) || 0
+        }));
+      }
+
+      return {
+        overview: {
+          totalProjects: parseInt(stats.total_projects),
+          activeProjects: parseInt(stats.active_projects),
+          withdrawnProjects: parseInt(stats.withdrawn_projects),
+          suspendedProjects: parseInt(stats.suspended_projects),
+          totalCapacityMW: parseFloat(stats.total_capacity_mw) || 0,
+          avgCapacityMW: parseFloat(stats.avg_capacity_mw) || 0,
+          uniqueISOs: parseInt(stats.unique_isos),
+          uniqueStates: parseInt(stats.unique_states),
+          uniqueGenerationTypes: parseInt(stats.unique_generation_types)
+        },
+        generationTypes: genTypesResult.rows.map(row => ({
+          type: row.generationtype,
+          count: parseInt(row.count),
+          totalCapacity: parseFloat(row.total_capacity) || 0
+        })),
+        isoBreakdown: isoBreakdown
+      };
+    } catch (error) {
+      console.error('Database query error in getProjectStatistics:', error.message);
+      console.log('Returning mock statistics due to database unavailability');
+      
+      // Return mock statistics when database is unavailable
+      return this.getMockStatistics(iso);
+    }
+  }
+
   getMockProjects(iso = null, offset = 0, limit = 10) {
     const mockProjects = [
       {
@@ -360,6 +456,39 @@ class ProjectsService {
     }
     
     return project;
+  }
+
+  getMockStatistics(iso = null) {
+    const mockStats = {
+      overview: {
+        totalProjects: iso ? 1250 : 15000,
+        activeProjects: iso ? 950 : 11200,
+        withdrawnProjects: iso ? 200 : 2800,
+        suspendedProjects: iso ? 100 : 1000,
+        totalCapacityMW: iso ? 45000 : 425000,
+        avgCapacityMW: iso ? 36 : 28.3,
+        uniqueISOs: iso ? 1 : 8,
+        uniqueStates: iso ? 3 : 35,
+        uniqueGenerationTypes: iso ? 8 : 12
+      },
+      generationTypes: [
+        { type: 'Solar', count: iso ? 450 : 6800, totalCapacity: iso ? 15000 : 180000 },
+        { type: 'Wind', count: iso ? 380 : 4200, totalCapacity: iso ? 18000 : 185000 },
+        { type: 'Battery Storage', count: iso ? 220 : 2100, totalCapacity: iso ? 8000 : 35000 },
+        { type: 'Natural Gas', count: iso ? 120 : 1200, totalCapacity: iso ? 2500 : 18000 },
+        { type: 'Hybrid', count: iso ? 80 : 700, totalCapacity: iso ? 1500 : 7000 }
+      ],
+      isoBreakdown: iso ? [] : [
+        { iso: 'CAISO', totalProjects: 4200, activeProjects: 3100, totalCapacity: 125000 },
+        { iso: 'ERCOT', totalProjects: 3800, activeProjects: 2900, totalCapacity: 110000 },
+        { iso: 'PJM', totalProjects: 2100, activeProjects: 1600, totalCapacity: 85000 },
+        { iso: 'MISO', totalProjects: 1900, activeProjects: 1400, totalCapacity: 65000 },
+        { iso: 'NYISO', totalProjects: 1200, activeProjects: 950, totalCapacity: 25000 },
+        { iso: 'SPP', totalProjects: 1100, activeProjects: 850, totalCapacity: 12000 },
+        { iso: 'ISONE', totalProjects: 700, activeProjects: 400, totalCapacity: 3000 }
+      ]
+    };
+    return mockStats;
   }
 }
 
