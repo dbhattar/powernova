@@ -8,7 +8,8 @@ import {
   ScrollView,
   Alert,
   ActivityIndicator,
-  Dimensions
+  Dimensions,
+  Linking
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../firebase';
@@ -24,6 +25,10 @@ const ProjectSearch = ({ navigation, onClose }) => {
   const [hasSearched, setHasSearched] = useState(false);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalFound, setTotalFound] = useState(0);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [showProjectDetails, setShowProjectDetails] = useState(false);
+  const [projectDetailsLoading, setProjectDetailsLoading] = useState(false);
+  const [additionalInfo, setAdditionalInfo] = useState(null);
 
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
@@ -140,9 +145,13 @@ const ProjectSearch = ({ navigation, onClose }) => {
   const SearchResultItem = ({ item, onPress }) => {
     const project = item.document;
     const status = getProjectStatus(item);
+    const isSelected = selectedProject && selectedProject.QueueID === project.queueid && selectedProject.IsoID === project.iso;
 
     return (
-      <TouchableOpacity style={styles.resultItem} onPress={() => onPress(project)}>
+      <TouchableOpacity 
+        style={[styles.resultItem, isSelected && styles.resultItemSelected]} 
+        onPress={() => onPress(item)}
+      >
         <View style={styles.resultHeader}>
           <Text style={styles.resultTitle} numberOfLines={2}>
             Project {project.queueid}
@@ -174,7 +183,9 @@ const ProjectSearch = ({ navigation, onClose }) => {
     );
   };
 
-  const handleResultPress = (project) => {
+  const handleResultPress = async (searchItem) => {
+    const project = searchItem.document;
+    
     // Convert search result format to project details format
     const projectData = {
       IsoID: project.iso,
@@ -183,110 +194,347 @@ const ProjectSearch = ({ navigation, onClose }) => {
       County: project.county,
       StateName: project.state,
       GenerationType: project.gentype,
-      Status: 'Active', // Default status
+      Status: getProjectStatus(searchItem),
     };
     
-    navigation.navigate('ProjectDetails', { project: projectData });
+    setSelectedProject(projectData);
+    setShowProjectDetails(true);
+    
+    // Fetch additional project details
+    await fetchProjectDetails(projectData);
+  };
+
+  const fetchProjectDetails = async (project) => {
+    if (!project.IsoID || !project.QueueID) return;
+    if (!user) {
+      console.log('No user authenticated, skipping fetch');
+      return;
+    }
+
+    setProjectDetailsLoading(true);
+    try {
+      const token = await user.getIdToken();
+      const response = await fetch(
+        `${API_BASE_URL}/api/projects/project-details?isoId=${project.IsoID}&queueId=${project.QueueID}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json',
+          },
+        }
+      );
+
+      if (response.ok) {
+        const detailedProject = await response.json();
+        setSelectedProject(detailedProject);
+        
+        // Parse additional info if available
+        if (detailedProject.AdditionalInfo) {
+          try {
+            const parsed = typeof detailedProject.AdditionalInfo === 'string' 
+              ? JSON.parse(detailedProject.AdditionalInfo)
+              : detailedProject.AdditionalInfo;
+            setAdditionalInfo(parsed);
+          } catch (e) {
+            console.log('Could not parse additional info:', e);
+            setAdditionalInfo(null);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching project details:', error);
+    } finally {
+      setProjectDetailsLoading(false);
+    }
+  };
+
+  const closeProjectDetails = () => {
+    setShowProjectDetails(false);
+    setSelectedProject(null);
+    setAdditionalInfo(null);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch {
+      return dateString;
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status?.toUpperCase()) {
+      case 'ACTIVE':
+        return '#10B981';
+      case 'WITHDRAWN':
+        return '#EF4444';
+      case 'SUSPENDED':
+        return '#F59E0B';
+      case 'COMPLETED':
+        return '#8B5CF6';
+      default:
+        return '#6B7280';
+    }
+  };
+
+  const handleExternalLink = (url) => {
+    if (url) {
+      Linking.openURL(url).catch(err => {
+        console.error('Error opening URL:', err);
+        Alert.alert('Error', 'Could not open the link');
+      });
+    }
+  };
+
+  const renderDetailSection = (title, data) => {
+    const validFields = Object.entries(data).filter(([key, value]) => 
+      value !== null && value !== undefined && value !== '' && value !== 'N/A'
+    );
+
+    if (validFields.length === 0) return null;
+
+    return (
+      <View style={styles.detailSection}>
+        <Text style={styles.detailSectionTitle}>{title}</Text>
+        <View style={styles.detailSectionContent}>
+          {validFields.map(([key, value], index) => (
+            <View key={key} style={[
+              styles.detailRow, 
+              index < validFields.length - 1 && styles.detailRowWithBorder
+            ]}>
+              <Text style={styles.detailLabel}>{key.replace(/([A-Z])/g, ' $1').trim()}:</Text>
+              <Text style={styles.detailValue}>{value?.toString() || 'N/A'}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  const renderAdditionalInfo = () => {
+    if (!additionalInfo || typeof additionalInfo !== 'object') return null;
+
+    const entries = Object.entries(additionalInfo).filter(([key, value]) => 
+      value !== null && value !== undefined && value !== '' && key !== 'id'
+    );
+
+    if (entries.length === 0) return null;
+
+    return (
+      <View style={styles.detailSection}>
+        <Text style={styles.detailSectionTitle}>Additional Information</Text>
+        <View style={styles.detailSectionContent}>
+          {entries.map(([key, value], index) => (
+            <View key={key} style={[
+              styles.detailRow,
+              index < entries.length - 1 && styles.detailRowWithBorder
+            ]}>
+              <Text style={styles.detailLabel}>{key}:</Text>
+              <Text style={styles.detailValue}>{value?.toString() || 'N/A'}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  const ProjectDetailsPanel = () => {
+    if (!selectedProject) return null;
+
+    return (
+      <View style={styles.detailsPanel}>
+        <View style={styles.detailsHeader}>
+          <View style={styles.detailsHeaderContent}>
+            <Text style={styles.detailsTitle}>
+              {selectedProject.ProjectName || 'Unnamed Project'}
+            </Text>
+            <TouchableOpacity onPress={closeProjectDetails} style={styles.detailsCloseButton}>
+              <Ionicons name="close" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.detailsHeaderInfo}>
+            <Text style={styles.detailsSubtitle}>
+              Queue ID: {selectedProject.QueueID} • ISO: {selectedProject.IsoID}
+            </Text>
+            <View style={[styles.detailsStatusBadge, { backgroundColor: getStatusColor(selectedProject.Status) }]}>
+              <Text style={styles.detailsStatusText}>{selectedProject.Status || 'Unknown'}</Text>
+            </View>
+          </View>
+        </View>
+
+        <ScrollView style={styles.detailsContent}>
+          {projectDetailsLoading && (
+            <View style={styles.detailsLoadingOverlay}>
+              <ActivityIndicator size="small" color="#3B82F6" />
+              <Text style={styles.detailsLoadingText}>Loading details...</Text>
+            </View>
+          )}
+
+          {/* Basic Information */}
+          {renderDetailSection('Basic Information', {
+            'Interconnecting Entity': selectedProject.InterconnectingEntity,
+            'Generation Type': selectedProject.GenerationType,
+            'Capacity (MW)': selectedProject.CapacityMW,
+            'Summer Capacity (MW)': selectedProject.SummerCapacity,
+            'Winter Capacity (MW)': selectedProject.WinterCapacityMW,
+          })}
+
+          {/* Location */}
+          {renderDetailSection('Location', {
+            'County': selectedProject.County,
+            'State': selectedProject.StateName,
+            'Interconnection Location': selectedProject.InterconnectionLocation,
+            'Transmission Owner': selectedProject.TransmissionOwner,
+          })}
+
+          {/* Timeline */}
+          {renderDetailSection('Timeline', {
+            'Queue Date': formatDate(selectedProject.QueueDate),
+            'Proposed Completion': formatDate(selectedProject.ProposedCompletionDate),
+            'Actual Completion': formatDate(selectedProject.ActualCompletionDate),
+            'Withdrawn Date': formatDate(selectedProject.WithdrawnDate),
+          })}
+
+          {/* Withdrawal Information */}
+          {selectedProject.WithdrawalComment && (
+            <View style={styles.detailSection}>
+              <Text style={styles.detailSectionTitle}>Withdrawal Information</Text>
+              <View style={styles.detailSectionContent}>
+                <View style={[styles.detailRow, styles.detailRowWithBorder]}>
+                  <Text style={styles.detailLabel}>Withdrawal Date:</Text>
+                  <Text style={styles.detailValue}>{formatDate(selectedProject.WithdrawnDate)}</Text>
+                </View>
+                <View style={styles.detailRow}>
+                  <Text style={styles.detailLabel}>Comment:</Text>
+                  <Text style={styles.detailValue}>{selectedProject.WithdrawalComment}</Text>
+                </View>
+              </View>
+            </View>
+          )}
+
+          {/* Additional Information */}
+          {renderAdditionalInfo()}
+
+          <View style={styles.detailsActions}>
+            <TouchableOpacity 
+              style={styles.detailsActionButton}
+              onPress={closeProjectDetails}
+            >
+              <Text style={styles.detailsActionButtonText}>Back to Search Results</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    );
   };
 
   return (
     <View style={styles.container}>
-      {/* Header */}
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View style={styles.headerText}>
-            <Text style={styles.title}>Project Search</Text>
-            <Text style={styles.subtitle}>
-              Search across power generation projects in all ISO/RTO regions
-            </Text>
+      <View style={styles.contentContainer}>
+        {/* Main Search Area */}
+        <View style={[styles.searchArea, showProjectDetails && styles.searchAreaWithPanel]}>
+          {/* Header */}
+          <View style={styles.header}>
+            <View style={styles.headerTop}>
+              <View style={styles.headerText}>
+                <Text style={styles.title}>Project Search</Text>
+                <Text style={styles.subtitle}>
+                  Search across power generation projects in all ISO/RTO regions
+                </Text>
+              </View>
+              <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                <Ionicons name="close" size={24} color="#007AFF" />
+              </TouchableOpacity>
+            </View>
           </View>
-          <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-            <Ionicons name="close" size={24} color="#007AFF" />
-          </TouchableOpacity>
-        </View>
-      </View>
 
-      {/* Search Input */}
-      <View style={styles.searchContainer}>
-        <View style={styles.searchInputContainer}>
-          <TextInput
-            style={styles.searchInput}
-            placeholder="Search projects by name, location, type, or queue ID..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={handleSearch}
-            returnKeyType="search"
-          />
-          <TouchableOpacity 
-            style={styles.searchButton}
-            onPress={handleSearch}
-            disabled={loading}
-          >
-            {loading ? (
-              <ActivityIndicator color="#FFFFFF" size="small" />
-            ) : (
-              <Text style={styles.searchButtonText}>Search</Text>
-            )}
-          </TouchableOpacity>
-        </View>
-      </View>
+          {/* Search Input */}
+          <View style={styles.searchContainer}>
+            <View style={styles.searchInputContainer}>
+              <TextInput
+                style={styles.searchInput}
+                placeholder="Search projects by name, location, type, or queue ID..."
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={handleSearch}
+                returnKeyType="search"
+              />
+              <TouchableOpacity 
+                style={styles.searchButton}
+                onPress={handleSearch}
+                disabled={loading}
+              >
+                {loading ? (
+                  <ActivityIndicator color="#FFFFFF" size="small" />
+                ) : (
+                  <Text style={styles.searchButtonText}>Search</Text>
+                )}
+              </TouchableOpacity>
+            </View>
+          </View>
 
-      {/* Search Results */}
-      <ScrollView 
-        style={styles.resultsContainer}
-        onScroll={({ nativeEvent }) => {
-          const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
-          const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
-          
-          if (isCloseToBottom && !loading && searchResults.length < totalFound) {
-            loadMore();
-          }
-        }}
-        scrollEventThrottle={400}
-      >
-        {hasSearched && (
-          <View style={styles.resultsSummary}>
-            <Text style={styles.resultsText}>
-              {totalFound > 0 
-                ? `Found ${totalFound} project${totalFound === 1 ? '' : 's'} for "${searchQuery}"`
-                : `No projects found for "${searchQuery}"`
+          {/* Search Results */}
+          <ScrollView 
+            style={styles.resultsContainer}
+            onScroll={({ nativeEvent }) => {
+              const { layoutMeasurement, contentOffset, contentSize } = nativeEvent;
+              const isCloseToBottom = layoutMeasurement.height + contentOffset.y >= contentSize.height - 20;
+              
+              if (isCloseToBottom && !loading && searchResults.length < totalFound) {
+                loadMore();
               }
-            </Text>
-          </View>
-        )}
+            }}
+            scrollEventThrottle={400}
+          >
+            {hasSearched && (
+              <View style={styles.resultsSummary}>
+                <Text style={styles.resultsText}>
+                  {totalFound > 0 
+                    ? `Found ${totalFound} project${totalFound === 1 ? '' : 's'} for "${searchQuery}"`
+                    : `No projects found for "${searchQuery}"`
+                  }
+                </Text>
+              </View>
+            )}
 
-        {searchResults.map((item, index) => (
-          <SearchResultItem
-            key={`${item.document.iso}-${item.document.queueid}-${index}`}
-            item={item}
-            onPress={handleResultPress}
-          />
-        ))}
+            {searchResults.map((item, index) => (
+              <SearchResultItem
+                key={`${item.document.iso}-${item.document.queueid}-${index}`}
+                item={item}
+                onPress={handleResultPress}
+              />
+            ))}
 
-        {loading && searchResults.length > 0 && (
-          <View style={styles.loadingMore}>
-            <ActivityIndicator color="#3B82F6" />
-            <Text style={styles.loadingText}>Loading more results...</Text>
-          </View>
-        )}
+            {loading && searchResults.length > 0 && (
+              <View style={styles.loadingMore}>
+                <ActivityIndicator color="#3B82F6" />
+                <Text style={styles.loadingText}>Loading more results...</Text>
+              </View>
+            )}
 
-        {hasSearched && searchResults.length === 0 && !loading && (
-          <View style={styles.noResults}>
-            <Text style={styles.noResultsText}>
-              No projects found matching your search.
-            </Text>
-            <Text style={styles.noResultsSubtext}>
-              Try different keywords or browse all projects instead.
-            </Text>
-            <TouchableOpacity 
-              style={styles.browseButton}
-              onPress={() => navigation.navigate('ProjectDashboard')}
-            >
-              <Text style={styles.browseButtonText}>Browse All Projects</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-      </ScrollView>
+            {hasSearched && searchResults.length === 0 && !loading && (
+              <View style={styles.noResults}>
+                <Text style={styles.noResultsText}>
+                  No projects found matching your search.
+                </Text>
+                <Text style={styles.noResultsSubtext}>
+                  Try different keywords or browse all projects instead.
+                </Text>
+                <TouchableOpacity 
+                  style={styles.browseButton}
+                  onPress={() => navigation.navigate('ProjectDashboard')}
+                >
+                  <Text style={styles.browseButtonText}>Browse All Projects</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </ScrollView>
+        </View>
+
+        {/* Side Panel for Project Details */}
+        {showProjectDetails && <ProjectDetailsPanel />}
+      </View>
     </View>
   );
 };
@@ -295,6 +543,139 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: '#F9FAFB',
+  },
+  contentContainer: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  searchArea: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  searchAreaWithPanel: {
+    flex: 0.6, // Takes 60% of width when panel is open
+  },
+  detailsPanel: {
+    flex: 0.4, // Takes 40% of width
+    backgroundColor: '#FFFFFF',
+    borderLeftWidth: 1,
+    borderLeftColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: -2, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  detailsHeader: {
+    padding: 20,
+    paddingTop: 40,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  detailsHeaderContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  detailsTitle: {
+    flex: 1,
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: '#1F2937',
+    marginRight: 16,
+  },
+  detailsCloseButton: {
+    padding: 8,
+    borderRadius: 6,
+    backgroundColor: '#F3F4F6',
+  },
+  detailsHeaderInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  detailsSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    flex: 1,
+  },
+  detailsStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 4,
+  },
+  detailsStatusText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  detailsContent: {
+    flex: 1,
+    padding: 20,
+  },
+  detailsLoadingOverlay: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 20,
+    gap: 8,
+  },
+  detailsLoadingText: {
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  detailSection: {
+    marginBottom: 24,
+  },
+  detailSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  detailSectionContent: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    padding: 16,
+  },
+  detailRow: {
+    flexDirection: 'row',
+    paddingVertical: 6,
+  },
+  detailRowWithBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  detailLabel: {
+    flex: 0.4,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
+  },
+  detailValue: {
+    flex: 0.6,
+    fontSize: 14,
+    color: '#1F2937',
+  },
+  detailsActions: {
+    paddingVertical: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    marginTop: 20,
+  },
+  detailsActionButton: {
+    backgroundColor: '#F3F4F6',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  detailsActionButtonText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#374151',
   },
   header: {
     padding: 20,
@@ -390,6 +771,11 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 2,
     elevation: 2,
+  },
+  resultItemSelected: {
+    borderColor: '#3B82F6',
+    borderWidth: 2,
+    backgroundColor: '#EBF8FF',
   },
   resultHeader: {
     flexDirection: 'row',
