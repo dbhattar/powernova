@@ -172,22 +172,36 @@ function handleFormSubmission(data) {
     const originalText = submitButton.innerHTML;
     submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     submitButton.disabled = true;
-    
-    // Simulate API call
-    setTimeout(() => {
-        // Reset form
-        document.getElementById('contactForm').reset();
-        
-        // Reset button
+
+    // Send to backend API
+    fetch('/api/contact/contact', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+            name: data.name,
+            email: data.email,
+            company: data.company,
+            message: data.message
+        })
+    })
+    .then(async response => {
+        const result = await response.json();
+        if (response.ok && result.success) {
+            document.getElementById('contactForm').reset();
+            showNotification('Thank you! Your message has been sent successfully.', 'success');
+        } else {
+            showNotification(result.error || 'Failed to send message. Please try again.', 'error');
+        }
+    })
+    .catch(() => {
+        showNotification('Failed to send message. Please try again.', 'error');
+    })
+    .finally(() => {
         submitButton.innerHTML = originalText;
         submitButton.disabled = false;
-        
-        // Show success message
-        showNotification('Thank you! Your message has been sent successfully.', 'success');
-        
-        // Log form data (in real implementation, send to server)
-        console.log('Form submission:', data);
-    }, 2000);
+    });
 }
 
 function showNotification(message, type = 'info') {

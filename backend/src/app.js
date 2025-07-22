@@ -13,6 +13,7 @@ const projectsController = require('./controllers/projectsController');
 const userController = require('./controllers/userController');
 const webSocketManager = require('./services/webSocketManager');
 const vectorizationWorker = require('./services/vectorizationWorker');
+const contactController = require('./controllers/contactController');
 
 const app = express();
 const PORT = process.env.PORT || 3001;
@@ -68,6 +69,10 @@ app.get('/api/test-db', async (req, res) => {
 });
 
 // API routes
+
+// Contact form endpoint (no auth required)
+app.use('/api/contact', contactController);
+
 app.use('/api/chat', authMiddleware, chatController);
 app.use('/api/documents', authMiddleware, documentController);
 app.use('/api/vectors', authMiddleware, vectorController);
