@@ -24,7 +24,6 @@
  */
 
 const Typesense = require('typesense');
-const { query } = require('../src/config/database');
 const path = require('path');
 const dotenvPath = path.join(__dirname, '../.env');
 console.log('🔍 Attempting to load environment variables from:', dotenvPath);
@@ -34,6 +33,8 @@ if (dotenvResult.error) {
 } else {
   console.log('✅ .env file loaded successfully');
 }
+
+const { query } = require('../src/config/database');
 
 // Typesense client configuration
 const typesenseConfig = {
