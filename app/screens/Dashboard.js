@@ -3,6 +3,9 @@ import { View, Text, ScrollView, StyleSheet, RefreshControl, TouchableOpacity } 
 import { Ionicons } from '@expo/vector-icons';
 import { Chart } from '../components/ui/Chart';
 import { Card } from '../components/ui/Card';
+import { API_BASE_URL } from '../config/constants';
+
+console.log('🔗 Dashboard API Base URL:', API_BASE_URL);
 
 // Import test data for development
 let mockConversations = [];
@@ -49,7 +52,6 @@ export const DashboardScreen = ({ user, conversations, documents, onNavigate }) 
     
     try {
       const token = await user.getIdToken();
-      const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000';
       
       const response = await fetch(`${API_BASE_URL}/api/projects/statistics`, {
         headers: {

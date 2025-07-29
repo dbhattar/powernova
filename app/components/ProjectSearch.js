@@ -14,6 +14,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
+import { API_BASE_URL } from '../config/constants'; // Ensure this is defined in your constants file
 
 const { width } = Dimensions.get('window');
 
@@ -36,8 +37,6 @@ const ProjectSearch = ({ navigation, onClose }) => {
     });
     return () => unsubscribe();
   }, []);
-
-  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000';
 
   const searchProjects = async (query, page = 1) => {
     if (!query.trim()) {

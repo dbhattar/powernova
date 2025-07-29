@@ -13,6 +13,7 @@ import { Ionicons } from '@expo/vector-icons';
 import * as DocumentPicker from 'expo-document-picker';
 import { getAuth } from 'firebase/auth';
 import { webSocketService } from '../services/webSocketService';
+import { API_BASE_URL } from '../config/constants';
 
 const DocumentUpload = ({ onUpload, isUploading: externalUploading }) => {
   const [uploading, setUploading] = useState(false);
@@ -121,7 +122,7 @@ const DocumentUpload = ({ onUpload, isUploading: externalUploading }) => {
       }
 
       const token = await user.getIdToken();
-      const apiUrl = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000';
+      const apiUrl = API_BASE_URL;
 
       // Create form data
       const formData = new FormData();

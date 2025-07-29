@@ -1,5 +1,6 @@
 import { io } from 'socket.io-client';
 import { getAuth } from 'firebase/auth';
+import { API_BASE_URL } from '../config/constants'; // Ensure this is defined in your constants file
 
 class WebSocketService {
   constructor() {
@@ -30,9 +31,9 @@ class WebSocketService {
 
       // Get Firebase Auth token (force refresh to ensure it's valid)
       const token = await user.getIdToken(true);
-      
-      const wsUrl = process.env.EXPO_PUBLIC_API_URL?.replace('http', 'ws') || 'ws://localhost:9000';
-      
+
+      const wsUrl = API_BASE_URL?.replace('http', 'ws');
+
       console.log('🔗 Connecting to WebSocket:', wsUrl);
       
       this.socket = io(wsUrl, {

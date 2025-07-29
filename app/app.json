@@ -26,7 +26,8 @@
       "favicon": "./assets/favicon.png"
     },
     "extra": {
-      "mainHeading": "PowerNOVA"
+      "mainHeading": "PowerNOVA",
+      "backendUrl": "https://app.powernova.ai"
     }
   }
 }

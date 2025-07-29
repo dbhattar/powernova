@@ -19,6 +19,7 @@ import { MainLayout } from './components/Layout';
 import { DashboardScreen, ProfileScreen } from './screens';
 import { Sidebar } from './components/ui';
 import { webSocketService } from './services/webSocketService';
+import { API_BASE_URL } from './config/constants';
 
 export default function App() {
   const [recording, setRecording] = useState(null);
@@ -64,11 +65,10 @@ export default function App() {
       return `${process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000'}/api`;
     }
     // Production: deployed backend URL
-    return Constants.expoConfig.extra.backendUrl || 'https://your-backend-url.com/api';
+    return Constants.expoConfig.extra.backendUrl || 'https://app.powernova.ai/api';
   }
 
   const BACKEND_API_URL = getBackendApiUrl();
-  console.log('Backend API URL:', BACKEND_API_URL);
 
   const MAIN_HEADING = Constants.expoConfig.extra.mainHeading;
 

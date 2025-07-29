@@ -12,7 +12,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../firebase';
 import { onAuthStateChanged } from 'firebase/auth';
-
+import { API_BASE_URL } from '../config/constants';
 const { width, height } = Dimensions.get('window');
 
 const ISOSelector = ({ selectedISO, onISOChange }) => {
@@ -218,7 +218,6 @@ const ProjectDashboard = ({ navigation, onClose }) => {
   const [totalProjects, setTotalProjects] = useState(0);
   const projectsPerPage = 50;
 
-  const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000';
 
   const fetchStatistics = async (iso = null) => {
     if (!user) return;

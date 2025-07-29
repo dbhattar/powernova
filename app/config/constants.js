@@ -1,6 +1,6 @@
 // API Configuration
-export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000';
-
+//export const API_BASE_URL = process.env.EXPO_PUBLIC_API_URL;
+export const API_BASE_URL = "http://localhost:9000";
 // Document viewer settings
 export const DOCUMENT_VIEWER_CONFIG = {
   maxFileSize: 100 * 1024 * 1024, // 100MB

@@ -18,6 +18,7 @@ import {
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../firebase';
 import { ProfilePicture } from '../components';
+import { API_BASE_URL } from '../config/constants'; // Ensure this is defined in your constants file
 
 const ProfileScreen = ({ onClose, user }) => {
   const [isLoading, setIsLoading] = useState(true);
@@ -36,7 +37,7 @@ const ProfileScreen = ({ onClose, user }) => {
   };
 
   // Backend API configuration
-  const BACKEND_API_URL = process.env.EXPO_PUBLIC_API_URL || 'http://localhost:9000';
+  const BACKEND_API_URL = API_BASE_URL;
 
   // Handle hardware back button on Android
   useEffect(() => {
