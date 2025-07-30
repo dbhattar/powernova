@@ -50,7 +50,7 @@ export default function App() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   // New state for enhanced UI
-  const [currentPanel, setCurrentPanel] = useState('dashboard');
+  const [currentPanel, setCurrentPanel] = useState(user ? 'dashboard' : 'projects');
   const [showSidebar, setShowSidebar] = useState(false);
 
   // Initialize Google Auth Provider
@@ -86,15 +86,18 @@ export default function App() {
       console.log('🌐 API Call START:', endpoint, options.method || 'GET');
       console.log('🌐 Full URL will be:', `${BACKEND_API_URL}${endpoint}`);
       
-      const token = await getUserToken();
-      console.log('🔑 Token obtained, length:', token ? token.length : 0);
-      console.log('🔑 Token preview:', token ? `${token.substring(0, 50)}...` : 'null');
-      
       // Build headers
       const headers = {
-        'Authorization': `Bearer ${token}`,
         ...options.headers,
       };
+      
+      // Only add auth token if user is authenticated
+      if (user) {
+        const token = await getUserToken();
+        console.log('🔑 Token obtained, length:', token ? token.length : 0);
+        console.log('🔑 Token preview:', token ? `${token.substring(0, 50)}...` : 'null');
+        headers['Authorization'] = `Bearer ${token}`;
+      }
       
       // Only add Content-Type for requests that typically have a body
       if (options.method && !['GET', 'DELETE'].includes(options.method.toUpperCase())) {
@@ -1013,6 +1016,19 @@ export default function App() {
         photoURL: user.photoURL
       } : 'null');
       setUser(user);
+      
+      // Set appropriate default panel based on auth state
+      if (user) {
+        // If user just signed in and is in chat/projects/search, switch to dashboard
+        if (currentPanel === 'chat' || currentPanel === 'projects' || currentPanel === 'search') {
+          setCurrentPanel('dashboard');
+        }
+      } else {
+        // If user signed out and is in an auth-required panel, switch to projects
+        if (currentPanel === 'dashboard' || currentPanel === 'chat' || currentPanel === 'documents' || currentPanel === 'history') {
+          setCurrentPanel('projects');
+        }
+      }
     }, (error) => {
       console.error('Auth state change error:', error);
     });
@@ -1021,7 +1037,7 @@ export default function App() {
       console.log('Cleaning up auth listener');
       unsubscribe();
     };
-  }, []);
+  }, [currentPanel]);
 
   return (
     <SafeAreaView style={styles.safeArea}>
@@ -1037,6 +1053,34 @@ export default function App() {
               <Text style={styles.heading}>{MAIN_HEADING}</Text>
             </View>
             <View style={styles.headerRight}>
+              {/* Always show Projects and Search navigation */}
+              <TouchableOpacity
+                style={[styles.navButton, currentPanel === 'projects' && styles.navButtonActive]}
+                onPress={() => navigateToPanel('projects')}
+              >
+                <Ionicons 
+                  name={currentPanel === 'projects' ? "business" : "business-outline"} 
+                  size={18} 
+                  color={currentPanel === 'projects' ? "#007AFF" : "#666"} 
+                />
+                <Text style={[styles.navButtonText, currentPanel === 'projects' && styles.navButtonTextActive]}>
+                  Projects
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.navButton, currentPanel === 'search' && styles.navButtonActive]}
+                onPress={() => navigateToPanel('search')}
+              >
+                <Ionicons 
+                  name={currentPanel === 'search' ? "search" : "search-outline"} 
+                  size={18} 
+                  color={currentPanel === 'search' ? "#007AFF" : "#666"} 
+                />
+                <Text style={[styles.navButtonText, currentPanel === 'search' && styles.navButtonTextActive]}>
+                  Search
+                </Text>
+              </TouchableOpacity>
+              
               {user ? (
                 <>
                   <TouchableOpacity
@@ -1082,32 +1126,6 @@ export default function App() {
                         <Text style={styles.documentBadgeText}>{documents.length}</Text>
                       </View>
                     ) : null}
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.navButton, currentPanel === 'projects' && styles.navButtonActive]}
-                    onPress={() => navigateToPanel('projects')}
-                  >
-                    <Ionicons 
-                      name={currentPanel === 'projects' ? "business" : "business-outline"} 
-                      size={18} 
-                      color={currentPanel === 'projects' ? "#007AFF" : "#666"} 
-                    />
-                    <Text style={[styles.navButtonText, currentPanel === 'projects' && styles.navButtonTextActive]}>
-                      Projects
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[styles.navButton, currentPanel === 'search' && styles.navButtonActive]}
-                    onPress={() => navigateToPanel('search')}
-                  >
-                    <Ionicons 
-                      name={currentPanel === 'search' ? "search" : "search-outline"} 
-                      size={18} 
-                      color={currentPanel === 'search' ? "#007AFF" : "#666"} 
-                    />
-                    <Text style={[styles.navButtonText, currentPanel === 'search' && styles.navButtonTextActive]}>
-                      Search
-                    </Text>
                   </TouchableOpacity>
                   <TouchableOpacity
                     style={[styles.navButton, currentPanel === 'history' && styles.navButtonActive]}
@@ -1317,20 +1335,42 @@ export default function App() {
                     />
                   ) : null}
                   
-                  {/* Welcome message for new users */}
+                  {/* Welcome message for new users or sign-in prompt for unauthenticated users */}
                   {!currentConversation && !transcription && !chatResponse && conversationThread.length === 0 ? (
                     <View style={styles.welcomeContainer}>
-                      <Text style={styles.welcomeText}>Welcome to PowerNOVA!</Text>
-                      <Text style={styles.welcomeSubtext}>
-                        I'm here to help with power systems and electrical engineering questions.
-                        You can type your question or use the microphone to speak.
-                      </Text>
-                      {user && documents.length > 0 ? (
-                        <Text style={styles.documentHintText}>
-                          💡 You have {documents.length} document{documents.length > 1 ? 's' : ''} uploaded.
-                          Ask questions about your documents for more detailed answers!
-                        </Text>
-                      ) : null}
+                      {user ? (
+                        <>
+                          <Text style={styles.welcomeText}>Welcome to PowerNOVA!</Text>
+                          <Text style={styles.welcomeSubtext}>
+                            I'm here to help with power systems and electrical engineering questions.
+                            You can type your question or use the microphone to speak.
+                          </Text>
+                          {documents.length > 0 ? (
+                            <Text style={styles.documentHintText}>
+                              💡 You have {documents.length} document{documents.length > 1 ? 's' : ''} uploaded.
+                              Ask questions about your documents for more detailed answers!
+                            </Text>
+                          ) : null}
+                        </>
+                      ) : (
+                        <>
+                          <Ionicons name="chatbubble-outline" size={64} color="#007AFF" style={{ marginBottom: 16 }} />
+                          <Text style={styles.welcomeText}>Chat with PowerNOVA AI</Text>
+                          <Text style={styles.welcomeSubtext}>
+                            Sign in to chat with our AI assistant, upload documents, and access advanced features.
+                          </Text>
+                          <TouchableOpacity
+                            style={styles.signInPromptButton}
+                            onPress={handleGoogleSignIn}
+                          >
+                            <Ionicons name="logo-google" size={20} color="#fff" style={{ marginRight: 8 }} />
+                            <Text style={styles.signInPromptText}>Sign in to Chat</Text>
+                          </TouchableOpacity>
+                          <Text style={styles.browseHintText}>
+                            💡 You can browse projects and search without signing in
+                          </Text>
+                        </>
+                      )}
                     </View>
                   ) : null}
                 </ScrollView>
@@ -1347,25 +1387,28 @@ export default function App() {
                 </TouchableOpacity>
               )}
               
-              <View style={styles.inputSection}>
-                <TextInput
-                  style={styles.textInput}
-                  value={inputText}
-                  onChangeText={handleInputChange}
-                  placeholder="Ask about power systems..."
-                  editable={!isRecording && !isMicActive}
-                  multiline
-                  blurOnSubmit={false}
-                  onKeyPress={handleTextInputKeyPress}
-                />
-                <TouchableOpacity
-                  style={[styles.micButton, isMicActive && styles.micActive]}
-                  onPress={handleMicPress}
-                  disabled={isTranscribing || isChatLoading}
-                >
-                  <Ionicons name={isMicActive ? 'mic-off' : 'mic'} size={28} color="#fff" />
-                </TouchableOpacity>
-              </View>
+              {/* Chat input section - only show for authenticated users */}
+              {user ? (
+                <View style={styles.inputSection}>
+                  <TextInput
+                    style={styles.textInput}
+                    value={inputText}
+                    onChangeText={handleInputChange}
+                    placeholder="Ask about power systems..."
+                    editable={!isRecording && !isMicActive}
+                    multiline
+                    blurOnSubmit={false}
+                    onKeyPress={handleTextInputKeyPress}
+                  />
+                  <TouchableOpacity
+                    style={[styles.micButton, isMicActive && styles.micActive]}
+                    onPress={handleMicPress}
+                    disabled={isTranscribing || isChatLoading}
+                  >
+                    <Ionicons name={isMicActive ? 'mic-off' : 'mic'} size={28} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ) : null}
             </>
           )}
           
@@ -1503,6 +1546,37 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: '#007AFF',
+  },
+  signInPromptButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#4285F4',
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 12,
+    marginTop: 20,
+    shadowColor: '#000',
+    shadowOffset: {
+      width: 0,
+      height: 2,
+    },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
+  },
+  signInPromptText: {
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  browseHintText: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
+    marginTop: 16,
+    padding: 12,
+    backgroundColor: '#f8f9fa',
+    borderRadius: 8,
   },
   messageContainer: {
     width: '100%',

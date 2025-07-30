@@ -44,23 +44,22 @@ const ProjectSearch = ({ navigation, onClose }) => {
       return;
     }
 
-    if (!user) {
-      Alert.alert('Authentication Error', 'Please sign in to search projects');
-      return;
-    }
-
     setLoading(true);
     
     try {
-      const token = await user.getIdToken();
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      // Add auth token if user is logged in
+      if (user) {
+        const token = await user.getIdToken();
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(
         `${API_BASE_URL}/api/projects/search?query=${encodeURIComponent(query)}&page=${page}&per_page=20`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
+        { headers }
       );
 
       if (!response.ok) {
@@ -205,22 +204,22 @@ const ProjectSearch = ({ navigation, onClose }) => {
 
   const fetchProjectDetails = async (project) => {
     if (!project.IsoID || !project.QueueID) return;
-    if (!user) {
-      console.log('No user authenticated, skipping fetch');
-      return;
-    }
 
     setProjectDetailsLoading(true);
     try {
-      const token = await user.getIdToken();
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      // Add auth token if user is logged in
+      if (user) {
+        const token = await user.getIdToken();
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
       const response = await fetch(
         `${API_BASE_URL}/api/projects/project-details?isoId=${project.IsoID}&queueId=${project.QueueID}`,
-        {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json',
-          },
-        }
+        { headers }
       );
 
       if (response.ok) {

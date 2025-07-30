@@ -220,21 +220,23 @@ const ProjectDashboard = ({ navigation, onClose }) => {
 
 
   const fetchStatistics = async (iso = null) => {
-    if (!user) return;
-    
     setStatsLoading(true);
     try {
-      const token = await user.getIdToken();
       const url = iso 
         ? `${API_BASE_URL}/api/projects/statistics/${iso}`
         : `${API_BASE_URL}/api/projects/statistics`;
       
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      // Add auth token if user is logged in
+      if (user) {
+        const token = await user.getIdToken();
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(url, { headers });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -251,27 +253,26 @@ const ProjectDashboard = ({ navigation, onClose }) => {
   };
 
   const fetchProjects = async (iso = null, page = 1) => {
-    if (!user) {
-      console.log('No user authenticated, skipping fetch');
-      return;
-    }
-    
     setLoading(true);
     setError(null);
     
     try {
-      const token = await user.getIdToken();
       const offset = (page - 1) * projectsPerPage;
       const url = iso 
         ? `${API_BASE_URL}/api/projects/projects/${iso}?limit=${projectsPerPage}&offset=${offset}`
         : `${API_BASE_URL}/api/projects/projects?limit=${projectsPerPage}&offset=${offset}`;
       
-      const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
-      });
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      // Add auth token if user is logged in
+      if (user) {
+        const token = await user.getIdToken();
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(url, { headers });
 
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
@@ -316,10 +317,8 @@ const ProjectDashboard = ({ navigation, onClose }) => {
 
   // Fetch initial data when user is available
   useEffect(() => {
-    if (user) {
       fetchProjects(null, 1);
       fetchStatistics(null);
-    }
   }, [user]);
 
   if (loading && projects.length === 0) {
@@ -358,6 +357,17 @@ const ProjectDashboard = ({ navigation, onClose }) => {
       <ISOSelector selectedISO={selectedISO} onISOChange={handleISOChange} />
 
       <ProjectStats statistics={statistics} loading={statsLoading} />
+
+      {/* Sign-in prompt for enhanced features */}
+      {!user && (
+        <View style={styles.signInPrompt}>
+          <Ionicons name="star-outline" size={24} color="#007AFF" />
+          <Text style={styles.signInPromptTitle}>Unlock Premium Features</Text>
+          <Text style={styles.signInPromptText}>
+            Sign in to access AI chat, document analysis, personalized dashboards, and more!
+          </Text>
+        </View>
+      )}
 
       {error && (
         <View style={styles.errorContainer}>
@@ -692,9 +702,27 @@ const styles = StyleSheet.create({
   paginationButtonTextDisabled: {
     color: '#9CA3AF',
   },
-  pageIndicator: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
+  // Sign-in prompt styles
+  signInPrompt: {
+    backgroundColor: '#F0F8FF',
+    borderWidth: 1,
+    borderColor: '#007AFF',
+    borderRadius: 12,
+    padding: 16,
+    margin: 16,
+    alignItems: 'center',
+    gap: 8,
+  },
+  signInPromptTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#007AFF',
+  },
+  signInPromptText: {
+    fontSize: 14,
+    color: '#333',
+    textAlign: 'center',
+    lineHeight: 20,
   },
 });
 

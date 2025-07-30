@@ -83,8 +83,8 @@ app.get('/api/projects/health', (req, res) => {
   res.json({ status: 'ok', service: 'projects', timestamp: new Date().toISOString() });
 });
 
-// Projects routes (auth required)
-app.use('/api/projects', authMiddleware, projectsController);
+// Projects routes (no auth required - public access)
+app.use('/api/projects', projectsController);
 
 // Error handling middleware
 app.use((err, req, res, next) => {
