@@ -1,0 +1,14 @@
+tests/
+test/
+docs/
+venv/
+*.md
+.env*
+.git/
+.github/
+scripts/
+*.test.js
+*.spec.js
+test*.js
+*.sh
+.sql

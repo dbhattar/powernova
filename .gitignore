@@ -91,6 +91,7 @@ dist/
 # Testing
 coverage/
 .nyc_output/
+ssh.env
 
 # Temporary files
 *.tmp
