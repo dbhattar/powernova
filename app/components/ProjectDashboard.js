@@ -216,6 +216,10 @@ const ProjectDashboard = ({ navigation, onClose }) => {
   const [error, setError] = useState(null);
   const [currentPage, setCurrentPage] = useState(1);
   const [totalProjects, setTotalProjects] = useState(0);
+  const [selectedProject, setSelectedProject] = useState(null);
+  const [showProjectDetails, setShowProjectDetails] = useState(false);
+  const [projectDetailsLoading, setProjectDetailsLoading] = useState(false);
+  const [additionalInfo, setAdditionalInfo] = useState(null);
   const projectsPerPage = 50;
 
 
@@ -297,8 +301,131 @@ const ProjectDashboard = ({ navigation, onClose }) => {
     fetchStatistics(iso);
   };
 
-  const handleProjectPress = (project) => {
-    navigation.navigate('ProjectDetails', { project });
+  const handleProjectPress = async (project) => {
+    setSelectedProject(project);
+    setShowProjectDetails(true);
+    
+    // Fetch additional project details
+    await fetchProjectDetails(project);
+  };
+
+  const fetchProjectDetails = async (project) => {
+    if (!project.IsoID || !project.QueueID) return;
+
+    setProjectDetailsLoading(true);
+    try {
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+
+      // Add auth token if user is logged in
+      if (user) {
+        const token = await user.getIdToken();
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+
+      const response = await fetch(
+        `${API_BASE_URL}/api/projects/project-details?isoId=${project.IsoID}&queueId=${project.QueueID}`,
+        { headers }
+      );
+
+      if (response.ok) {
+        const detailedProject = await response.json();
+        setSelectedProject(detailedProject);
+        
+        // Parse additional info if available
+        if (detailedProject.AdditionalInfo) {
+          try {
+            const parsed = typeof detailedProject.AdditionalInfo === 'string' 
+              ? JSON.parse(detailedProject.AdditionalInfo)
+              : detailedProject.AdditionalInfo;
+            setAdditionalInfo(parsed);
+          } catch (e) {
+            console.log('Could not parse additional info:', e);
+          }
+        }
+      }
+    } catch (error) {
+      console.error('Error fetching project details:', error);
+    } finally {
+      setProjectDetailsLoading(false);
+    }
+  };
+
+  const closeProjectDetails = () => {
+    setShowProjectDetails(false);
+    setSelectedProject(null);
+    setAdditionalInfo(null);
+  };
+
+  const formatDate = (dateString) => {
+    if (!dateString) return 'N/A';
+    try {
+      return new Date(dateString).toLocaleDateString();
+    } catch {
+      return dateString;
+    }
+  };
+
+  const getStatusColor = (status) => {
+    switch (status?.toUpperCase()) {
+      case 'ACTIVE':
+        return '#10B981';
+      case 'WITHDRAWN':
+        return '#EF4444';
+      case 'SUSPENDED':
+        return '#F59E0B';
+      case 'COMPLETED':
+        return '#8B5CF6';
+      default:
+        return '#6B7280';
+    }
+  };
+
+  const renderDetailSection = (title, data) => {
+    const validFields = Object.entries(data).filter(([key, value]) => 
+      value !== null && value !== undefined && value !== '' && value !== 'N/A'
+    );
+
+    if (validFields.length === 0) return null;
+
+    return (
+      <View style={styles.detailSection}>
+        <Text style={styles.detailSectionTitle}>{title}</Text>
+        <View style={styles.detailSectionContent}>
+          {validFields.map(([key, value], index) => (
+            <View key={key} style={[styles.detailRow, index < validFields.length - 1 && styles.detailRowWithBorder]}>
+              <Text style={styles.detailLabel}>{key.replace(/([A-Z])/g, ' $1').trim()}:</Text>
+              <Text style={styles.detailValue}>{value?.toString() || 'N/A'}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
+  };
+
+  const renderAdditionalInfo = () => {
+    if (!additionalInfo || typeof additionalInfo !== 'object') return null;
+
+    const entries = Object.entries(additionalInfo).filter(([key, value]) => 
+      value !== null && value !== undefined && value !== '' && key !== 'id'
+    );
+
+    if (entries.length === 0) return null;
+
+    return (
+      <View style={styles.detailSection}>
+        <Text style={styles.detailSectionTitle}>Additional Information</Text>
+        <View style={styles.detailSectionContent}>
+          {entries.map(([key, value], index) => (
+            <View key={key} style={[styles.detailRow, index < entries.length - 1 && styles.detailRowWithBorder]}>
+              <Text style={styles.detailLabel}>{key}:</Text>
+              <Text style={styles.detailValue}>{value?.toString() || 'N/A'}</Text>
+            </View>
+          ))}
+        </View>
+      </View>
+    );
   };
 
   const handlePageChange = (newPage) => {
@@ -331,7 +458,11 @@ const ProjectDashboard = ({ navigation, onClose }) => {
   }
 
   return (
-    <ScrollView style={styles.container}>
+    <View style={styles.container}>
+      <View style={styles.contentContainer}>
+        {/* Main Dashboard Area */}
+        <View style={[styles.dashboardArea, showProjectDetails && styles.dashboardAreaWithPanel]}>
+          <ScrollView style={styles.scrollContainer}>
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View style={styles.headerText}>
@@ -427,7 +558,94 @@ const ProjectDashboard = ({ navigation, onClose }) => {
           loading={loading}
         />
       </View>
-    </ScrollView>
+        </ScrollView>
+      </View>
+
+      {/* Side Panel for Project Details */}
+      {showProjectDetails && (
+        <View style={styles.detailsPanel}>
+          <View style={styles.detailsHeader}>
+            <View style={styles.detailsHeaderContent}>
+              <Text style={styles.detailsTitle}>
+                {selectedProject?.GenerationProjectName || selectedProject?.ProjectName || 'Unnamed Project'}
+              </Text>
+              <TouchableOpacity onPress={() => setShowProjectDetails(false)} style={styles.detailsCloseButton}>
+                <Ionicons name="close" size={24} color="#007AFF" />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.detailsHeaderInfo}>
+              <Text style={styles.detailsSubtitle}>
+                Queue ID: {selectedProject?.QueueID} • ISO: {selectedProject?.IsoID}
+              </Text>
+              <View style={[styles.detailsStatusBadge, { backgroundColor: getStatusColor(selectedProject?.ProjectStatus || selectedProject?.Status) }]}>
+                <Text style={styles.detailsStatusText}>{selectedProject?.ProjectStatus || selectedProject?.Status || 'Unknown'}</Text>
+              </View>
+            </View>
+          </View>
+
+          <ScrollView style={styles.detailsContent}>
+            {projectDetailsLoading && (
+              <View style={styles.detailsLoadingOverlay}>
+                <ActivityIndicator size="small" color="#3B82F6" />
+                <Text style={styles.detailsLoadingText}>Loading details...</Text>
+              </View>
+            )}
+
+            {selectedProject && (
+              <>
+                {/* Basic Information */}
+                {renderDetailSection('Basic Information', {
+                  'Max Capacity (MW)': selectedProject.MaxCapacityMW,
+                  'Summer Capacity (MW)': selectedProject.SummerCapacityMW,
+                  'Winter Capacity (MW)': selectedProject.WinterCapacityMW,
+                  'Fuel Type': selectedProject.FuelType,
+                  'Technology Type': selectedProject.TechnologyType,
+                  'Generation Type': selectedProject.GenerationType,
+                })}
+
+                {/* Location */}
+                {renderDetailSection('Location', {
+                  'County': selectedProject.County,
+                  'State': selectedProject.State || selectedProject.StateName,
+                  'Zip Code': selectedProject.ZipCode,
+                  'Point of Interconnection': selectedProject.PointOfInterconnection,
+                  'Transmission Owner': selectedProject.TransmissionOwner,
+                })}
+
+                {/* Interconnection Details */}
+                {renderDetailSection('Interconnection Details', {
+                  'Interconnection Service Type': selectedProject.InterconnectionServiceType,
+                  'Voltage Level': selectedProject.VoltageLevel ? `${selectedProject.VoltageLevel} kV` : null,
+                  'Interconnecting Entity': selectedProject.InterconnectingEntity,
+                })}
+
+                {/* Timeline */}
+                {renderDetailSection('Timeline', {
+                  'Queue Date': formatDate(selectedProject.QueueDate),
+                  'Commercial Operation Date': formatDate(selectedProject.CommercialOperationDate),
+                  'Initial Synchronization Date': formatDate(selectedProject.InitialSynchronizationDate),
+                  'Withdrawn Date': formatDate(selectedProject.WithdrawnDate),
+                })}
+
+                {/* Withdrawal Information */}
+                {selectedProject.WithdrawalComment && (
+                  <View style={styles.detailSection}>
+                    <Text style={styles.detailSectionTitle}>Withdrawal Information</Text>
+                    <View style={styles.detailSectionContent}>
+                      <Text style={styles.withdrawalComment}>{selectedProject.WithdrawalComment}</Text>
+                    </View>
+                  </View>
+                )}
+
+                {/* Additional Information */}
+                {renderAdditionalInfo()}
+              </>
+            )}
+          </ScrollView>
+        </View>
+      )}
+    </View>
+  </View>
   );
 };
 
@@ -723,6 +941,132 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  // Layout styles
+  contentContainer: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  dashboardArea: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  dashboardAreaWithPanel: {
+    flex: 0.6, // Takes 60% of width when panel is open
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  // Side panel styles
+  detailsPanel: {
+    flex: 0.4, // Takes 40% of width
+    backgroundColor: '#FFFFFF',
+    borderLeftWidth: 1,
+    borderLeftColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: -2, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  detailsHeader: {
+    padding: 20,
+    paddingTop: 40,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  detailsHeaderContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  detailsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    flex: 1,
+    marginRight: 12,
+  },
+  detailsCloseButton: {
+    padding: 8,
+  },
+  detailsHeaderInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  detailsSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    flex: 1,
+  },
+  detailsStatusBadge: {
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  detailsStatusText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  detailsContent: {
+    flex: 1,
+    padding: 20,
+  },
+  detailsLoadingOverlay: {
+    alignItems: 'center',
+    padding: 20,
+  },
+  detailsLoadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  detailSection: {
+    marginBottom: 20,
+  },
+  detailSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  detailSectionContent: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    backgroundColor: '#FFFFFF',
+  },
+  detailRowWithBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+  },
+  detailLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  detailValue: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1F2937',
+    textAlign: 'right',
+  },
+  withdrawalComment: {
+    fontSize: 14,
+    color: '#1F2937',
+    padding: 16,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
   },
 });
 
