@@ -50,7 +50,7 @@ export default function App() {
   const [selectedProject, setSelectedProject] = useState(null);
   const [showProfile, setShowProfile] = useState(false);
   // New state for enhanced UI
-  const [currentPanel, setCurrentPanel] = useState(user ? 'dashboard' : 'projects');
+  const [currentPanel, setCurrentPanel] = useState('projects'); // Default to projects, will be updated based on auth state
   const [showSidebar, setShowSidebar] = useState(false);
 
   // Initialize Google Auth Provider
@@ -1018,17 +1018,15 @@ export default function App() {
       setUser(user);
       
       // Set appropriate default panel based on auth state
-      if (user) {
-        // If user just signed in and is in chat/projects/search, switch to dashboard
-        if (currentPanel === 'chat' || currentPanel === 'projects' || currentPanel === 'search') {
-          setCurrentPanel('dashboard');
-        }
-      } else {
+      if (!user) {
         // If user signed out and is in an auth-required panel, switch to projects
-        if (currentPanel === 'dashboard' || currentPanel === 'chat' || currentPanel === 'documents' || currentPanel === 'history') {
+        if (currentPanel === 'dashboard' || currentPanel === 'documents' || currentPanel === 'history') {
           setCurrentPanel('projects');
         }
+        // chat, projects, and search work for unauthenticated users, so no need to change
       }
+      // When user signs in (user becomes truthy), don't force navigation
+      // Let them stay wherever they are since all views work for authenticated users
     }, (error) => {
       console.error('Auth state change error:', error);
     });
