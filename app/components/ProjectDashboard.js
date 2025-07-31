@@ -7,7 +7,8 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Dimensions
+  Dimensions,
+  Modal
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../firebase';
@@ -458,11 +459,8 @@ const ProjectDashboard = ({ navigation, onClose }) => {
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.contentContainer}>
-        {/* Main Dashboard Area */}
-        <View style={[styles.dashboardArea, showProjectDetails && styles.dashboardAreaWithPanel]}>
-          <ScrollView style={styles.scrollContainer}>
+    <>
+      <ScrollView style={styles.container}>
       <View style={styles.header}>
         <View style={styles.headerTop}>
           <View style={styles.headerText}>
@@ -558,94 +556,101 @@ const ProjectDashboard = ({ navigation, onClose }) => {
           loading={loading}
         />
       </View>
-        </ScrollView>
-      </View>
+    </ScrollView>
 
-      {/* Side Panel for Project Details */}
-      {showProjectDetails && (
-        <View style={styles.detailsPanel}>
-          <View style={styles.detailsHeader}>
-            <View style={styles.detailsHeaderContent}>
-              <Text style={styles.detailsTitle}>
-                {selectedProject?.GenerationProjectName || selectedProject?.ProjectName || 'Unnamed Project'}
-              </Text>
-              <TouchableOpacity onPress={() => setShowProjectDetails(false)} style={styles.detailsCloseButton}>
-                <Ionicons name="close" size={24} color="#007AFF" />
-              </TouchableOpacity>
-            </View>
-            <View style={styles.detailsHeaderInfo}>
-              <Text style={styles.detailsSubtitle}>
-                Queue ID: {selectedProject?.QueueID} • ISO: {selectedProject?.IsoID}
-              </Text>
-              <View style={[styles.detailsStatusBadge, { backgroundColor: getStatusColor(selectedProject?.ProjectStatus || selectedProject?.Status) }]}>
-                <Text style={styles.detailsStatusText}>{selectedProject?.ProjectStatus || selectedProject?.Status || 'Unknown'}</Text>
-              </View>
-            </View>
-          </View>
-
-          <ScrollView style={styles.detailsContent}>
-            {projectDetailsLoading && (
-              <View style={styles.detailsLoadingOverlay}>
-                <ActivityIndicator size="small" color="#3B82F6" />
-                <Text style={styles.detailsLoadingText}>Loading details...</Text>
-              </View>
-            )}
-
-            {selectedProject && (
-              <>
-                {/* Basic Information */}
-                {renderDetailSection('Basic Information', {
-                  'Max Capacity (MW)': selectedProject.MaxCapacityMW,
-                  'Summer Capacity (MW)': selectedProject.SummerCapacityMW,
-                  'Winter Capacity (MW)': selectedProject.WinterCapacityMW,
-                  'Fuel Type': selectedProject.FuelType,
-                  'Technology Type': selectedProject.TechnologyType,
-                  'Generation Type': selectedProject.GenerationType,
-                })}
-
-                {/* Location */}
-                {renderDetailSection('Location', {
-                  'County': selectedProject.County,
-                  'State': selectedProject.State || selectedProject.StateName,
-                  'Zip Code': selectedProject.ZipCode,
-                  'Point of Interconnection': selectedProject.PointOfInterconnection,
-                  'Transmission Owner': selectedProject.TransmissionOwner,
-                })}
-
-                {/* Interconnection Details */}
-                {renderDetailSection('Interconnection Details', {
-                  'Interconnection Service Type': selectedProject.InterconnectionServiceType,
-                  'Voltage Level': selectedProject.VoltageLevel ? `${selectedProject.VoltageLevel} kV` : null,
-                  'Interconnecting Entity': selectedProject.InterconnectingEntity,
-                })}
-
-                {/* Timeline */}
-                {renderDetailSection('Timeline', {
-                  'Queue Date': formatDate(selectedProject.QueueDate),
-                  'Commercial Operation Date': formatDate(selectedProject.CommercialOperationDate),
-                  'Initial Synchronization Date': formatDate(selectedProject.InitialSynchronizationDate),
-                  'Withdrawn Date': formatDate(selectedProject.WithdrawnDate),
-                })}
-
-                {/* Withdrawal Information */}
-                {selectedProject.WithdrawalComment && (
-                  <View style={styles.detailSection}>
-                    <Text style={styles.detailSectionTitle}>Withdrawal Information</Text>
-                    <View style={styles.detailSectionContent}>
-                      <Text style={styles.withdrawalComment}>{selectedProject.WithdrawalComment}</Text>
-                    </View>
-                  </View>
-                )}
-
-                {/* Additional Information */}
-                {renderAdditionalInfo()}
-              </>
-            )}
-          </ScrollView>
+    {/* Project Details Modal */}
+    <Modal
+      visible={showProjectDetails}
+      animationType="slide"
+      presentationStyle="pageSheet"
+      onRequestClose={() => setShowProjectDetails(false)}
+    >
+      <View style={styles.modalContainer}>
+        <View style={styles.modalHeader}>
+          <Text style={styles.modalTitle}>Project Details</Text>
+          <TouchableOpacity
+            onPress={() => setShowProjectDetails(false)}
+            style={styles.modalCloseButton}
+          >
+            <Ionicons name="close" size={24} color="#666" />
+          </TouchableOpacity>
         </View>
-      )}
-    </View>
-  </View>
+        
+        {selectedProject && (
+          <ScrollView style={styles.modalContent}>
+            <View style={styles.projectCard}>
+              <View style={styles.projectHeader}>
+                <Text style={styles.projectTitle}>
+                  {selectedProject.GenerationProjectName || 'Unnamed Project'}
+                </Text>
+                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedProject.ProjectStatus) }]}>
+                  <Text style={styles.statusText}>
+                    {selectedProject.ProjectStatus || 'Unknown'}
+                  </Text>
+                </View>
+              </View>
+
+              <View style={styles.projectMeta}>
+                <Text style={styles.metaText}>
+                  <Text style={styles.metaLabel}>Queue ID:</Text> {selectedProject.QueueID}
+                </Text>
+                <Text style={styles.metaText}>
+                  <Text style={styles.metaLabel}>ISO:</Text> {selectedProject.IsoID}
+                </Text>
+                {selectedProject.County && (
+                  <Text style={styles.metaText}>
+                    <Text style={styles.metaLabel}>County:</Text> {selectedProject.County}
+                  </Text>
+                )}
+                {selectedProject.State && (
+                  <Text style={styles.metaText}>
+                    <Text style={styles.metaLabel}>State:</Text> {selectedProject.State}
+                  </Text>
+                )}
+                {selectedProject.ZipCode && (
+                  <Text style={styles.metaText}>
+                    <Text style={styles.metaLabel}>Zip Code:</Text> {selectedProject.ZipCode}
+                  </Text>
+                )}
+              </View>
+
+              {renderDetailSection('Technical Details', [
+                { label: 'Max Capacity', value: selectedProject.MaxCapacityMW ? `${selectedProject.MaxCapacityMW} MW` : null },
+                { label: 'Summer Capacity', value: selectedProject.SummerCapacityMW ? `${selectedProject.SummerCapacityMW} MW` : null },
+                { label: 'Winter Capacity', value: selectedProject.WinterCapacityMW ? `${selectedProject.WinterCapacityMW} MW` : null },
+                { label: 'Fuel Type', value: selectedProject.FuelType },
+                { label: 'Technology Type', value: selectedProject.TechnologyType },
+                { label: 'Commercial Operation Date', value: selectedProject.CommercialOperationDate ? formatDate(selectedProject.CommercialOperationDate) : null },
+              ])}
+
+              {renderDetailSection('Interconnection Details', [
+                { label: 'Interconnection Service Type', value: selectedProject.InterconnectionServiceType },
+                { label: 'Transmission Owner', value: selectedProject.TransmissionOwner },
+                { label: 'Point of Interconnection', value: selectedProject.PointOfInterconnection },
+                { label: 'Voltage Level', value: selectedProject.VoltageLevel ? `${selectedProject.VoltageLevel} kV` : null },
+              ])}
+
+              {renderDetailSection('Timeline', [
+                { label: 'Queue Date', value: selectedProject.QueueDate ? formatDate(selectedProject.QueueDate) : null },
+                { label: 'Initial Synchronization Date', value: selectedProject.InitialSynchronizationDate ? formatDate(selectedProject.InitialSynchronizationDate) : null },
+                { label: 'Withdrawn Date', value: selectedProject.WithdrawnDate ? formatDate(selectedProject.WithdrawnDate) : null },
+                { label: 'Withdrawal Comment', value: selectedProject.WithdrawalComment },
+              ])}
+
+              {renderAdditionalInfo()}
+            </View>
+          </ScrollView>
+        )}
+
+        {projectDetailsLoading && (
+          <View style={styles.loadingContainer}>
+            <ActivityIndicator size="large" color="#3B82F6" />
+            <Text style={styles.loadingText}>Loading project details...</Text>
+          </View>
+        )}
+      </View>
+    </Modal>
+    </>
   );
 };
 
@@ -942,110 +947,89 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     lineHeight: 20,
   },
-  // Layout styles
-  contentContainer: {
-    flex: 1,
-    flexDirection: 'row',
-  },
-  dashboardArea: {
+  // Modal styles
+  modalContainer: {
     flex: 1,
     backgroundColor: '#F9FAFB',
   },
-  dashboardAreaWithPanel: {
-    flex: 0.6, // Takes 60% of width when panel is open
-  },
-  scrollContainer: {
-    flex: 1,
-  },
-  // Side panel styles
-  detailsPanel: {
-    flex: 0.4, // Takes 40% of width
-    backgroundColor: '#FFFFFF',
-    borderLeftWidth: 1,
-    borderLeftColor: '#E5E7EB',
-    shadowColor: '#000',
-    shadowOffset: { width: -2, height: 0 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 5,
-  },
-  detailsHeader: {
-    padding: 20,
-    paddingTop: 40,
-    backgroundColor: '#FFFFFF',
-    borderBottomWidth: 1,
-    borderBottomColor: '#E5E7EB',
-  },
-  detailsHeaderContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  detailsTitle: {
-    fontSize: 18,
-    fontWeight: '600',
-    color: '#1F2937',
-    flex: 1,
-    marginRight: 12,
-  },
-  detailsCloseButton: {
-    padding: 8,
-  },
-  detailsHeaderInfo: {
+  modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+    paddingTop: 60,
   },
-  detailsSubtitle: {
-    fontSize: 14,
-    color: '#6B7280',
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '600',
+    color: '#1F2937',
+  },
+  modalCloseButton: {
+    padding: 8,
+  },
+  modalContent: {
     flex: 1,
   },
-  detailsStatusBadge: {
-    paddingHorizontal: 8,
-    paddingVertical: 4,
+  projectCard: {
+    backgroundColor: '#FFFFFF',
+    margin: 16,
     borderRadius: 12,
+    padding: 20,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.1,
+    shadowRadius: 4,
+    elevation: 3,
   },
-  detailsStatusText: {
+  projectHeader: {
+    marginBottom: 16,
+  },
+  projectTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 8,
+  },
+  statusBadge: {
+    alignSelf: 'flex-start',
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  statusText: {
     color: '#FFFFFF',
     fontSize: 12,
     fontWeight: '600',
   },
-  detailsContent: {
-    flex: 1,
-    padding: 20,
+  projectMeta: {
+    marginBottom: 20,
+    gap: 4,
   },
-  detailsLoadingOverlay: {
-    alignItems: 'center',
-    padding: 20,
-  },
-  detailsLoadingText: {
-    marginTop: 8,
+  metaText: {
     fontSize: 14,
     color: '#6B7280',
+  },
+  metaLabel: {
+    fontWeight: '600',
+    color: '#374151',
   },
   detailSection: {
     marginBottom: 20,
   },
-  detailSectionTitle: {
+  sectionHeader: {
     fontSize: 16,
     fontWeight: '600',
     color: '#1F2937',
     marginBottom: 12,
   },
-  detailSectionContent: {
-    backgroundColor: '#F9FAFB',
-    borderRadius: 8,
-    overflow: 'hidden',
-  },
   detailRow: {
     flexDirection: 'row',
-    paddingVertical: 12,
-    paddingHorizontal: 16,
-    backgroundColor: '#FFFFFF',
-  },
-  detailRowWithBorder: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
   },
@@ -1056,17 +1040,21 @@ const styles = StyleSheet.create({
     color: '#6B7280',
   },
   detailValue: {
-    flex: 1,
+    flex: 2,
     fontSize: 14,
     color: '#1F2937',
     textAlign: 'right',
   },
-  withdrawalComment: {
-    fontSize: 14,
-    color: '#1F2937',
-    padding: 16,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 8,
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 40,
+  },
+  loadingText: {
+    marginTop: 12,
+    fontSize: 16,
+    color: '#6B7280',
   },
 });
 

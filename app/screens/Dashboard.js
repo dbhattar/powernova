@@ -304,13 +304,6 @@ export const DashboardScreen = ({ user, conversations, documents, onNavigate }) 
         />
       </View>
 
-      {/* LMP Chart */}
-      <Chart
-        data={dashboardData.lmpData}
-        title="LMP Trends ($/MWh)"
-        type="line"
-      />
-
       {/* Quick Actions */}
       <View style={styles.quickActionsContainer}>
         <Text style={styles.sectionTitle}>Quick Actions</Text>
