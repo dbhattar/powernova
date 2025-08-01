@@ -7,8 +7,7 @@ import {
   TouchableOpacity,
   Alert,
   ActivityIndicator,
-  Dimensions,
-  Modal
+  Dimensions
 } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { auth } from '../firebase';
@@ -436,6 +435,100 @@ const ProjectDashboard = ({ navigation, onClose }) => {
     }
   };
 
+  // Project Details Panel Component
+  const ProjectDetailsPanel = () => {
+    if (!selectedProject) return null;
+
+    return (
+      <View style={styles.detailsPanel}>
+        <View style={styles.detailsHeader}>
+          <View style={styles.detailsHeaderContent}>
+            <Text style={styles.detailsTitle}>
+              {selectedProject.GenerationProjectName || 'Unnamed Project'}
+            </Text>
+            <TouchableOpacity onPress={closeProjectDetails} style={styles.detailsCloseButton}>
+              <Ionicons name="close" size={24} color="#007AFF" />
+            </TouchableOpacity>
+          </View>
+          <View style={styles.detailsHeaderInfo}>
+            <Text style={styles.detailsSubtitle}>
+              Queue ID: {selectedProject.QueueID} • ISO: {selectedProject.IsoID}
+            </Text>
+            <View style={[styles.detailsStatusBadge, { backgroundColor: getStatusColor(selectedProject.Status) }]}>
+              <Text style={styles.detailsStatusText}>{selectedProject.Status || 'Unknown'}</Text>
+            </View>
+          </View>
+        </View>
+
+        <ScrollView style={styles.detailsContent}>
+          {projectDetailsLoading && (
+            <View style={styles.detailsLoadingOverlay}>
+              <ActivityIndicator size="small" color="#3B82F6" />
+              <Text style={styles.detailsLoadingText}>Loading details...</Text>
+            </View>
+          )}
+
+          {/* Project Meta */}
+          <View style={styles.projectMeta}>
+            {selectedProject.County && (
+              <Text style={styles.metaText}>
+                <Text style={styles.metaLabel}>County:</Text> {selectedProject.County}
+              </Text>
+            )}
+            {selectedProject.State && (
+              <Text style={styles.metaText}>
+                <Text style={styles.metaLabel}>State:</Text> {selectedProject.State}
+              </Text>
+            )}
+            {selectedProject.ZipCode && (
+              <Text style={styles.metaText}>
+                <Text style={styles.metaLabel}>Zip Code:</Text> {selectedProject.ZipCode}
+              </Text>
+            )}
+          </View>
+
+          {/* Technical Details */}
+          {renderDetailSection('Technical Details', {
+            'Max Capacity': selectedProject.MaxCapacityMW ? `${selectedProject.MaxCapacityMW} MW` : null,
+            'Summer Capacity': selectedProject.SummerCapacityMW ? `${selectedProject.SummerCapacityMW} MW` : null,
+            'Winter Capacity': selectedProject.WinterCapacityMW ? `${selectedProject.WinterCapacityMW} MW` : null,
+            'Fuel Type': selectedProject.FuelType,
+            'Technology Type': selectedProject.TechnologyType,
+            'Commercial Operation Date': selectedProject.CommercialOperationDate ? formatDate(selectedProject.CommercialOperationDate) : null,
+          })}
+
+          {/* Interconnection Details */}
+          {renderDetailSection('Interconnection Details', {
+            'Interconnection Service Type': selectedProject.InterconnectionServiceType,
+            'Transmission Owner': selectedProject.TransmissionOwner,
+            'Point of Interconnection': selectedProject.PointOfInterconnection,
+            'Voltage Level': selectedProject.VoltageLevel ? `${selectedProject.VoltageLevel} kV` : null,
+          })}
+
+          {/* Timeline */}
+          {renderDetailSection('Timeline', {
+            'Queue Date': selectedProject.QueueDate ? formatDate(selectedProject.QueueDate) : null,
+            'Initial Synchronization Date': selectedProject.InitialSynchronizationDate ? formatDate(selectedProject.InitialSynchronizationDate) : null,
+            'Withdrawn Date': selectedProject.WithdrawnDate ? formatDate(selectedProject.WithdrawnDate) : null,
+            'Withdrawal Comment': selectedProject.WithdrawalComment,
+          })}
+
+          {/* Additional Information */}
+          {renderAdditionalInfo()}
+
+          <View style={styles.detailsActions}>
+            <TouchableOpacity 
+              style={styles.detailsActionButton}
+              onPress={closeProjectDetails}
+            >
+              <Text style={styles.detailsActionButtonText}>Back to Projects</Text>
+            </TouchableOpacity>
+          </View>
+        </ScrollView>
+      </View>
+    );
+  };
+
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, (currentUser) => {
       setUser(currentUser);
@@ -459,198 +552,113 @@ const ProjectDashboard = ({ navigation, onClose }) => {
   }
 
   return (
-    <>
-      <ScrollView style={styles.container}>
-      <View style={styles.header}>
-        <View style={styles.headerTop}>
-          <View style={styles.headerText}>
-            <Text style={styles.title}>Power Project Dashboard</Text>
-            <Text style={styles.subtitle}>
-              Explore interconnection queues across ISOs and RTOs
-            </Text>
-          </View>
-          <View style={styles.headerButtons}>
-            <TouchableOpacity 
-              style={styles.searchButton}
-              onPress={() => navigation.navigate('ProjectSearch')}
-            >
-              <Text style={styles.searchButtonText}>Search</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={onClose} style={styles.closeButton}>
-              <Ionicons name="close" size={24} color="#007AFF" />
-            </TouchableOpacity>
-          </View>
-        </View>
-      </View>
-
-      <ISOSelector selectedISO={selectedISO} onISOChange={handleISOChange} />
-
-      <ProjectStats statistics={statistics} loading={statsLoading} />
-
-      {/* Sign-in prompt for enhanced features */}
-      {!user && (
-        <View style={styles.signInPrompt}>
-          <Ionicons name="star-outline" size={24} color="#007AFF" />
-          <Text style={styles.signInPromptTitle}>Unlock Premium Features</Text>
-          <Text style={styles.signInPromptText}>
-            Sign in to access AI chat, document analysis, personalized dashboards, and more!
-          </Text>
-        </View>
-      )}
-
-      {error && (
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Error: {error}</Text>
-          <TouchableOpacity 
-            style={styles.retryButton}
-            onPress={() => {
-              fetchProjects(selectedISO, currentPage);
-              fetchStatistics(selectedISO);
-            }}
-          >
-            <Text style={styles.retryButtonText}>Retry</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <View style={styles.projectsContainer}>
-        <Text style={styles.sectionTitle}>
-          Projects {selectedISO ? `(${selectedISO})` : '(All ISOs)'}
-        </Text>
-        
-        {totalProjects > 0 && (
-          <PaginationControls
-            currentPage={currentPage}
-            totalProjects={totalProjects}
-            projectsPerPage={projectsPerPage}
-            onPageChange={handlePageChange}
-            loading={loading}
-          />
-        )}
-        
-        {loading && (
-          <View style={styles.loadingOverlay}>
-            <ActivityIndicator size="small" color="#3B82F6" />
-          </View>
-        )}
-
-        {projects.length === 0 && !loading && (
-          <Text style={styles.noProjectsText}>
-            No projects found. Try selecting a different ISO.
-          </Text>
-        )}
-
-        {projects.map((project, index) => (
-          <ProjectItem
-            key={`${project.IsoID}-${project.QueueID}-${index}`}
-            project={project}
-            onPress={handleProjectPress}
-          />
-        ))}
-
-        <PaginationControls 
-          currentPage={currentPage}
-          totalProjects={totalProjects}
-          projectsPerPage={projectsPerPage}
-          onPageChange={handlePageChange}
-          loading={loading}
-        />
-      </View>
-    </ScrollView>
-
-    {/* Project Details Modal */}
-    <Modal
-      visible={showProjectDetails}
-      animationType="slide"
-      presentationStyle="pageSheet"
-      onRequestClose={() => setShowProjectDetails(false)}
-    >
-      <View style={styles.modalContainer}>
-        <View style={styles.modalHeader}>
-          <Text style={styles.modalTitle}>Project Details</Text>
-          <TouchableOpacity
-            onPress={() => setShowProjectDetails(false)}
-            style={styles.modalCloseButton}
-          >
-            <Ionicons name="close" size={24} color="#666" />
-          </TouchableOpacity>
-        </View>
-        
-        {selectedProject && (
-          <ScrollView style={styles.modalContent}>
-            <View style={styles.projectCard}>
-              <View style={styles.projectHeader}>
-                <Text style={styles.projectTitle}>
-                  {selectedProject.GenerationProjectName || 'Unnamed Project'}
-                </Text>
-                <View style={[styles.statusBadge, { backgroundColor: getStatusColor(selectedProject.ProjectStatus) }]}>
-                  <Text style={styles.statusText}>
-                    {selectedProject.ProjectStatus || 'Unknown'}
+    <View style={styles.container}>
+      <View style={styles.contentContainer}>
+        {/* Main Dashboard Area */}
+        <View style={[styles.dashboardArea, showProjectDetails && styles.dashboardAreaWithPanel]}>
+          <ScrollView style={styles.scrollContainer}>
+            <View style={styles.header}>
+              <View style={styles.headerTop}>
+                <View style={styles.headerText}>
+                  <Text style={styles.title}>Power Project Dashboard</Text>
+                  <Text style={styles.subtitle}>
+                    Explore interconnection queues across ISOs and RTOs
                   </Text>
                 </View>
+                <View style={styles.headerButtons}>
+                  <TouchableOpacity 
+                    style={styles.searchButton}
+                    onPress={() => navigation.navigate('ProjectSearch')}
+                  >
+                    <Text style={styles.searchButtonText}>Search</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity onPress={onClose} style={styles.closeButton}>
+                    <Ionicons name="close" size={24} color="#007AFF" />
+                  </TouchableOpacity>
+                </View>
               </View>
+            </View>
 
-              <View style={styles.projectMeta}>
-                <Text style={styles.metaText}>
-                  <Text style={styles.metaLabel}>Queue ID:</Text> {selectedProject.QueueID}
+            <ISOSelector selectedISO={selectedISO} onISOChange={handleISOChange} />
+
+            <ProjectStats statistics={statistics} loading={statsLoading} />
+
+            {/* Sign-in prompt for enhanced features */}
+            {!user && (
+              <View style={styles.signInPrompt}>
+                <Ionicons name="star-outline" size={24} color="#007AFF" />
+                <Text style={styles.signInPromptTitle}>Unlock Premium Features</Text>
+                <Text style={styles.signInPromptText}>
+                  Sign in to access AI chat, document analysis, personalized dashboards, and more!
                 </Text>
-                <Text style={styles.metaText}>
-                  <Text style={styles.metaLabel}>ISO:</Text> {selectedProject.IsoID}
-                </Text>
-                {selectedProject.County && (
-                  <Text style={styles.metaText}>
-                    <Text style={styles.metaLabel}>County:</Text> {selectedProject.County}
-                  </Text>
-                )}
-                {selectedProject.State && (
-                  <Text style={styles.metaText}>
-                    <Text style={styles.metaLabel}>State:</Text> {selectedProject.State}
-                  </Text>
-                )}
-                {selectedProject.ZipCode && (
-                  <Text style={styles.metaText}>
-                    <Text style={styles.metaLabel}>Zip Code:</Text> {selectedProject.ZipCode}
-                  </Text>
-                )}
               </View>
+            )}
 
-              {renderDetailSection('Technical Details', [
-                { label: 'Max Capacity', value: selectedProject.MaxCapacityMW ? `${selectedProject.MaxCapacityMW} MW` : null },
-                { label: 'Summer Capacity', value: selectedProject.SummerCapacityMW ? `${selectedProject.SummerCapacityMW} MW` : null },
-                { label: 'Winter Capacity', value: selectedProject.WinterCapacityMW ? `${selectedProject.WinterCapacityMW} MW` : null },
-                { label: 'Fuel Type', value: selectedProject.FuelType },
-                { label: 'Technology Type', value: selectedProject.TechnologyType },
-                { label: 'Commercial Operation Date', value: selectedProject.CommercialOperationDate ? formatDate(selectedProject.CommercialOperationDate) : null },
-              ])}
+            {error && (
+              <View style={styles.errorContainer}>
+                <Text style={styles.errorText}>Error: {error}</Text>
+                <TouchableOpacity 
+                  style={styles.retryButton}
+                  onPress={() => {
+                    fetchProjects(selectedISO, currentPage);
+                    fetchStatistics(selectedISO);
+                  }}
+                >
+                  <Text style={styles.retryButtonText}>Retry</Text>
+                </TouchableOpacity>
+              </View>
+            )}
 
-              {renderDetailSection('Interconnection Details', [
-                { label: 'Interconnection Service Type', value: selectedProject.InterconnectionServiceType },
-                { label: 'Transmission Owner', value: selectedProject.TransmissionOwner },
-                { label: 'Point of Interconnection', value: selectedProject.PointOfInterconnection },
-                { label: 'Voltage Level', value: selectedProject.VoltageLevel ? `${selectedProject.VoltageLevel} kV` : null },
-              ])}
+            <View style={styles.projectsContainer}>
+              <Text style={styles.sectionTitle}>
+                Projects {selectedISO ? `(${selectedISO})` : '(All ISOs)'}
+              </Text>
+              
+              {totalProjects > 0 && (
+                <PaginationControls
+                  currentPage={currentPage}
+                  totalProjects={totalProjects}
+                  projectsPerPage={projectsPerPage}
+                  onPageChange={handlePageChange}
+                  loading={loading}
+                />
+              )}
+              
+              {loading && (
+                <View style={styles.loadingOverlay}>
+                  <ActivityIndicator size="small" color="#3B82F6" />
+                </View>
+              )}
 
-              {renderDetailSection('Timeline', [
-                { label: 'Queue Date', value: selectedProject.QueueDate ? formatDate(selectedProject.QueueDate) : null },
-                { label: 'Initial Synchronization Date', value: selectedProject.InitialSynchronizationDate ? formatDate(selectedProject.InitialSynchronizationDate) : null },
-                { label: 'Withdrawn Date', value: selectedProject.WithdrawnDate ? formatDate(selectedProject.WithdrawnDate) : null },
-                { label: 'Withdrawal Comment', value: selectedProject.WithdrawalComment },
-              ])}
+              {projects.length === 0 && !loading && (
+                <Text style={styles.noProjectsText}>
+                  No projects found. Try selecting a different ISO.
+                </Text>
+              )}
 
-              {renderAdditionalInfo()}
+              {projects.map((project, index) => (
+                <ProjectItem
+                  key={`${project.IsoID}-${project.QueueID}-${index}`}
+                  project={project}
+                  onPress={handleProjectPress}
+                />
+              ))}
+
+              <PaginationControls 
+                currentPage={currentPage}
+                totalProjects={totalProjects}
+                projectsPerPage={projectsPerPage}
+                onPageChange={handlePageChange}
+                loading={loading}
+              />
             </View>
           </ScrollView>
-        )}
+        </View>
 
-        {projectDetailsLoading && (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color="#3B82F6" />
-            <Text style={styles.loadingText}>Loading project details...</Text>
-          </View>
-        )}
+        {/* Side Panel for Project Details */}
+        {showProjectDetails && <ProjectDetailsPanel />}
       </View>
-    </Modal>
-    </>
+    </View>
   );
 };
 
@@ -946,6 +954,143 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center',
     lineHeight: 20,
+  },
+  // Layout styles for side panel
+  contentContainer: {
+    flex: 1,
+    flexDirection: 'row',
+  },
+  dashboardArea: {
+    flex: 1,
+    backgroundColor: '#F9FAFB',
+  },
+  dashboardAreaWithPanel: {
+    flex: 0.6, // Takes 60% of width when panel is open
+  },
+  scrollContainer: {
+    flex: 1,
+  },
+  // Details panel styles
+  detailsPanel: {
+    flex: 0.4, // Takes 40% of width
+    backgroundColor: '#FFFFFF',
+    borderLeftWidth: 1,
+    borderLeftColor: '#E5E7EB',
+    shadowColor: '#000',
+    shadowOffset: { width: -2, height: 0 },
+    shadowOpacity: 0.1,
+    shadowRadius: 8,
+    elevation: 5,
+  },
+  detailsHeader: {
+    padding: 20,
+    paddingTop: 40,
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  detailsHeaderContent: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  detailsTitle: {
+    fontSize: 18,
+    fontWeight: '600',
+    color: '#1F2937',
+    flex: 1,
+    marginRight: 12,
+  },
+  detailsCloseButton: {
+    padding: 8,
+  },
+  detailsHeaderInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  detailsSubtitle: {
+    fontSize: 14,
+    color: '#6B7280',
+    flex: 1,
+  },
+  detailsStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 20,
+  },
+  detailsStatusText: {
+    color: '#FFFFFF',
+    fontSize: 12,
+    fontWeight: '600',
+  },
+  detailsContent: {
+    flex: 1,
+    padding: 20,
+  },
+  detailsLoadingOverlay: {
+    alignItems: 'center',
+    paddingVertical: 20,
+  },
+  detailsLoadingText: {
+    marginTop: 8,
+    fontSize: 14,
+    color: '#6B7280',
+  },
+  detailsActions: {
+    paddingTop: 20,
+    borderTopWidth: 1,
+    borderTopColor: '#E5E7EB',
+    marginTop: 20,
+  },
+  detailsActionButton: {
+    backgroundColor: '#3B82F6',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
+  },
+  detailsActionButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  // Detail section styles (already existed, but ensuring they work with side panel)
+  detailSection: {
+    marginBottom: 20,
+  },
+  detailSectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#1F2937',
+    marginBottom: 12,
+  },
+  detailSectionContent: {
+    backgroundColor: '#F9FAFB',
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  detailRow: {
+    flexDirection: 'row',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+  },
+  detailRowWithBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E7EB',
+  },
+  detailLabel: {
+    flex: 1,
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#6B7280',
+  },
+  detailValue: {
+    flex: 1,
+    fontSize: 14,
+    color: '#1F2937',
+    textAlign: 'right',
   },
   // Modal styles
   modalContainer: {
