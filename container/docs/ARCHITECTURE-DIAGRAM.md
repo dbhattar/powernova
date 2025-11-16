@@ -3,53 +3,42 @@
 ## 🏗️ Azure Infrastructure Layout
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                     Azure Resource Group                             │
-│                      "powernova-rg"                                  │
-│                                                                       │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │         Azure Container Registry (ACR)                       │   │
-│  │              "powernovaacr"                                  │   │
-│  │                                                               │   │
-│  │  ┌──────────────────────┐  ┌──────────────────────┐        │   │
-│  │  │  powernova-website   │  │ powernova-chat-app   │        │   │
-│  │  │      :latest         │  │      :latest         │        │   │
-│  │  └──────────────────────┘  └──────────────────────┘        │   │
-│  │         (~50MB)                    (~50MB)                  │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                                                                       │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │         App Service Plan "powernova-plan"                    │   │
-│  │         SKU: B1 ($13/month)                                  │   │
-│  │         1 vCPU, 1.75GB RAM, 10GB Storage                     │   │
-│  │                                                               │   │
-│  │  ┌─────────────────────┐      ┌─────────────────────┐       │   │
-│  │  │  App Service #1     │      │  App Service #2     │       │   │
-│  │  │  "powernova-web"    │      │  "powernova-chat"   │       │   │
-│  │  │                     │      │                     │       │   │
-│  │  │  Container:         │      │  Container:         │       │   │
-│  │  │  website:latest     │      │  chat-app:latest    │       │   │
-│  │  │                     │      │                     │       │   │
-│  │  │  Port: 80           │      │  Port: 80           │       │   │
-│  │  │  HTTPS: Yes         │      │  HTTPS: Yes         │       │   │
-│  │  │                     │      │                     │       │   │
-│  │  └─────────────────────┘      └─────────────────────┘       │   │
-│  │           │                              │                   │   │
-│  └───────────┼──────────────────────────────┼───────────────────┘   │
-│              │                              │                       │
-└──────────────┼──────────────────────────────┼───────────────────────┘
-               │                              │
-               │                              │
-        Azure URL                      Azure URL
-               │                              │
-               ▼                              ▼
-  powernova-web.azurewebsites.net  powernova-chat.azurewebsites.net
-               │                              │
-               │                              │
-        CNAME Record                   CNAME Record
-               │                              │
-               ▼                              ▼
-      www.powernova.ai              app.powernova.ai
+┌─────────────────────────────────────────────────────────────────────────┐
+│                     Azure Resource Group                                 │
+│                      "powernova-rg"                                      │
+│                                                                           │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │         Azure Container Registry (ACR)                             │  │
+│  │              "powernovaacr"                                        │  │
+│  │                                                                     │  │
+│  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐           │  │
+│  │  │  website     │  │  chat-app    │  │  api         │           │  │
+│  │  │  :latest     │  │  :latest     │  │  :latest     │           │  │
+│  │  └──────────────┘  └──────────────┘  └──────────────┘           │  │
+│  │     (~50MB)           (~50MB)           (~200MB)                  │  │
+│  └───────────────────────────────────────────────────────────────────┘  │
+│                                                                           │
+│  ┌───────────────────────────────────────────────────────────────────┐  │
+│  │         App Service Plan "powernova-plan"                          │  │
+│  │         SKU: B1 ($13/month)                                        │  │
+│  │         1 vCPU, 1.75GB RAM, 10GB Storage                           │  │
+│  │                                                                     │  │
+│  │  ┌───────────┐      ┌───────────┐      ┌───────────────┐         │  │
+│  │  │  App #1   │      │  App #2   │      │  App #3       │         │  │
+│  │  │  web      │      │  chat     │      │  api          │         │  │
+│  │  │           │      │           │      │               │         │  │
+│  │  │  nginx    │      │  nginx    │      │  FastAPI      │         │  │
+│  │  │  :80      │      │  :80      │      │  :8000        │         │  │
+│  │  │  HTTPS ✓  │      │  HTTPS ✓  │      │  HTTPS ✓      │         │  │
+│  │  │           │      │           │      │  OpenAI ✓     │         │  │
+│  │  └───────────┘      └───────────┘      └───────────────┘         │  │
+│  │       │                   │                    │                  │  │
+│  └───────┼───────────────────┼────────────────────┼──────────────────┘  │
+│          │                   │                    │                     │
+└──────────┼───────────────────┼────────────────────┼─────────────────────┘
+           │                   │                    │
+           ▼                   ▼                    ▼
+    www.powernova.ai    app.powernova.ai    api.powernova.ai
 ```
 
 ## 🌐 Traffic Flow
@@ -126,6 +115,76 @@ User Browser
 User sees chat interface
 ```
 
+### Chat with AI Flow (Complete Journey)
+
+```
+User Browser (app.powernova.ai)
+    │
+    │ 1. User types message: "What are CAISO procedures?"
+    │
+    ▼
+┌─────────────────────────────────┐
+│  JavaScript (app.js)            │
+│  Sends POST request to:         │
+│  https://api.powernova.ai       │
+│  /api/chat/stream               │
+└─────────────────────────────────┘
+    │
+    │ 2. HTTPS Request with message history
+    │
+    ▼
+┌─────────────────────────────────┐
+│  Azure App Service              │
+│  "powernova-api"                │
+│                                 │
+│  ┌───────────────────────────┐ │
+│  │  FastAPI Backend          │ │
+│  │  - Validates request      │ │
+│  │  - Checks CORS            │ │
+│  │  - Prepares for OpenAI    │ │
+│  └───────────────────────────┘ │
+└─────────────────────────────────┘
+    │
+    │ 3. Calls OpenAI API with streaming
+    │
+    ▼
+┌─────────────────────────────────┐
+│  OpenAI API                     │
+│  gpt-4o-mini                    │
+│                                 │
+│  Generates response and         │
+│  streams tokens back            │
+└─────────────────────────────────┘
+    │
+    │ 4. SSE Stream (Server-Sent Events)
+    │    data: {"content": "CAISO"}
+    │    data: {"content": "'s interconnection"}
+    │    data: {"content": " procedures..."}
+    │    data: [DONE]
+    │
+    ▼
+┌─────────────────────────────────┐
+│  FastAPI Backend                │
+│  Proxies stream to client       │
+│  (keeps API key secure)         │
+└─────────────────────────────────┘
+    │
+    │ 5. SSE Stream forwarded
+    │
+    ▼
+┌─────────────────────────────────┐
+│  JavaScript (app.js)            │
+│  - Receives stream chunks       │
+│  - Updates UI in real-time      │
+│  - Shows typing animation       │
+└─────────────────────────────────┘
+    │
+    │ 6. Displays message
+    │
+    ▼
+User sees AI response appear word-by-word!
+```
+
 ## 💰 Cost Breakdown
 
 ```
@@ -135,19 +194,25 @@ User sees chat interface
 │                                                │
 │  App Service Plan (B1)              $13.00    │
 │  ├─ powernova-web                   included  │
-│  └─ powernova-chat                  included  │
+│  ├─ powernova-chat                  included  │
+│  └─ powernova-api                   included  │
 │                                                │
 │  Azure Container Registry (Basic)    $5.00    │
 │  ├─ powernova-website:latest        included  │
-│  └─ powernova-chat-app:latest       included  │
+│  ├─ powernova-chat-app:latest       included  │
+│  └─ powernova-api:latest            included  │
 │                                                │
 │  Bandwidth (first 100GB)             FREE     │
 │                                                │
-│  SSL Certificates                    FREE     │
+│  SSL Certificates (3x)               FREE     │
 │  (Azure Managed)                              │
 │                                                │
+│  OpenAI API Costs                   VARIABLE  │
+│  (pay-per-use, ~$0.15-0.60/1M tokens)         │
+│                                                │
 ├────────────────────────────────────────────────┤
-│  TOTAL:                             ~$18/mo   │
+│  TOTAL INFRASTRUCTURE:              ~$18/mo   │
+│  TOTAL with OpenAI usage:           ~$20-30/mo│
 └────────────────────────────────────────────────┘
 ```
 

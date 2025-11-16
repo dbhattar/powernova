@@ -96,6 +96,10 @@ class ChatApp {
         this.welcomeScreen.classList.add('hidden');
         this.messagesContainer.classList.add('active');
         
+        // Remove any existing follow-up prompts
+        const existingPrompts = this.messagesContainer.querySelectorAll('.followup-prompts');
+        existingPrompts.forEach(el => el.remove());
+        
         // Add user message
         this.addMessage('user', text);
         
@@ -139,7 +143,28 @@ class ChatApp {
         
         const bubble = document.createElement('div');
         bubble.className = 'message-bubble';
-        bubble.textContent = message.content;
+        
+        // Render markdown for assistant messages, plain text for user messages
+        if (message.role === 'assistant') {
+            // Configure marked for better rendering
+            marked.setOptions({
+                breaks: true,
+                gfm: true,
+                headerIds: false,
+                mangle: false
+            });
+            
+            // Render markdown
+            bubble.innerHTML = marked.parse(message.content || '');
+            
+            // Apply syntax highlighting to code blocks
+            bubble.querySelectorAll('pre code').forEach((block) => {
+                hljs.highlightElement(block);
+            });
+        } else {
+            // User messages - plain text
+            bubble.textContent = message.content;
+        }
         
         const time = document.createElement('div');
         time.className = 'message-time';
@@ -209,67 +234,292 @@ class ChatApp {
         this.isTyping = true;
         this.showTypingIndicator();
         
-        // Simulate API delay
-        setTimeout(() => {
-            this.hideTypingIndicator();
-            
-            // Generate mock response based on question
-            const response = this.generateMockResponse(userMessage);
-            this.addMessage('assistant', response.content, response.sources);
-            
-            this.isTyping = false;
-        }, 1500 + Math.random() * 1000);
+        // Call the real API
+        this.streamAIResponse(userMessage);
     }
     
-    generateMockResponse(question) {
-        const lowerQuestion = question.toLowerCase();
-        
-        // Mock responses for demo purposes
-        if (lowerQuestion.includes('caiso') || lowerQuestion.includes('interconnection')) {
-            return {
-                content: "CAISO's interconnection procedures are governed by their Generator Interconnection and Deliverability Allocation Procedures (GIDAP). The latest procedures include a transition to a cluster study process, enhanced deliverability assessment, and updated timelines for study completion. Key requirements include a $10,000 study deposit and adherence to specific milestone deadlines.\n\nThe process typically takes 2-3 years from application to commercial operation, with multiple study phases including Phase I and Phase II interconnection studies.",
-                sources: [
-                    { title: "CAISO GIDAP Manual - Section 3.5", url: "#" },
-                    { title: "Business Practice Manual for Generator Management", url: "#" }
-                ]
+    async streamAIResponse(userMessage) {
+        try {
+            // Get API URL from config
+            const apiUrl = window.PowerNOVA?.config?.apiUrl || 'http://localhost:8000';
+            
+            // Prepare messages array (include conversation history)
+            const messages = this.messages
+                .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+                .map(msg => ({
+                    role: msg.role,
+                    content: msg.content
+                }));
+            
+            // Call the streaming API
+            const response = await fetch(`${apiUrl}/api/chat/stream`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    messages: messages,
+                    model: 'gpt-4o-mini',
+                    temperature: 0.7,
+                    max_tokens: 2000,
+                    stream: true
+                })
+            });
+            
+            if (!response.ok) {
+                throw new Error(`API error: ${response.status} ${response.statusText}`);
+            }
+            
+            // Hide typing indicator before streaming
+            this.hideTypingIndicator();
+            
+            // Create a message element for streaming content
+            const messageId = Date.now();
+            const message = {
+                id: messageId,
+                role: 'assistant',
+                content: '',
+                timestamp: new Date()
             };
+            
+            this.messages.push(message);
+            this.renderMessage(message);
+            
+            // Get the message bubble for updating
+            const messageEl = this.messagesContainer.querySelector(`[data-id="${messageId}"]`);
+            const bubble = messageEl.querySelector('.message-bubble');
+            
+            // Read the stream
+            const reader = response.body.getReader();
+            const decoder = new TextDecoder();
+            let buffer = '';
+            
+            while (true) {
+                const { done, value } = await reader.read();
+                
+                if (done) break;
+                
+                // Decode the chunk
+                buffer += decoder.decode(value, { stream: true });
+                
+                // Process complete SSE messages
+                const lines = buffer.split('\n');
+                buffer = lines.pop() || ''; // Keep incomplete line in buffer
+                
+                for (const line of lines) {
+                    if (line.startsWith('data: ')) {
+                        const data = line.slice(6); // Remove 'data: ' prefix
+                        
+                        if (data === '[DONE]') {
+                            this.isTyping = false;
+                            break;
+                        }
+                        
+                        try {
+                            const parsed = JSON.parse(data);
+                            
+                            // Check for error
+                            if (parsed.error) {
+                                console.error('Stream error:', parsed.error);
+                                bubble.textContent = message.content + '\n\n[Error: ' + parsed.error + ']';
+                                this.isTyping = false;
+                                break;
+                            }
+                            
+                            // Add content to message
+                            if (parsed.content) {
+                                message.content += parsed.content;
+                                // Re-render markdown on each chunk
+                                marked.setOptions({
+                                    breaks: true,
+                                    gfm: true,
+                                    headerIds: false,
+                                    mangle: false
+                                });
+                                bubble.innerHTML = marked.parse(message.content || '');
+                                // Apply syntax highlighting to code blocks
+                                bubble.querySelectorAll('pre code').forEach((block) => {
+                                    hljs.highlightElement(block);
+                                });
+                                this.scrollToBottom();
+                            }
+                            
+                            // Handle completion
+                            if (parsed.done || parsed.finish_reason) {
+                                this.isTyping = false;
+                            }
+                        } catch (e) {
+                            console.error('Error parsing SSE data:', e);
+                        }
+                    }
+                }
+            }
+            
+            this.isTyping = false;
+            this.scrollToBottom();
+            
+            // Show follow-up prompts after AI response
+            this.showFollowUpPrompts(message);
+            
+        } catch (error) {
+            console.error('Error calling API:', error);
+            this.hideTypingIndicator();
+            
+            // Show error message to user
+            this.addMessage('assistant', 
+                `I'm sorry, I encountered an error while processing your request: ${error.message}\n\n` +
+                `Please make sure the API is running and accessible. In development, it should be at http://localhost:8000`
+            );
+            
+            this.isTyping = false;
         }
+    }
+    
+    async showFollowUpPrompts(aiMessage) {
+        // Remove any existing follow-up prompts
+        const existingPrompts = this.messagesContainer.querySelectorAll('.followup-prompts');
+        existingPrompts.forEach(el => el.remove());
         
-        if (lowerQuestion.includes('ferc') || lowerQuestion.includes('order 2023')) {
-            return {
-                content: "FERC Order 2023, issued in July 2023, represents a major reform of the generator interconnection process. Key provisions include:\n\n1. First-Ready, First-Served cluster study approach\n2. Incorporation of technological advancements in study assumptions\n3. Enhanced information requirements for interconnection requests\n4. Penalties for late withdrawals from the queue\n5. Improved alternative transmission technology considerations\n\nThe order aims to reduce interconnection timelines and improve the efficiency of the queue management process across all RTOs and ISOs.",
-                sources: [
-                    { title: "FERC Order No. 2023", url: "#" },
-                    { title: "Order 2023 Implementation Guide", url: "#" }
-                ]
-            };
+        // Generate contextual follow-up questions using LLM
+        const followUps = await this.generateFollowUpQuestions(aiMessage);
+        
+        if (!followUps || followUps.length === 0) return;
+        
+        // Create follow-up prompts container
+        const promptsContainer = document.createElement('div');
+        promptsContainer.className = 'followup-prompts';
+        
+        const title = document.createElement('h4');
+        title.textContent = 'Continue exploring:';
+        promptsContainer.appendChild(title);
+        
+        const grid = document.createElement('div');
+        grid.className = 'followup-grid';
+        
+        followUps.forEach(followUp => {
+            const btn = document.createElement('button');
+            btn.className = 'followup-btn';
+            btn.innerHTML = `<i class="${followUp.icon}"></i><span>${followUp.text}</span>`;
+            btn.addEventListener('click', () => {
+                this.messageInput.value = followUp.text;
+                this.sendBtn.disabled = false;
+                this.sendMessage();
+            });
+            grid.appendChild(btn);
+        });
+        
+        promptsContainer.appendChild(grid);
+        this.messagesContainer.appendChild(promptsContainer);
+        this.scrollToBottom();
+    }
+    
+    async generateFollowUpQuestions(aiMessage) {
+        try {
+            // Get API URL from config
+            const apiUrl = window.PowerNOVA?.config?.apiUrl || 'http://localhost:8000';
+            
+            // Get the last few messages for context (up to 4 messages)
+            const recentMessages = this.messages
+                .slice(-4)
+                .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+                .map(msg => ({
+                    role: msg.role,
+                    content: msg.content
+                }));
+            
+            // Create a system prompt for generating follow-up questions
+            const systemPrompt = `You are a helpful assistant that generates relevant follow-up questions for conversations about energy markets, regulations, and grid operations.
+
+Based on the conversation context, generate exactly 3 relevant follow-up questions that the user might want to ask next. The questions should:
+1. Be specific and actionable
+2. Build upon the current conversation
+3. Explore related topics or dive deeper into mentioned concepts
+4. Be relevant to energy markets, CAISO, ERCOT, PJM, MISO, FERC regulations, or grid operations
+
+Return ONLY a JSON array with exactly 3 objects, each with "text" and "icon" properties. Use Font Awesome icon classes.
+Example format:
+[
+  {"text": "What are the timeline requirements?", "icon": "fas fa-clock"},
+  {"text": "How do costs compare across regions?", "icon": "fas fa-dollar-sign"},
+  {"text": "What are the next steps in the process?", "icon": "fas fa-list-ol"}
+]
+
+Available icon classes: fa-clock, fa-dollar-sign, fa-chart-line, fa-file-alt, fa-gavel, fa-industry, fa-bolt, fa-sun, fa-wind, fa-battery-full, fa-plug, fa-network-wired, fa-database, fa-info-circle, fa-list-ol, fa-calendar-alt, fa-tools, fa-shield-alt, fa-globe-americas, fa-exchange-alt, fa-balance-scale`;
+            
+            // Make API call to generate follow-up questions
+            const response = await fetch(`${apiUrl}/api/chat`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    messages: [
+                        { role: 'system', content: systemPrompt },
+                        ...recentMessages
+                    ],
+                    model: 'gpt-4o-mini',
+                    temperature: 0.8,
+                    max_tokens: 300
+                })
+            });
+            
+            if (!response.ok) {
+                console.error('Failed to generate follow-up questions:', response.statusText);
+                return this.getFallbackFollowUps();
+            }
+            
+            const data = await response.json();
+            const content = data.response || data.content || '';
+            
+            // Try to parse JSON from the response
+            try {
+                // Extract JSON array from response (handle cases where LLM adds extra text)
+                const jsonMatch = content.match(/\[[\s\S]*\]/);
+                if (jsonMatch) {
+                    const followUps = JSON.parse(jsonMatch[0]);
+                    
+                    // Validate the response
+                    if (Array.isArray(followUps) && followUps.length > 0) {
+                        // Ensure we have exactly 3 questions with proper structure
+                        return followUps.slice(0, 3).filter(q => q.text && q.icon);
+                    }
+                }
+            } catch (parseError) {
+                console.error('Error parsing follow-up questions:', parseError);
+            }
+            
+            // Return fallback questions if parsing fails
+            return this.getFallbackFollowUps();
+            
+        } catch (error) {
+            console.error('Error generating follow-up questions:', error);
+            return this.getFallbackFollowUps();
         }
+    }
+    
+    getFallbackFollowUps() {
+        // Fallback questions if API call fails
+        const fallbackOptions = [
+            [
+                { text: "Can you provide more details on this topic?", icon: "fas fa-info-circle" },
+                { text: "What are the latest regulatory changes?", icon: "fas fa-newspaper" },
+                { text: "How does this compare to other regions?", icon: "fas fa-globe-americas" }
+            ],
+            [
+                { text: "What are the timeline requirements?", icon: "fas fa-clock" },
+                { text: "What are the typical costs involved?", icon: "fas fa-dollar-sign" },
+                { text: "What documentation is needed?", icon: "fas fa-file-alt" }
+            ],
+            [
+                { text: "How does the process work?", icon: "fas fa-list-ol" },
+                { text: "What are common challenges?", icon: "fas fa-exclamation-triangle" },
+                { text: "What are best practices?", icon: "fas fa-check-circle" }
+            ]
+        ];
         
-        if (lowerQuestion.includes('ercot') || lowerQuestion.includes('market design')) {
-            return {
-                content: "ERCOT operates as an energy-only market without a centralized capacity market. Key features of ERCOT's market design include:\n\n• Day-Ahead Market (DAM): Voluntary market for energy and ancillary services\n• Real-Time Market (RTM): Balances supply and demand every 5 minutes\n• Ancillary Services: Including Regulation, Responsive Reserve, and Non-Spinning Reserve\n• Operating Reserve Demand Curve (ORDC): Provides scarcity pricing signals\n• No capacity market: Relies on energy and ancillary service revenues\n\nERCOT's unique design reflects Texas's deregulated electricity market structure and its isolation from other interconnections.",
-                sources: [
-                    { title: "ERCOT Nodal Protocols - Section 4", url: "#" },
-                    { title: "ERCOT Market Guide", url: "#" }
-                ]
-            };
-        }
-        
-        if (lowerQuestion.includes('pjm') && lowerQuestion.includes('miso')) {
-            return {
-                content: "PJM and MISO both operate capacity markets, but with different designs:\n\n**PJM's Reliability Pricing Model (RPM):**\n• Forward capacity auctions (Base Residual Auction 3 years ahead)\n• Locational deliverability requirements\n• Performance-based capacity payments\n• Minimum Offer Price Rule (MOPR)\n\n**MISO's Resource Adequacy:**\n• Annual Planning Resource Auction\n• Zonal capacity requirements\n• Seasonal construct (summer/winter)\n• Accreditation based on ELCC methodology\n\nBoth markets aim to ensure resource adequacy, but PJM's market is more mature and typically shows higher clearing prices due to tighter capacity conditions in certain zones.",
-                sources: [
-                    { title: "PJM RPM Design", url: "#" },
-                    { title: "MISO Resource Adequacy Business Practice Manual", url: "#" }
-                ]
-            };
-        }
-        
-        // Default response
-        return {
-            content: `Thank you for your question about "${question}". This is a demo version of PowerNOVA Chat. In the full version, I would search through thousands of regulatory documents, tariffs, market rules, and operational procedures from ISO/RTO markets to provide you with accurate, cited answers.\n\nThe actual implementation will use advanced RAG (Retrieval-Augmented Generation) technology to:\n• Search relevant documents in real-time\n• Extract pertinent information\n• Synthesize a comprehensive answer\n• Provide source citations for verification\n\nFor now, try asking about CAISO interconnection procedures, FERC Order 2023, ERCOT market design, or comparing PJM and MISO capacity markets to see example responses!`,
-            sources: null
-        };
+        // Return a random set of fallback questions
+        const randomIndex = Math.floor(Math.random() * fallbackOptions.length);
+        return fallbackOptions[randomIndex];
     }
     
     formatTime(date) {

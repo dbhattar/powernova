@@ -8,7 +8,7 @@
     // Default values are for production
     const config = {
         landingUrl: 'https://www.powernova.ai',
-        apiUrl: 'https://api.powernova.ai',
+        apiUrl: 'https://powernovaapi.azurewebsites.net',
         wsUrl: 'wss://api.powernova.ai',
         environment: 'production'
     };

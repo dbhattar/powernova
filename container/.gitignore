@@ -42,7 +42,7 @@ temp/
 # Azure
 .azure/
 azure-pipelines.yml
-.azure-deployment.conf
+.azure*deployment.conf
 
 # Docker (local development)
 docker-compose.override.yml

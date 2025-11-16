@@ -1,0 +1,49 @@
+# Python cache (exclude at all levels)
+__pycache__/
+**/__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.pyc
+
+# Environment files (don't copy to image)
+.env
+.env.local
+.env.*.local
+
+# Documentation
+*.md
+README.md
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Git
+.git/
+.gitignore
+.gitattributes
+
+# Logs
+*.log
+logs/
+
+# Test files
+test/
+tests/
+*.test.py
+*_test.py
+
+# CI/CD
+.github/
+.gitlab-ci.yml
+
+# Build artifacts
+dist/
+build/
+*.egg-info/

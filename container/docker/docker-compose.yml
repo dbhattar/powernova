@@ -47,6 +47,33 @@ services:
       - "com.powernova.subdomain=app"
       - "com.powernova.environment=local"
 
-# Note: No custom network needed - containers don't communicate with each other
-# Each is an independent frontend application
-# Production uses Dockerfile and Dockerfile.app (without .local config)
+  # PowerNOVA API Backend (api.powernova.ai)
+  powernova-api:
+    build:
+      context: ../api
+      dockerfile: ../docker/Dockerfile.api.local  # Local development Dockerfile
+    container_name: powernova-api
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - PORT=8000
+      - ENVIRONMENT=development
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    labels:
+      - "com.powernova.description=PowerNOVA API backend (local)"
+      - "com.powernova.version=1.0.0"
+      - "com.powernova.subdomain=api"
+      - "com.powernova.environment=local"
+    volumes:
+      - ../api:/app  # Mount for hot-reload during development
+
+# Note: Containers communicate via host network for local development
+# Frontend (localhost:8081) calls API (localhost:8000)
+# Production uses separate Azure App Services with custom domains
