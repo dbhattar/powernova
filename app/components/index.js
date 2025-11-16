@@ -7,3 +7,5 @@ export { default as ConversationHistory } from './ConversationHistory';
 export { default as ProjectDashboard } from './ProjectDashboard';
 export { default as ProjectDetails } from './ProjectDetails';
 export { default as ProjectSearch } from './ProjectSearch';
+export { default as CookieConsent } from './CookieConsent';
+export { default as PrivacyPolicy } from './PrivacyPolicy';

@@ -6,7 +6,7 @@ import * as FileSystem from 'expo-file-system';
 import Constants from 'expo-constants';
 import * as Speech from 'expo-speech';
 import { Ionicons } from '@expo/vector-icons';
-import { auth } from './firebase';
+import { auth, trackEvent } from './firebase';
 import { onAuthStateChanged, signInWithPopup, GoogleAuthProvider, signOut, updateProfile } from 'firebase/auth';
 import Markdown from 'react-native-markdown-display';
 import { formatFileSize, getFileIcon } from './documentService';
@@ -263,6 +263,14 @@ export default function App() {
 
   // Send transcription to backend API with document context and conversation history
   const sendToChat = async (text) => {
+    // Track chat message
+    trackEvent('chat_message_sent', {
+      message_length: text.length,
+      input_type: transcription ? 'voice' : 'text',
+      has_documents: documents.length > 0,
+      user_id: user?.uid
+    });
+    
     setIsChatLoading(true);
     setChatResponse('');
     
@@ -651,6 +659,13 @@ export default function App() {
 
   // Navigation function to handle switching between panels
   const navigateToPanel = (panel) => {
+    // Track navigation events
+    trackEvent('page_view', { 
+      page_name: panel,
+      previous_page: currentPanel,
+      user_authenticated: !!user 
+    });
+    
     // Close all panels first
     setShowHistory(false);
     setShowDocuments(false);
@@ -699,6 +714,13 @@ export default function App() {
     try {
       console.log('📤 Document upload result received:', result);
       
+      // Track document upload
+      trackEvent('document_upload', {
+        is_duplicate: result.isDuplicate || result.isExisting,
+        file_type: result.fileType || 'unknown',
+        user_id: user?.uid
+      });
+      
       if (result.isDuplicate || result.isExisting) {
         console.log('🔄 Duplicate file - refreshing document list');
         // For duplicates, just refresh the list to potentially highlight the existing document
@@ -710,6 +732,12 @@ export default function App() {
       }
     } catch (error) {
       console.error('Error handling upload result:', error);
+      
+      // Track upload error
+      trackEvent('document_upload_error', {
+        error_message: error.message,
+        user_id: user?.uid
+      });
     }
   };
 
@@ -989,12 +1017,28 @@ export default function App() {
   const handleGoogleSignIn = async () => {
     try {
       console.log('Starting Google sign-in...');
+      trackEvent('sign_in_attempt', { method: 'google' });
+      
       const result = await signInWithPopup(auth, googleProvider);
       const user = result.user;
       console.log('Google sign-in successful:', user);
       setUser(user);
+      
+      // Track successful sign-in
+      trackEvent('sign_in_success', { 
+        method: 'google',
+        user_id: user.uid 
+      });
+      
     } catch (error) {
       console.error('Google sign-in error:', error);
+      
+      // Track sign-in failure
+      trackEvent('sign_in_failure', { 
+        method: 'google',
+        error_code: error.code 
+      });
+      
       if (error.code === 'auth/popup-blocked') {
         alert('Popup blocked. Please allow popups for this site and try again.');
       } else if (error.code === 'auth/popup-closed-by-user') {
@@ -1004,6 +1048,14 @@ export default function App() {
       }
     }
   };
+
+  // Track initial page load
+  React.useEffect(() => {
+    trackEvent('app_start', {
+      platform: Platform.OS,
+      initial_panel: currentPanel
+    });
+  }, []);
 
   // Setup auth state listener
   React.useEffect(() => {
