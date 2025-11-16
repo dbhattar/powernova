@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>PowerNOVA Chat - AI Energy Data Assistant</title>
+    <meta name="description" content="Chat with PowerNOVA's AI assistant to get instant answers from thousands of energy documents and regulatory data.">
+    <link rel="stylesheet" href="css/styles.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Environment Configuration - Must load before app.js -->
+    <script src="js/config.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="chat-header">
+        <div class="header-content">
+            <div class="logo-section">
+                <i class="fas fa-bolt logo-icon"></i>
+                <h1 class="logo-text">PowerNOVA <span class="chat-badge">Chat</span></h1>
+            </div>
+            <div class="header-actions">
+                <button class="btn-icon" id="newChatBtn" title="New Conversation">
+                    <i class="fas fa-plus"></i>
+                </button>
+                <button class="btn-icon" id="historyBtn" title="Chat History">
+                    <i class="fas fa-history"></i>
+                </button>
+                <button class="btn-icon" id="settingsBtn" title="Settings">
+                    <i class="fas fa-cog"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="main-container">
+        <!-- Sidebar -->
+        <aside class="sidebar" id="sidebar">
+            <div class="sidebar-header">
+                <h2>Recent Chats</h2>
+                <button class="btn-close" id="closeSidebar">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="chat-list" id="chatList">
+                <!-- Chat history will be populated here -->
+                <div class="chat-item">
+                    <i class="fas fa-comment-dots"></i>
+                    <div class="chat-item-content">
+                        <div class="chat-item-title">Welcome to PowerNOVA</div>
+                        <div class="chat-item-preview">Start a new conversation...</div>
+                    </div>
+                </div>
+            </div>
+        </aside>
+
+        <!-- Chat Area -->
+        <main class="chat-container">
+            <!-- Welcome Screen -->
+            <div class="welcome-screen" id="welcomeScreen">
+                <div class="welcome-content">
+                    <div class="welcome-icon">
+                        <i class="fas fa-comments"></i>
+                    </div>
+                    <h1 class="welcome-title">Welcome to PowerNOVA Chat</h1>
+                    <p class="welcome-subtitle">Ask me anything about energy markets, regulations, and operational data</p>
+                    
+                    <div class="example-questions">
+                        <h3>Try asking:</h3>
+                        <div class="examples-grid">
+                            <button class="example-btn" data-question="What are the latest CAISO interconnection procedures?">
+                                <i class="fas fa-plug"></i>
+                                <span>What are the latest CAISO interconnection procedures?</span>
+                            </button>
+                            <button class="example-btn" data-question="Explain FERC Order 2023 requirements">
+                                <i class="fas fa-file-alt"></i>
+                                <span>Explain FERC Order 2023 requirements</span>
+                            </button>
+                            <button class="example-btn" data-question="What is the current ERCOT market design?">
+                                <i class="fas fa-chart-line"></i>
+                                <span>What is the current ERCOT market design?</span>
+                            </button>
+                            <button class="example-btn" data-question="Compare PJM and MISO capacity markets">
+                                <i class="fas fa-balance-scale"></i>
+                                <span>Compare PJM and MISO capacity markets</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="welcome-features">
+                        <div class="feature-item">
+                            <i class="fas fa-database"></i>
+                            <span>1000s of documents indexed</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-shield-alt"></i>
+                            <span>Source citations included</span>
+                        </div>
+                        <div class="feature-item">
+                            <i class="fas fa-brain"></i>
+                            <span>AI-powered insights</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Messages Container -->
+            <div class="messages-container" id="messagesContainer">
+                <!-- Messages will be dynamically added here -->
+            </div>
+
+            <!-- Input Area -->
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <button class="btn-attach" id="attachBtn" title="Attach file">
+                        <i class="fas fa-paperclip"></i>
+                    </button>
+                    <textarea 
+                        id="messageInput" 
+                        class="message-input" 
+                        placeholder="Ask a question about energy markets, regulations, or data..."
+                        rows="1"
+                    ></textarea>
+                    <button class="btn-send" id="sendBtn" disabled>
+                        <i class="fas fa-paper-plane"></i>
+                    </button>
+                </div>
+                <div class="input-info">
+                    <span class="info-text">
+                        <i class="fas fa-info-circle"></i>
+                        PowerNOVA AI can make mistakes. Verify important information from source documents.
+                    </span>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="js/app.js"></script>
+</body>
+</html>

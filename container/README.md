@@ -1,4 +1,4 @@
-# PowerNOVA Website - Quick Reference
+# PowerNOVA - Quick Reference
 
 > 📚 **Complete Documentation**: See [docs/](docs/) folder for detailed guides
 > - [DEPLOYMENT.md](docs/DEPLOYMENT.md) - Comprehensive Azure deployment guide
@@ -6,18 +6,32 @@
 > - [MIGRATION-GUIDE.md](docs/MIGRATION-GUIDE.md) - Project reorganization guide
 > - [CHANGELOG.md](docs/CHANGELOG.md) - Version history and updates
 
+## 📦 Project Structure
+
+This repository contains two applications:
+
+- **Landing Page** (`website/`) - Static marketing site for www.powernova.ai
+- **Chat Interface** (`app/`) - AI-powered chat application for app.powernova.ai
+
 ## 🚀 Quick Start Commands
 
 ### Local Development with Docker
 
-```bash
-# Option 1: Using docker-compose (Recommended for beginners)
-cd docker
-docker-compose up -d          # Start the container
-docker-compose logs -f        # View logs
-docker-compose down          # Stop the container
+**Note:** Docker Compose is for **local testing only**. Azure deployment uses separate App Services (not docker-compose). See [DOCKER-COMPOSE-EXPLAINED.md](docs/DOCKER-COMPOSE-EXPLAINED.md) for details.
 
-# Option 2: Using the helper script
+```bash
+# Option 1: Using docker-compose (Recommended - runs both apps)
+cd docker
+docker-compose up -d          # Start both containers
+docker-compose logs -f        # View logs for both
+docker-compose ps            # Check status
+docker-compose down          # Stop both containers
+
+# Run individual services
+docker-compose up -d powernova-web    # Only landing page
+docker-compose up -d powernova-chat   # Only chat app
+
+# Option 2: Using the helper script (for landing page only)
 ./scripts/docker-helper.sh build     # Build the image
 ./scripts/docker-helper.sh run       # Run the container
 ./scripts/docker-helper.sh status    # Check status
@@ -25,24 +39,62 @@ docker-compose down          # Stop the container
 ./scripts/docker-helper.sh test      # Run tests
 ./scripts/docker-helper.sh stop      # Stop container
 
-# Option 3: Using Docker directly
+# Option 3: Using Docker directly (explicit, no compose)
+# Landing page
 docker build -f docker/Dockerfile -t powernova-website .
 docker run -d -p 8080:80 --name powernova-web powernova-website
-docker logs -f powernova-web
-docker stop powernova-web && docker rm powernova-web
+
+# Chat app
+docker build -f docker/Dockerfile.app -t powernova-chat .
+docker run -d -p 8081:80 --name powernova-chat-app powernova-chat
 ```
 
 ### Access Points
 
-- **Website**: http://localhost:8080
-- **Health Check**: http://localhost:8080/health
+**Landing Page (www.powernova.ai locally)**
+- Website: http://localhost:8080
+- Health Check: http://localhost:8080/health
+
+**Chat App (app.powernova.ai locally)**
+- Chat Interface: http://localhost:8081
+- Health Check: http://localhost:8081/health
 
 ## ☁️ Azure Deployment
 
-### Option 1: Automated Deployment Script (Recommended)
+### 🎯 Two Applications, One Plan Architecture
 
-The easiest way to deploy to Azure using our interactive deployment script:
+PowerNOVA uses **two separate App Services on one shared App Service Plan**:
+- **Landing Page** → `www.powernova.ai` (powernova-web)
+- **Chat Interface** → `app.powernova.ai` (powernova-chat)
 
+**Cost**: ~$18/month total (both apps share one B1 plan + ACR)
+
+📖 **Complete Guide**: See [DUAL-APP-DEPLOYMENT.md](docs/DUAL-APP-DEPLOYMENT.md)
+
+### Quick Start: Deploy Both Applications
+
+**Step 1: Deploy Landing Page**
+```bash
+./scripts/azure-deploy.sh
+```
+
+**Step 2: Deploy Chat App**
+```bash
+./scripts/azure-deploy-chat.sh
+```
+
+**Important**: Use the **SAME** configuration for both:
+- Same Resource Group
+- Same Location  
+- Same ACR Name
+- Same App Service Plan name
+- Different Web App names
+
+This ensures both apps share the same plan (no extra cost!).
+
+### Automated Deployment Scripts
+
+**Landing Page Deployment:**
 ```bash
 # Full deployment (interactive prompts)
 ./scripts/azure-deploy.sh
@@ -54,15 +106,56 @@ The easiest way to deploy to Azure using our interactive deployment script:
 ./scripts/azure-deploy.sh --help
 ```
 
-The script will:
+**Chat App Deployment:**
+```bash
+# Full deployment (interactive prompts)
+./scripts/azure-deploy-chat.sh
+
+# Update existing deployment
+./scripts/azure-deploy-chat.sh --update
+
+# View help
+./scripts/azure-deploy-chat.sh --help
+```
+
+The scripts will:
 - ✅ Check prerequisites (Azure CLI, Docker)
 - ✅ Prompt for configuration (names, location, SKU)
-- ✅ Create all Azure resources
-- ✅ Build and push Docker image
-- ✅ Configure web app and security settings
+- ✅ Create all Azure resources (or use existing)
+- ✅ Build and push Docker images
+- ✅ Configure web apps and security settings
 - ✅ Save configuration for future updates
 
-### Option 2: Manual Deployment
+### Custom Domain Configuration
+
+After deployment, configure your DNS:
+
+**DNS Records:**
+```
+www.powernova.ai → CNAME → powernova-web.azurewebsites.net
+app.powernova.ai → CNAME → powernova-chat.azurewebsites.net
+```
+
+**Add to Azure:**
+```bash
+# Landing page
+az webapp config hostname add \
+  --webapp-name powernova-web \
+  --resource-group powernova-rg \
+  --hostname www.powernova.ai
+
+# Chat app
+az webapp config hostname add \
+  --webapp-name powernova-chat \
+  --resource-group powernova-rg \
+  --hostname app.powernova.ai
+```
+
+See [DUAL-APP-DEPLOYMENT.md](docs/DUAL-APP-DEPLOYMENT.md) for complete DNS setup instructions.
+
+### Manual Deployment
+
+For manual deployment steps, see [DEPLOYMENT.md](docs/DEPLOYMENT.md).
 
 ### Prerequisites
 ```bash

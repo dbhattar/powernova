@@ -2,28 +2,40 @@
 
 > **Note**: This document serves as a reference for the project structure and organization principles.
 
-## 📁 Current Directory Structure (v1.2.0)
+## 📁 Current Directory Structure (v1.3.0)
 
 ```
 container/
-├── website/                         # Static website source files
+├── website/                         # Static landing page (www.powernova.ai)
 │   ├── index.html                  # Main landing page
 │   ├── css/
 │   │   └── styles.css              # Stylesheet
 │   └── js/
 │       └── script.js               # JavaScript functionality
 │
+├── app/                             # Chat interface (app.powernova.ai)
+│   ├── index.html                  # Chat application
+│   ├── css/
+│   │   └── styles.css              # Chat app styles
+│   └── js/
+│       └── app.js                  # Chat functionality
+│
 ├── docker/                          # Docker configuration files
-│   ├── Dockerfile                  # Container image definition
-│   ├── nginx.conf                  # Nginx web server config
-│   ├── docker-compose.yml          # Local development orchestration
+│   ├── Dockerfile                  # Landing page container
+│   ├── Dockerfile.app              # Chat app container
+│   ├── nginx.conf                  # Landing page nginx config
+│   ├── nginx-app.conf              # Chat app nginx config
+│   ├── docker-compose.yml          # Local development orchestration (both apps)
 │   └── .dockerignore               # Docker build exclusions
 │
 ├── scripts/                         # Utility scripts
-│   └── docker-helper.sh            # Docker management helper
+│   ├── docker-helper.sh            # Docker management helper
+│   ├── azure-deploy.sh             # Azure deployment automation
+│   └── azure-manage.sh             # Azure management operations
 │
 ├── docs/                            # 📚 All documentation
 │   ├── DEPLOYMENT.md               # Azure deployment guide
+│   ├── AZURE-SCRIPTS-GUIDE.md      # Scripts documentation
 │   ├── MIGRATION-GUIDE.md          # Reorganization guide
 │   ├── CHANGELOG.md                # Version history
 │   └── PROJECT-STRUCTURE.md        # This file
@@ -85,11 +97,20 @@ container/
 | `css/styles.css` | Styling and design |
 | `js/script.js` | Interactive functionality |
 
+### app/
+| File/Folder | Purpose |
+|-------------|---------|
+| `index.html` | Chat interface HTML |
+| `css/styles.css` | Chat app styling |
+| `js/app.js` | Chat functionality and AI integration |
+
 ### docker/
 | File | Purpose |
 |------|---------|
-| `Dockerfile` | Container image build instructions |
-| `nginx.conf` | Web server configuration |
+| `Dockerfile` | Landing page container image |
+| `Dockerfile.app` | Chat app container image |
+| `nginx.conf` | Landing page web server config |
+| `nginx-app.conf` | Chat app web server config |
 | `docker-compose.yml` | Local multi-container orchestration |
 | `.dockerignore` | Files to exclude from Docker builds |
 
@@ -97,6 +118,8 @@ container/
 | File | Purpose |
 |------|---------|
 | `docker-helper.sh` | Simplified Docker command wrapper |
+| `azure-deploy.sh` | Automated Azure deployment |
+| `azure-manage.sh` | Azure management operations |
 
 ### docs/
 | File | Purpose |

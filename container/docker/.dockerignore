@@ -25,6 +25,8 @@ LICENSE
 docker-compose.yml
 .dockerignore
 Dockerfile
+Dockerfile.local
+Dockerfile.app.local
 
 # Logs
 *.log
@@ -34,6 +36,13 @@ logs
 .env
 .env.local
 .env.*.local
+
+# Local development config files
+*.local.js
+**/*.local.js
+js/config.local.js
+app/js/config.local.js
+website/js/config.local.js
 
 # Node modules (if any)
 node_modules

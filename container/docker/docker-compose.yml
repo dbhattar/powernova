@@ -1,10 +1,15 @@
 version: '3.8'
 
+# Local development environment for PowerNOVA
+# Note: This is ONLY for local testing. Azure deployment uses separate App Services.
+# Uses Dockerfile.local and Dockerfile.app.local which inject local config.
+
 services:
+  # PowerNOVA Landing Page (www.powernova.ai)
   powernova-web:
     build:
       context: ..
-      dockerfile: docker/Dockerfile
+      dockerfile: docker/Dockerfile.local  # Local development Dockerfile
     container_name: powernova-website
     ports:
       - "8080:80"
@@ -16,5 +21,32 @@ services:
       retries: 3
       start_period: 5s
     labels:
-      - "com.powernova.description=PowerNOVA landing page"
+      - "com.powernova.description=PowerNOVA landing page (local)"
       - "com.powernova.version=1.0.0"
+      - "com.powernova.subdomain=www"
+      - "com.powernova.environment=local"
+
+  # PowerNOVA Chat App (app.powernova.ai)
+  powernova-chat:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.app.local  # Local development Dockerfile
+    container_name: powernova-chat-app
+    ports:
+      - "8081:80"
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "wget", "--quiet", "--tries=1", "--spider", "http://localhost:80/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+    labels:
+      - "com.powernova.description=PowerNOVA chat interface (local)"
+      - "com.powernova.version=1.0.0"
+      - "com.powernova.subdomain=app"
+      - "com.powernova.environment=local"
+
+# Note: No custom network needed - containers don't communicate with each other
+# Each is an independent frontend application
+# Production uses Dockerfile and Dockerfile.app (without .local config)
