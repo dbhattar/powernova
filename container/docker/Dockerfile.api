@@ -4,22 +4,38 @@ FROM python:3.11-slim
 # Set working directory
 WORKDIR /app
 
-# Install system dependencies
+# Install system dependencies including OpenSSH server
 RUN apt-get update && apt-get install -y \
     gcc \
+    openssh-server \
+    dialog \
     && rm -rf /var/lib/apt/lists/*
 
+# Copy SSH configuration and entrypoint
+COPY docker/sshd_config /etc/ssh/
+COPY docker/entrypoint.sh ./
+
+# Start and enable SSH
+RUN echo "root:Docker!" | chpasswd \
+    && chmod +x ./entrypoint.sh \
+    && cd /etc/ssh/ \
+    && ssh-keygen -A
+
 # Copy requirements first for better caching
-COPY requirements.txt .
+COPY api/requirements.txt .
 
 # Install Python dependencies
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir -r requirements.txt
 
 # Copy application code explicitly
-# Note: Build context is api/ directory, so paths are relative to that
-COPY main.py .
-COPY routes/ ./routes/
+# Note: Build context is now project root, so we prefix with api/
+COPY api/main.py .
+COPY api/routes/ ./routes/
+COPY api/models/ ./models/
+COPY api/database/ ./database/
+COPY api/alembic/ ./alembic/
+COPY api/alembic.ini ./alembic.ini
 
 # Verify files were copied (for debugging)
 RUN echo "=== Files in /app ===" && ls -la /app && \
@@ -29,14 +45,15 @@ RUN echo "=== Files in /app ===" && ls -la /app && \
 RUN useradd -m -u 1000 apiuser && \
     chown -R apiuser:apiuser /app
 
-USER apiuser
+# Note: We need to run as root for SSH daemon
+# USER apiuser
 
-# Expose port
-EXPOSE 8000
+# Expose ports (8000 for API, 2222 for SSH)
+EXPOSE 8000 2222
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
 
-# Run the application
-CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--workers", "1"]
+# Run the application via entrypoint script (starts SSH daemon + API)
+ENTRYPOINT ["./entrypoint.sh"]

@@ -106,9 +106,6 @@ if az webapp config appsettings set \
     --name $APP_NAME \
     --settings \
         DATABASE_URL="$DATABASE_URL" \
-        SUPABASE_URL="$SUPABASE_URL" \
-        SUPABASE_ANON_KEY="${SUPABASE_ANON_KEY:-}" \
-        SUPABASE_SERVICE_KEY="${SUPABASE_SERVICE_KEY:-}" \
         ENVIRONMENT="${ENVIRONMENT:-production}" \
         DEBUG="${DEBUG:-false}" \
         LOG_LEVEL="${LOG_LEVEL:-INFO}" \

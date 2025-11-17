@@ -374,7 +374,7 @@ build_and_push_image() {
         --platform linux/amd64 \
         -t "$IMAGE_NAME:$IMAGE_TAG" \
         -f docker/Dockerfile.api \
-        api/
+        .
     print_success "Image built successfully"
     
     # Tag image for ACR

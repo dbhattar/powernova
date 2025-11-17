@@ -38,11 +38,12 @@ coverage/
 tmp/
 temp/
 *.tmp
-
+.env.production
 # Azure
 .azure/
 azure-pipelines.yml
 .azure*deployment.conf
+deployment-info-*.txt
 
 # Docker (local development)
 docker-compose.override.yml
