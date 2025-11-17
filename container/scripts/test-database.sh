@@ -33,7 +33,7 @@ fi
 # Test 2: Check database connection
 echo ""
 echo -e "${BLUE}Test 2: Testing database connection...${NC}"
-if docker exec powernova-postgres pg_isready -U powernova -d powernova_db > /dev/null 2>&1; then
+if docker exec powernova-postgres pg_isready -U powernova -d powernova > /dev/null 2>&1; then
     echo -e "${GREEN}✓ Database is accepting connections${NC}"
 else
     echo -e "${RED}✗ Database connection failed${NC}"
@@ -43,14 +43,14 @@ fi
 # Test 3: Check tables exist
 echo ""
 echo -e "${BLUE}Test 3: Checking if tables exist...${NC}"
-TABLES=$(docker exec powernova-postgres psql -U powernova -d powernova_db -t -c "SELECT tablename FROM pg_tables WHERE schemaname='public';" | grep -v '^$' | wc -l)
+TABLES=$(docker exec powernova-postgres psql -U powernova -d powernova -t -c "SELECT tablename FROM pg_tables WHERE schemaname='public';" | grep -v '^$' | wc -l)
 
 if [ "$TABLES" -gt 0 ]; then
     echo -e "${GREEN}✓ Found $TABLES tables${NC}"
-    docker exec powernova-postgres psql -U powernova -d powernova_db -c "\dt"
+    docker exec powernova-postgres psql -U powernova -d powernova -c "\dt"
 else
     echo -e "${YELLOW}⚠ No tables found. Running migrations...${NC}"
-    docker exec powernova-api alembic upgrade head
+    docker exec powernova-api python -m alembic upgrade head
     echo -e "${GREEN}✓ Migrations completed${NC}"
 fi
 
@@ -120,22 +120,22 @@ fi
 # Test 7: Database statistics
 echo ""
 echo -e "${BLUE}Test 7: Database statistics...${NC}"
-docker exec powernova-postgres psql -U powernova -d powernova_db -c "
+docker exec powernova-postgres psql -U powernova -d powernova -c "
 SELECT 
     'Database Size' as metric,
-    pg_size_pretty(pg_database_size('powernova_db')) as value
+    pg_size_pretty(pg_database_size('powernova')) as value
 UNION ALL
 SELECT 
     'Active Connections',
     count(*)::text
 FROM pg_stat_activity
-WHERE datname = 'powernova_db';
+WHERE datname = 'powernova';
 "
 
 # Test 8: Migration status
 echo ""
 echo -e "${BLUE}Test 8: Checking migration status...${NC}"
-docker exec powernova-api alembic current 2>/dev/null
+docker exec powernova-api python -m alembic current 2>/dev/null
 if [ $? -eq 0 ]; then
     echo -e "${GREEN}✓ Migrations up to date${NC}"
 else
@@ -151,7 +151,7 @@ echo ""
 echo -e "${GREEN}✓ All tests passed!${NC}"
 echo ""
 echo "Database Connection:"
-echo "  postgresql://powernova:powernova_dev_2024@localhost:5432/powernova_db"
+echo "  postgresql://powernova:powernova_dev_2024@localhost:5432/powernova"
 echo ""
 echo "Useful Commands:"
 echo "  ./scripts/manage-database.sh    # Interactive database management"

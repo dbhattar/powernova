@@ -12,7 +12,7 @@ NC='\033[0m'
 CONTAINER_NAME="powernova-postgres"
 API_CONTAINER="powernova-api"
 DB_USER="powernova"
-DB_NAME="powernova_db"
+DB_NAME="powernova"
 
 # Function to display menu
 show_menu() {
@@ -63,7 +63,7 @@ psql_cli() {
 
 run_migrations() {
     echo -e "${BLUE}Running migrations...${NC}"
-    docker exec $API_CONTAINER alembic upgrade head
+    docker exec $API_CONTAINER python -m alembic upgrade head
     echo -e "${GREEN}✓ Migrations completed${NC}"
 }
 
@@ -71,7 +71,7 @@ create_migration() {
     echo -n "Enter migration message: "
     read message
     echo -e "${BLUE}Creating migration: $message${NC}"
-    docker exec $API_CONTAINER alembic revision --autogenerate -m "$message"
+    docker exec $API_CONTAINER python -m alembic revision --autogenerate -m "$message"
     echo -e "${GREEN}✓ Migration created${NC}"
 }
 
@@ -80,7 +80,7 @@ rollback_migration() {
     echo -n "Are you sure? (yes/no): "
     read confirm
     if [ "$confirm" = "yes" ]; then
-        docker exec $API_CONTAINER alembic downgrade -1
+        docker exec $API_CONTAINER python -m alembic downgrade -1
         echo -e "${GREEN}✓ Migration rolled back${NC}"
     else
         echo "Cancelled"
@@ -89,10 +89,10 @@ rollback_migration() {
 
 migration_history() {
     echo -e "${BLUE}Migration History:${NC}"
-    docker exec $API_CONTAINER alembic history
+    docker exec $API_CONTAINER python -m alembic history
     echo ""
     echo -e "${BLUE}Current Version:${NC}"
-    docker exec $API_CONTAINER alembic current
+    docker exec $API_CONTAINER python -m alembic current
 }
 
 backup_database() {
@@ -190,8 +190,8 @@ reset_database() {
         backup_database
         
         echo -e "${RED}Resetting database...${NC}"
-        docker exec $API_CONTAINER alembic downgrade base
-        docker exec $API_CONTAINER alembic upgrade head
+        docker exec $API_CONTAINER python -m alembic downgrade base
+        docker exec $API_CONTAINER python -m alembic upgrade head
         echo -e "${GREEN}✓ Database reset complete${NC}"
     else
         echo "Cancelled (you entered: '$confirm')"

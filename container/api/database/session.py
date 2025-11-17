@@ -13,7 +13,7 @@ Environment Variables:
 - DB_POOL_RECYCLE: Recycle connections after this many seconds (default: 3600)
 """
 import os
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.orm import sessionmaker, Session
 from sqlalchemy.pool import NullPool
 from typing import Generator
@@ -103,7 +103,7 @@ def check_db_connection() -> bool:
     """
     try:
         with engine.connect() as conn:
-            result = conn.execute("SELECT 1")
+            result = conn.execute(text("SELECT 1"))
             result.close()
         return True
     except Exception as e:
