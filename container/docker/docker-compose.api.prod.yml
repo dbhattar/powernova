@@ -1,0 +1,166 @@
+version: '3.8'
+
+# PRODUCTION API deployment with PostgreSQL sidecar
+# Optimized for production with security hardening and no external database exposure
+
+services:
+  # PowerNOVA API Backend (Production)
+  powernova-api:
+    build:
+      context: ../api
+      dockerfile: ../docker/Dockerfile.api  # Production Dockerfile
+    container_name: powernova-api-prod
+    ports:
+      - "${API_PORT:-8000}:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PORT=8000
+      - ENVIRONMENT=production
+      # Internal database connection - not exposed externally
+      - DATABASE_URL=postgresql://${POSTGRES_USER:-powernova}:${POSTGRES_PASSWORD}@powernova-db:5432/${POSTGRES_DB:-powernova_db}?sslmode=disable
+      - LOG_LEVEL=${LOG_LEVEL:-INFO}
+    restart: always
+    depends_on:
+      powernova-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 20s
+    labels:
+      - "com.powernova.description=PowerNOVA API (production)"
+      - "com.powernova.version=1.0.0"
+      - "com.powernova.environment=production"
+    networks:
+      - api-internal
+    # Security: Read-only root filesystem (uncomment if app supports it)
+    # read_only: true
+    # security_opt:
+    #   - no-new-privileges:true
+    # Cap drop all capabilities
+    cap_drop:
+      - ALL
+    # Only add necessary capabilities
+    cap_add:
+      - NET_BIND_SERVICE
+
+  # PostgreSQL Database (Sidecar - Production)
+  powernova-db:
+    image: postgres:16-alpine
+    container_name: powernova-db-prod
+    environment:
+      - POSTGRES_DB=${POSTGRES_DB:-powernova_db}
+      - POSTGRES_USER=${POSTGRES_USER:-powernova}
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}  # REQUIRED: Set in .env
+      - PGDATA=/var/lib/postgresql/data/pgdata
+      # Performance tuning
+      - POSTGRES_MAX_CONNECTIONS=100
+      - POSTGRES_SHARED_BUFFERS=256MB
+    # NO PORT MAPPING - Maximum security
+    volumes:
+      - postgres_prod_data:/var/lib/postgresql/data
+      - ../api/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+      # Optional: PostgreSQL configuration
+      # - ./postgresql.conf:/etc/postgresql/postgresql.conf:ro
+    restart: always
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-powernova} -d ${POSTGRES_DB:-powernova_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      - "com.powernova.description=PostgreSQL (production sidecar)"
+      - "com.powernova.version=16"
+      - "com.powernova.environment=production"
+    networks:
+      - api-internal
+    # Security
+    user: postgres
+    cap_drop:
+      - ALL
+    cap_add:
+      - CHOWN
+      - DAC_OVERRIDE
+      - SETGID
+      - SETUID
+    # Read-only root filesystem with writable volumes
+    read_only: true
+    tmpfs:
+      - /tmp
+      - /run/postgresql
+
+# Internal network - isolated from external access
+networks:
+  api-internal:
+    driver: bridge
+    name: powernova-api-prod-network
+    # Set to true for complete network isolation (no internet)
+    # Recommended if API doesn't need external services
+    internal: false
+    driver_opts:
+      com.docker.network.bridge.name: powernova-br0
+
+# Persistent volumes with backup labels
+volumes:
+  postgres_prod_data:
+    driver: local
+    name: powernova_api_prod_postgres_data
+    labels:
+      - "com.powernova.backup=true"
+      - "com.powernova.backup-schedule=daily"
+
+# Production Deployment Notes:
+# =============================
+# 
+# 1. Environment Variables (.env file):
+#    POSTGRES_PASSWORD=<strong-password>  # REQUIRED
+#    OPENAI_API_KEY=<your-key>            # REQUIRED
+#    POSTGRES_USER=powernova              # Optional (default: powernova)
+#    POSTGRES_DB=powernova_db             # Optional (default: powernova_db)
+#    API_PORT=8000                        # Optional (default: 8000)
+#    LOG_LEVEL=INFO                       # Optional (default: INFO)
+#
+# 2. Start Production:
+#    docker-compose -f docker-compose.api.prod.yml up -d
+#
+# 3. View Logs:
+#    docker-compose -f docker-compose.api.prod.yml logs -f
+#
+# 4. Run Migrations:
+#    docker exec powernova-api-prod alembic upgrade head
+#
+# 5. Backup Database:
+#    docker exec powernova-db-prod pg_dump -U powernova powernova_db > backup.sql
+#
+# 6. Restore Database:
+#    docker exec -i powernova-db-prod psql -U powernova powernova_db < backup.sql
+#
+# 7. Scale API (if needed):
+#    docker-compose -f docker-compose.api.prod.yml up -d --scale powernova-api=3
+#    (Requires load balancer in front)
+#
+# Security Features:
+# ==================
+# - Database NOT exposed to host network
+# - Minimal container capabilities
+# - Read-only filesystem where possible
+# - Non-root user execution
+# - Isolated Docker network
+# - Health checks for automatic recovery
+# - Secure password via environment variables
+#
+# Monitoring:
+# ===========
+# - Health endpoint: http://localhost:8000/health
+# - Container stats: docker stats powernova-api-prod powernova-db-prod
+# - Logs: docker-compose -f docker-compose.api.prod.yml logs -f
+#
+# Maintenance:
+# ============
+# - Update images: docker-compose -f docker-compose.api.prod.yml pull
+# - Restart: docker-compose -f docker-compose.api.prod.yml restart
+# - Stop: docker-compose -f docker-compose.api.prod.yml down
+# - Clean volumes: docker-compose -f docker-compose.api.prod.yml down -v

@@ -1,0 +1,82 @@
+version: '3.8'
+
+# Azure App Service Multi-Container Configuration
+# API + PostgreSQL Sidecar for Production Deployment
+#
+# IMPORTANT NOTES:
+# ================
+# 1. Azure App Service has limitations with multi-container apps:
+#    - Volumes are ephemeral (data lost on restart) - NOT RECOMMENDED for PostgreSQL
+#    - Limited to 'bridge' network driver
+#    - No 'depends_on' conditions support
+#    - Container images must be in a container registry (ACR)
+#
+# 2. RECOMMENDATION: Use Azure Database for PostgreSQL instead
+#    - Persistent data
+#    - Automatic backups
+#    - Better performance
+#    - High availability
+#    - This file is for development/testing only
+
+services:
+  api:
+    image: ${DOCKER_REGISTRY_SERVER_URL}/powernova-api:${IMAGE_TAG:-latest}
+    ports:
+      - "80:8000"
+      - "443:8000"
+    environment:
+      - WEBSITES_PORT=8000
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PORT=8000
+      - ENVIRONMENT=production
+      - DATABASE_URL=postgresql://powernova:${POSTGRES_PASSWORD}@db:5432/powernova_db
+      - WEBSITES_ENABLE_APP_SERVICE_STORAGE=true
+    restart: always
+    depends_on:
+      - db
+
+  db:
+    image: postgres:16-alpine
+    environment:
+      - POSTGRES_DB=powernova_db
+      - POSTGRES_USER=powernova
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    restart: always
+    # WARNING: Azure App Service volumes are EPHEMERAL
+    # Data will be LOST on app restart/redeploy
+    # Use Azure Database for PostgreSQL for production
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+volumes:
+  postgres_data:
+    driver: local
+
+# Azure App Service Configuration Notes:
+# =======================================
+# 
+# Set these Application Settings in Azure Portal or via CLI:
+# - DOCKER_REGISTRY_SERVER_URL=<your-acr-name>.azurecr.io
+# - DOCKER_REGISTRY_SERVER_USERNAME=<your-acr-username>
+# - DOCKER_REGISTRY_SERVER_PASSWORD=<your-acr-password>
+# - OPENAI_API_KEY=<your-openai-key>
+# - POSTGRES_PASSWORD=<strong-password>
+# - IMAGE_TAG=latest
+#
+# Deploy with:
+# az webapp config container set \
+#   --resource-group powernova \
+#   --name powernovaapi \
+#   --multicontainer-config-type compose \
+#   --multicontainer-config-file docker-compose.azure.yml
+#
+# LIMITATIONS:
+# - PostgreSQL data is NOT persistent (lost on restart)
+# - No automated backups
+# - Limited to single instance (can't scale horizontally)
+# - Database performance not optimized
+#
+# RECOMMENDED ALTERNATIVE:
+# Use Azure Database for PostgreSQL Flexible Server
+# and deploy only the API container to App Service

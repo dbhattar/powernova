@@ -25,6 +25,8 @@ services:
       - "com.powernova.version=1.0.0"
       - "com.powernova.subdomain=www"
       - "com.powernova.environment=local"
+    networks:
+      - powernova-network
 
   # PowerNOVA Chat App (app.powernova.ai)
   powernova-chat:
@@ -46,6 +48,8 @@ services:
       - "com.powernova.version=1.0.0"
       - "com.powernova.subdomain=app"
       - "com.powernova.environment=local"
+    networks:
+      - powernova-network
 
   # PowerNOVA API Backend (api.powernova.ai)
   powernova-api:
@@ -55,11 +59,17 @@ services:
     container_name: powernova-api
     ports:
       - "8000:8000"
+    env_file:
+      - ../api/.env  # Load environment variables from .env file
     environment:
-      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      # Override/add specific variables (these take precedence over env_file)
       - PORT=8000
       - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://powernova:powernova_dev_2024@powernova-postgres:5432/powernova
     restart: unless-stopped
+    depends_on:
+      powernova-postgres:
+        condition: service_healthy
     healthcheck:
       test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
       interval: 30s
@@ -73,7 +83,70 @@ services:
       - "com.powernova.environment=local"
     volumes:
       - ../api:/app  # Mount for hot-reload during development
+    networks:
+      - powernova-network
 
-# Note: Containers communicate via host network for local development
+  # PostgreSQL Database
+  # NOTE: Database is NOT exposed externally - only accessible via internal network
+  # API service connects via: powernova-postgres:5432
+  powernova-postgres:
+    image: postgres:16-alpine
+    container_name: powernova-postgres
+    environment:
+      - POSTGRES_DB=powernova
+      - POSTGRES_USER=powernova
+      - POSTGRES_PASSWORD=powernova_dev_2024
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    # NO external port mapping - database is private to the network
+    # ports:
+    #   - "5432:5432"  # REMOVED: Not exposed to host machine
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../api/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U powernova -d powernova"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      - "com.powernova.description=PostgreSQL database (local, internal only)"
+      - "com.powernova.version=16"
+      - "com.powernova.environment=local"
+      - "com.powernova.access=internal-only"
+    networks:
+      - powernova-network
+
+networks:
+  powernova-network:
+    driver: bridge
+    name: powernova-network
+
+volumes:
+  postgres_data:
+    driver: local
+    name: powernova_postgres_data
+
+# Security Notes:
+# ================
+# 1. PostgreSQL is NOT exposed to the host machine (no port mapping)
+# 2. Database is only accessible via the internal 'powernova-network'
+# 3. Only the 'powernova-api' service can connect to the database
+# 4. All services are on the same network for inter-service communication
+# 5. External access:
+#    - Website: http://localhost:8080
+#    - Chat App: http://localhost:8081
+#    - API: http://localhost:8000
+#    - Database: NOT accessible from host (internal only)
+#
+# To connect to database for debugging (from within the API container):
+#   docker exec -it powernova-api psql -h powernova-postgres -U powernova -d powernova
+#
+# Or directly in the database container:
+#   docker exec -it powernova-postgres psql -U powernova -d powernova
+
+# Note: Containers communicate via powernova-network for local development
 # Frontend (localhost:8081) calls API (localhost:8000)
-# Production uses separate Azure App Services with custom domains
+# API connects to PostgreSQL via internal network (powernova-postgres:5432)
+# Production uses separate Azure App Services with managed PostgreSQL

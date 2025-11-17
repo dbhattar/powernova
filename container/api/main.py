@@ -7,19 +7,48 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import os
 from dotenv import load_dotenv
+from contextlib import asynccontextmanager
 
 from routes import chat
+from database.session import check_db_connection
 
 # Load environment variables
 load_dotenv()
 
-# Initialize FastAPI app
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """
+    Application lifespan manager
+    Handles startup and shutdown events
+    """
+    # Startup
+    print("=" * 50)
+    print("Starting PowerNOVA API...")
+    
+    # Check database connection
+    print("Checking database connection...")
+    if check_db_connection():
+        print("✓ Database connection successful")
+    else:
+        print("✗ WARNING: Database connection failed!")
+        print("  API will start but database features will not work.")
+    
+    print("=" * 50)
+    
+    yield
+    
+    # Shutdown
+    print("Shutting down PowerNOVA API...")
+
+
+# Initialize FastAPI app with lifespan
 app = FastAPI(
     title="PowerNOVA API",
     description="Backend API for PowerNOVA chat interface with RAG capabilities",
     version="1.0.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
+    lifespan=lifespan
 )
 
 # CORS Configuration
@@ -58,13 +87,18 @@ app.include_router(chat.router, prefix="/api", tags=["Chat"])
 async def health_check():
     """
     Health check endpoint for Azure App Service
+    Includes database connection status
     """
+    db_healthy = check_db_connection()
+    
     return JSONResponse(
         content={
-            "status": "healthy",
+            "status": "healthy" if db_healthy else "degraded",
             "service": "powernova-api",
-            "version": "1.0.0"
-        }
+            "version": "1.0.0",
+            "database": "connected" if db_healthy else "disconnected"
+        },
+        status_code=200 if db_healthy else 503
     )
 
 # Root endpoint

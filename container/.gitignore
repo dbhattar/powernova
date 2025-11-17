@@ -47,6 +47,15 @@ azure-pipelines.yml
 # Docker (local development)
 docker-compose.override.yml
 
+# Database
+*.db
+*.sqlite
+*.sqlite3
+backup.sql
+api/__pycache__/
+api/**/__pycache__/
+*.pyc
+
 # Git
 .git/
 .gitattributes

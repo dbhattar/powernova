@@ -1,0 +1,95 @@
+version: '3.8'
+
+# API-only deployment with PostgreSQL sidecar
+# This configuration runs ONLY the API and database without exposing PostgreSQL externally
+# Perfect for production deployment or isolated API development
+
+services:
+  # PowerNOVA API Backend
+  powernova-api:
+    build:
+      context: ../api
+      dockerfile: ../docker/Dockerfile.api.local
+    container_name: powernova-api-standalone
+    ports:
+      - "8000:8000"
+    environment:
+      - OPENAI_API_KEY=${OPENAI_API_KEY:-}
+      - PORT=8000
+      - ENVIRONMENT=${ENVIRONMENT:-development}
+      # PostgreSQL connection - only accessible within Docker network
+      - DATABASE_URL=postgresql://powernova:${POSTGRES_PASSWORD:-powernova_secure_2024}@powernova-db:5432/powernova_db
+    restart: unless-stopped
+    depends_on:
+      powernova-db:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests; requests.get('http://localhost:8000/health')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    labels:
+      - "com.powernova.description=PowerNOVA API backend (standalone)"
+      - "com.powernova.version=1.0.0"
+      - "com.powernova.environment=${ENVIRONMENT:-development}"
+    volumes:
+      - ../api:/app  # Mount for hot-reload in development
+    networks:
+      - api-internal
+
+  # PostgreSQL Database (Sidecar - Internal Only)
+  powernova-db:
+    image: postgres:16-alpine
+    container_name: powernova-db
+    environment:
+      - POSTGRES_DB=powernova_db
+      - POSTGRES_USER=powernova
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-powernova_secure_2024}
+      - PGDATA=/var/lib/postgresql/data/pgdata
+    # NO PORT MAPPING - Database only accessible from within Docker network
+    # This prevents external access and improves security
+    volumes:
+      - postgres_api_data:/var/lib/postgresql/data
+      - ../api/init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U powernova -d powernova_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      - "com.powernova.description=PostgreSQL database (sidecar - internal only)"
+      - "com.powernova.version=16"
+      - "com.powernova.environment=${ENVIRONMENT:-development}"
+    networks:
+      - api-internal
+    # Security: Run as non-root user
+    user: postgres
+
+# Internal network - NOT accessible from host
+networks:
+  api-internal:
+    driver: bridge
+    name: powernova-api-network
+    internal: false  # Set to true for complete isolation (no internet access)
+
+# Persistent volume for database
+volumes:
+  postgres_api_data:
+    driver: local
+    name: powernova_api_postgres_data
+
+# Usage:
+# ------
+# Start:     docker-compose -f docker-compose.api.yml up -d
+# Logs:      docker-compose -f docker-compose.api.yml logs -f
+# Stop:      docker-compose -f docker-compose.api.yml down
+# Clean:     docker-compose -f docker-compose.api.yml down -v  # Removes volumes
+#
+# Access database from within API container:
+#   docker exec -it powernova-api-standalone psql postgresql://powernova:password@powernova-db:5432/powernova_db
+#
+# Database is NOT accessible from host machine for security
+# API is accessible at http://localhost:8000
