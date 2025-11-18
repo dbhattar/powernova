@@ -9,7 +9,7 @@ import os
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
-from routes import chat
+from routes import chat, admin
 from database.session import check_db_connection
 
 # Load environment variables
@@ -81,6 +81,7 @@ print("=" * 50)
 
 # Include routers
 app.include_router(chat.router, prefix="/api", tags=["Chat"])
+app.include_router(admin.router, prefix="/api", tags=["Admin"])
 
 # Health check endpoint
 @app.get("/health")
