@@ -354,7 +354,179 @@
         .hidden {
             display: none !important;
         }
+
+        /* Documents Modal Styles */
+        .documents-modal {
+            background: white;
+            padding: 0;
+            border-radius: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            max-width: 900px;
+            width: 90%;
+            max-height: 85vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .modal-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 25px 30px;
+            border-bottom: 2px solid #f0f0f0;
+        }
+
+        .modal-header h2 {
+            color: #333;
+            margin: 0;
+            font-size: 24px;
+        }
+
+        .btn-close {
+            background: #f0f0f0;
+            border: none;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            font-size: 20px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+            color: #666;
+        }
+
+        .btn-close:hover {
+            background: #e74c3c;
+            color: white;
+            transform: rotate(90deg);
+        }
+
+        .modal-subheader {
+            padding: 15px 30px;
+            background: #f8f9fa;
+            color: #666;
+            font-size: 14px;
+            border-bottom: 1px solid #e0e0e0;
+        }
+
+        .documents-list {
+            padding: 20px 30px;
+            overflow-y: auto;
+            flex: 1;
+        }
+
+        .document-item {
+            padding: 20px;
+            border: 2px solid #f0f0f0;
+            border-radius: 8px;
+            margin-bottom: 15px;
+            transition: all 0.3s;
+            background: white;
+        }
+
+        .document-item:hover {
+            border-color: #667eea;
+            box-shadow: 0 2px 8px rgba(102, 126, 234, 0.1);
+        }
+
+        .document-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
+            margin-bottom: 10px;
+        }
+
+        .document-title {
+            color: #333;
+            font-weight: 600;
+            font-size: 16px;
+            flex: 1;
+            margin-right: 15px;
+            word-break: break-word;
+        }
+
+        .document-type {
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            white-space: nowrap;
+        }
+
+        .type-pdf { background: #e74c3c; color: white; }
+        .type-html { background: #3498db; color: white; }
+        .type-docx { background: #2ecc71; color: white; }
+        .type-txt { background: #95a5a6; color: white; }
+        .type-markdown { background: #9b59b6; color: white; }
+        .type-other { background: #34495e; color: white; }
+
+        .document-url {
+            color: #666;
+            font-size: 12px;
+            margin-bottom: 10px;
+            word-break: break-all;
+        }
+
+        .document-meta {
+            display: flex;
+            gap: 20px;
+            color: #999;
+            font-size: 12px;
+            margin-top: 10px;
+        }
+
+        .document-actions {
+            margin-top: 15px;
+            display: flex;
+            gap: 10px;
+        }
+
+        .btn-link {
+            background: #667eea;
+            color: white;
+            text-decoration: none;
+            padding: 8px 16px;
+            border-radius: 6px;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.3s;
+            display: inline-block;
+        }
+
+        .btn-link:hover {
+            background: #5568d3;
+            transform: translateY(-1px);
+        }
+
+        .document-content-preview {
+            margin-top: 10px;
+            padding: 12px;
+            background: #f8f9fa;
+            border-radius: 6px;
+            font-size: 13px;
+            color: #555;
+            line-height: 1.5;
+            max-height: 100px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .document-content-preview::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            height: 30px;
+            background: linear-gradient(transparent, #f8f9fa);
+        }
     </style>
+    
+    <!-- Load configuration (config.js is replaced during Docker build based on environment) -->
+    <script src="js/config.js"></script>
 </head>
 <body>
     <!-- Login Modal -->
@@ -440,7 +612,7 @@
 
                     <div class="form-group">
                         <label for="file-types">File Types</label>
-                        <input type="text" id="file-types" value="html,pdf" placeholder="html,pdf,docx">
+                        <input type="text" id="file-types" value="html,pdf,doc,docx,txt,rtf,md" placeholder="html,pdf,docx">
                         <small>Comma-separated file types to download</small>
                     </div>
 
@@ -481,12 +653,25 @@
     <!-- Toast Notification -->
     <div class="toast" id="toast"></div>
 
+    <!-- Documents Modal -->
+    <div class="login-overlay hidden" id="documents-overlay">
+        <div class="documents-modal">
+            <div class="modal-header">
+                <h2>📄 Documents</h2>
+                <button class="btn-close" onclick="closeDocumentsModal()">✕</button>
+            </div>
+            <div class="modal-subheader" id="documents-subheader">
+                Loading documents...
+            </div>
+            <div class="documents-list" id="documents-list">
+                <div class="loader"></div>
+            </div>
+        </div>
+    </div>
+
     <script>
-        // API configuration - detect environment
-        const isDev = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-        const API_BASE = isDev 
-            ? 'http://localhost:8000/api'  // Local development
-            : window.location.origin + '/api';  // Production (same origin)
+        // API configuration - use PowerNOVA config
+        const API_BASE = window.PowerNOVA.getApiUrl() + '/api';
         
         let ADMIN_KEY = '';
         
@@ -743,11 +928,150 @@
 
         // View documents (placeholder)
         function viewDocuments(jobId) {
-            alert(`Viewing documents for job ${jobId} - Coming soon!`);
+            loadDocumentsForJob(jobId);
+        }
+
+        // Load documents for a specific job
+        async function loadDocumentsForJob(jobId) {
+            // Show modal
+            document.getElementById('documents-overlay').classList.remove('hidden');
+            document.getElementById('documents-list').innerHTML = '<div class="loader"></div>';
+            document.getElementById('documents-subheader').textContent = 'Loading documents...';
+            
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/documents?crawl_job_id=${jobId}`);
+                const documents = await response.json();
+                
+                const container = document.getElementById('documents-list');
+                const subheader = document.getElementById('documents-subheader');
+                
+                if (documents.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
+                            </svg>
+                            <p>No documents found for this job</p>
+                        </div>
+                    `;
+                    subheader.textContent = 'No documents found';
+                    return;
+                }
+                
+                // Update subheader
+                const completedCount = documents.filter(d => d.status === 'COMPLETED').length;
+                const failedCount = documents.filter(d => d.status === 'FAILED').length;
+                subheader.innerHTML = `
+                    Found <strong>${documents.length}</strong> documents 
+                    (<span style="color: #2ecc71;">${completedCount} completed</span>, 
+                    <span style="color: #e74c3c;">${failedCount} failed</span>)
+                `;
+                
+                // Render documents
+                container.innerHTML = documents.map(doc => {
+                    const typeClass = `type-${doc.document_type.toLowerCase()}`;
+                    const statusIcon = doc.status === 'COMPLETED' ? '✅' : 
+                                      doc.status === 'FAILED' ? '❌' : 
+                                      doc.status === 'PROCESSING' ? '⏳' : '⏸️';
+                    
+                    const contentPreview = doc.content && doc.content.length > 200 
+                        ? doc.content.substring(0, 200) + '...' 
+                        : doc.content || 'No content extracted';
+                    
+                    return `
+                        <div class="document-item">
+                            <div class="document-header">
+                                <div class="document-title">${statusIcon} ${escapeHtml(doc.title || doc.url)}</div>
+                                <span class="document-type ${typeClass}">${doc.document_type}</span>
+                            </div>
+                            <div class="document-url">🔗 ${escapeHtml(doc.url)}</div>
+                            ${doc.content ? `<div class="document-content-preview">${escapeHtml(contentPreview)}</div>` : ''}
+                            <div class="document-meta">
+                                ${doc.file_size ? `<span>📦 ${formatFileSize(doc.file_size)}</span>` : ''}
+                                ${doc.chunk_count ? `<span>📊 ${doc.chunk_count} chunks</span>` : ''}
+                                <span>${doc.embedding_generated ? '✨ Embeddings ready' : '⚪ No embeddings'}</span>
+                                <span>📅 ${formatDate(doc.created_at)}</span>
+                            </div>
+                            ${doc.error_message ? `<div style="color: #e74c3c; font-size: 12px; margin-top: 8px;">⚠️ Error: ${escapeHtml(doc.error_message)}</div>` : ''}
+                            ${doc.blob_url ? `
+                                <div class="document-actions">
+                                    <a href="${doc.blob_url}" target="_blank" class="btn-link">📥 Download</a>
+                                    <button class="btn btn-danger btn-sm" onclick="deleteDocument(${doc.id})">🗑️ Delete</button>
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+                
+            } catch (error) {
+                console.error('Failed to load documents:', error);
+                document.getElementById('documents-list').innerHTML = `
+                    <div class="empty-state">
+                        <p>Failed to load documents</p>
+                    </div>
+                `;
+                document.getElementById('documents-subheader').textContent = 'Error loading documents';
+            }
+        }
+
+        // Close documents modal
+        function closeDocumentsModal() {
+            document.getElementById('documents-overlay').classList.add('hidden');
+        }
+
+        // Delete a document
+        async function deleteDocument(documentId) {
+            if (!confirm('Delete this document from storage and database?')) return;
+            
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/documents/${documentId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    showToast('Document deleted', 'success');
+                    // Reload the current documents view
+                    const overlay = document.getElementById('documents-overlay');
+                    if (!overlay.classList.contains('hidden')) {
+                        // Find which job we're viewing by checking the URL
+                        // For now, just close and reload stats
+                        closeDocumentsModal();
+                        loadStats();
+                    }
+                } else {
+                    showToast('Failed to delete document', 'error');
+                }
+            } catch (error) {
+                showToast('Failed to delete document', 'error');
+                console.error(error);
+            }
+        }
+
+        // Format file size
+        function formatFileSize(bytes) {
+            if (!bytes) return '0 B';
+            const k = 1024;
+            const sizes = ['B', 'KB', 'MB', 'GB'];
+            const i = Math.floor(Math.log(bytes) / Math.log(k));
+            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Escape HTML to prevent XSS
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
         }
 
         // Initial auth check
         checkAuth();
+        
+        // Close modal when clicking outside
+        document.getElementById('documents-overlay').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeDocumentsModal();
+            }
+        });
         
         // Auto-refresh every 10 seconds (only if authenticated)
         setInterval(() => {

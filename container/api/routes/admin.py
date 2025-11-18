@@ -8,6 +8,8 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from database.session import get_db
 from models import CrawlJob, CrawlStatus, Document, DocumentStatus
+from services.crawler import run_crawler
+from services.azure_storage import get_storage_service
 from datetime import datetime
 import os
 import secrets
@@ -129,8 +131,7 @@ async def create_crawl_job(
     db.refresh(crawl_job)
     
     # Start crawl job in background
-    # TODO: Implement actual crawler
-    # background_tasks.add_task(run_crawler, crawl_job.id, db)
+    background_tasks.add_task(run_crawler, crawl_job.id, db)
     
     return crawl_job
 
@@ -269,7 +270,10 @@ async def delete_document(
     if not document:
         raise HTTPException(status_code=404, detail="Document not found")
     
-    # TODO: Delete from Azure Blob Storage
+    # Delete from Azure Blob Storage
+    if document.file_path:
+        storage_service = get_storage_service()
+        storage_service.delete_document(document.file_path)
     
     db.delete(document)
     db.commit()

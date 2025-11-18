@@ -25,3 +25,21 @@ tqdm==4.67.1
 typing-inspection==0.4.2
 typing_extensions==4.15.0
 uvicorn==0.38.0
+
+# Web crawling and document processing
+beautifulsoup4==4.12.3
+requests==2.31.0
+lxml==5.1.0
+html5lib==1.1
+
+# Azure Storage
+azure-storage-blob==12.19.0
+azure-identity==1.15.0
+
+# Document parsing
+PyPDF2==3.0.1
+python-docx==1.1.0
+python-magic==0.4.27
+
+# URL parsing and validation
+validators==0.22.0
