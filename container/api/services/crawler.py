@@ -76,7 +76,24 @@ class WebCrawler:
             start_domain = urlparse(self.start_url).netloc
             return domain == start_domain
         
-        return domain in self.allowed_domains
+        # Check if domain matches any allowed domain
+        # Support both exact match and subdomain match
+        # e.g., if allowed domain is "example.com", allow both "example.com" and "www.example.com"
+        for allowed_domain in self.allowed_domains:
+            # Exact match
+            if domain == allowed_domain:
+                return True
+            
+            # Subdomain match: domain ends with .allowed_domain
+            if domain.endswith('.' + allowed_domain):
+                return True
+            
+            # Reverse check: if allowed_domain is a subdomain of domain
+            # e.g., allowed="www.example.com" should match domain="example.com"
+            if allowed_domain.endswith('.' + domain):
+                return True
+        
+        return False
     
     def _matches_patterns(self, url: str) -> bool:
         """Check if URL matches include/exclude patterns"""
