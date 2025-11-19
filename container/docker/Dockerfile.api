@@ -34,12 +34,14 @@ COPY api/main.py .
 COPY api/routes/ ./routes/
 COPY api/models/ ./models/
 COPY api/database/ ./database/
+COPY api/services/ ./services/
 COPY api/alembic/ ./alembic/
 COPY api/alembic.ini ./alembic.ini
 
 # Verify files were copied (for debugging)
 RUN echo "=== Files in /app ===" && ls -la /app && \
-    echo "=== Files in /app/routes ===" && ls -la /app/routes
+    echo "=== Files in /app/routes ===" && ls -la /app/routes && \
+    echo "=== Files in /app/services ===" && ls -la /app/services
 
 # Create non-root user for security
 RUN useradd -m -u 1000 apiuser && \
