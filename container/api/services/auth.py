@@ -131,9 +131,20 @@ def get_current_user(
     
     try:
         payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
-        user_id: int = payload.get("sub")
-        if user_id is None:
+        user_id_raw = payload.get("sub")
+        
+        if user_id_raw is None:
             raise credentials_exception
+        
+        # Handle both string and integer formats (for backward compatibility)
+        try:
+            if isinstance(user_id_raw, int):
+                user_id = user_id_raw
+            else:
+                user_id = int(user_id_raw)
+        except (ValueError, TypeError):
+            raise credentials_exception
+            
     except JWTError:
         raise credentials_exception
     

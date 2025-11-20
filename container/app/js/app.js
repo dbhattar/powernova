@@ -99,7 +99,8 @@ const Auth = {
             const response = await fetch(`${window.PowerNOVA.getApiUrl()}/api/auth/me`, {
                 headers: {
                     'Authorization': `Bearer ${this.token}`
-                }
+                },
+                credentials: 'include'
             });
             
             if (response.ok) {
@@ -197,6 +198,7 @@ const Auth = {
                     'Authorization': `Bearer ${this.token}`,
                     'Content-Type': 'application/json'
                 },
+                credentials: 'include',
                 body: JSON.stringify({
                     current_password: currentPassword,
                     new_password: newPassword
@@ -354,7 +356,6 @@ class ChatApp {
         // Buttons
         this.newChatBtn = document.getElementById('newChatBtn');
         this.historyBtn = document.getElementById('historyBtn');
-        this.settingsBtn = document.getElementById('settingsBtn');
         this.attachBtn = document.getElementById('attachBtn');
         this.closeSidebar = document.getElementById('closeSidebar');
         
@@ -393,11 +394,6 @@ class ChatApp {
         // History toggle
         this.historyBtn.addEventListener('click', () => {
             this.sidebar.classList.toggle('hidden');
-        });
-        
-        // Settings
-        this.settingsBtn.addEventListener('click', () => {
-            alert('Settings feature coming soon!');
         });
         
         // Attach file

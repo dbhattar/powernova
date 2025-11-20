@@ -19,8 +19,7 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
-# Copy and set permissions for startup script
-COPY api/startup.sh /app/startup.sh
+# Copy and set permissions for startup script (already in context root)
 RUN chmod +x /app/startup.sh
 
 # Expose port

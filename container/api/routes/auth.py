@@ -92,7 +92,7 @@ async def login(
     # Create access token
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": user.id, "email": user.email},
+        data={"sub": str(user.id), "email": user.email},
         expires_delta=access_token_expires
     )
     
@@ -154,7 +154,7 @@ async def change_password(
     # Generate new token with updated must_change_password status
     access_token_expires = timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES)
     access_token = create_access_token(
-        data={"sub": current_user.id, "email": current_user.email},
+        data={"sub": str(current_user.id), "email": current_user.email},
         expires_delta=access_token_expires
     )
     

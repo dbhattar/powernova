@@ -62,6 +62,7 @@ class OptionsMiddleware(BaseHTTPMiddleware):
                 "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
                 "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
                 "Access-Control-Allow-Headers": "*",
+                "Access-Control-Allow-Credentials": "true",
                 "Access-Control-Max-Age": "3600",
             })
         return await call_next(request)
@@ -82,7 +83,7 @@ app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
     expose_headers=["*"],
     max_age=3600,  # Cache preflight requests for 1 hour
