@@ -37,6 +37,10 @@ COPY api/database/ ./database/
 COPY api/services/ ./services/
 COPY api/alembic/ ./alembic/
 COPY api/alembic.ini ./alembic.ini
+COPY api/startup.sh ./startup.sh
+
+# Make startup script executable
+RUN chmod +x ./startup.sh
 
 # Verify files were copied (for debugging)
 RUN echo "=== Files in /app ===" && ls -la /app && \
@@ -57,5 +61,6 @@ EXPOSE 8000 2222
 HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
     CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
 
-# Run the application via entrypoint script (starts SSH daemon + API)
-ENTRYPOINT ["./entrypoint.sh"]
+# Use startup.sh as entrypoint for automatic migrations, then start SSH and API
+ENTRYPOINT ["./startup.sh"]
+CMD ["./entrypoint.sh"]

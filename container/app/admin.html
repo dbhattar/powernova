@@ -583,11 +583,19 @@
         <!-- Header -->
         <div class="header">
             <h1>🚀 PowerNOVA Admin</h1>
-            <p>Manage web crawling jobs and document indexing for RAG</p>
+            <p>Manage web crawling jobs, documents, and users for RAG</p>
+            <div style="margin-top: 15px; display: flex; gap: 10px;">
+                <button class="btn" id="tab-crawl" onclick="switchTab('crawl')" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white;">
+                    🕷️ Crawler
+                </button>
+                <button class="btn" id="tab-users" onclick="switchTab('users')" style="background: #f0f0f0; color: #333;">
+                    👥 Users
+                </button>
+            </div>
         </div>
 
         <!-- Stats Grid -->
-        <div class="stats-grid" id="stats-grid">
+        <div class="stats-grid" id="stats-grid-crawl">
             <div class="stat-card">
                 <h3>Total Jobs</h3>
                 <div class="stat-value" id="stat-total-jobs">-</div>
@@ -615,8 +623,22 @@
             </div>
         </div>
 
+        <!-- User Stats Grid (hidden by default) -->
+        <div class="stats-grid hidden" id="stats-grid-users">
+            <div class="stat-card">
+                <h3>Total Users</h3>
+                <div class="stat-value" id="stat-total-users">-</div>
+                <div class="stat-label">All time</div>
+            </div>
+            <div class="stat-card">
+                <h3>Active Users</h3>
+                <div class="stat-value" id="stat-active-users">-</div>
+                <div class="stat-label">Can log in</div>
+            </div>
+        </div>
+
         <!-- Main Content -->
-        <div class="main-content">
+        <div class="main-content" id="content-crawl">
             <!-- Create Crawl Job Panel -->
             <div class="panel">
                 <h2>Create Crawl Job</h2>
@@ -677,6 +699,73 @@
                 </div>
             </div>
         </div>
+
+        <!-- User Management Content (hidden by default) -->
+        <div class="main-content hidden" id="content-users">
+            <!-- Create User Panel -->
+            <div class="panel">
+                <h2>Create User</h2>
+                <form id="user-form">
+                    <div class="form-group">
+                        <label for="user-email">Email *</label>
+                        <input type="email" id="user-email" required placeholder="user@example.com">
+                        <small>User's email address (used for login)</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="user-username">Display Name *</label>
+                        <input type="text" id="user-username" required placeholder="John Doe" minlength="3" maxlength="100">
+                        <small>Name shown in the app</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label for="user-password">Password (optional)</label>
+                        <input type="password" id="user-password" placeholder="Leave empty for random password" minlength="8">
+                        <small>Leave empty to generate a random password</small>
+                    </div>
+
+                    <div class="form-group">
+                        <label style="display: flex; align-items: center; gap: 10px; cursor: pointer;">
+                            <input type="checkbox" id="user-is-superuser" style="width: auto;">
+                            <span>Grant admin privileges</span>
+                        </label>
+                        <small>Admins have access to all features</small>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        👤 Create User
+                    </button>
+                </form>
+            </div>
+
+            <!-- Users List Panel -->
+            <div class="panel">
+                <h2>Users</h2>
+                <div class="jobs-list" id="users-list">
+                    <div class="loader"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Display Modal -->
+    <div class="login-overlay hidden" id="password-modal">
+        <div class="login-modal">
+            <h2>🔑 User Created</h2>
+            <p>Save this temporary password - it won't be shown again!</p>
+            <div class="form-group">
+                <label>Email:</label>
+                <input type="text" id="created-user-email" readonly style="background: #f8f9fa;">
+            </div>
+            <div class="form-group">
+                <label>Temporary Password:</label>
+                <input type="text" id="created-user-password" readonly style="background: #fff3cd; font-family: monospace; font-weight: bold;">
+            </div>
+            <button class="btn btn-primary" onclick="closePasswordModal()">
+                Got it!
+            </button>
+        </div>
+    </div>
     </div>
 
     <!-- Toast Notification -->
@@ -815,8 +904,34 @@
                 document.getElementById('stat-running-jobs').textContent = data.crawl_jobs.running;
                 document.getElementById('stat-total-docs').textContent = data.documents.total;
                 document.getElementById('stat-embeddings').textContent = data.documents.with_embeddings;
+                
+                // Load user stats if available
+                if (data.users) {
+                    document.getElementById('stat-total-users').textContent = data.users.total;
+                    document.getElementById('stat-active-users').textContent = data.users.active;
+                }
             } catch (error) {
                 console.error('Failed to load stats:', error);
+            }
+        }
+
+        // Tab switching
+        function switchTab(tab) {
+            // Update tab buttons
+            document.getElementById('tab-crawl').style.background = tab === 'crawl' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f0f0f0';
+            document.getElementById('tab-crawl').style.color = tab === 'crawl' ? 'white' : '#333';
+            document.getElementById('tab-users').style.background = tab === 'users' ? 'linear-gradient(135deg, #667eea 0%, #764ba2 100%)' : '#f0f0f0';
+            document.getElementById('tab-users').style.color = tab === 'users' ? 'white' : '#333';
+            
+            // Show/hide content
+            document.getElementById('stats-grid-crawl').classList.toggle('hidden', tab !== 'crawl');
+            document.getElementById('stats-grid-users').classList.toggle('hidden', tab !== 'users');
+            document.getElementById('content-crawl').classList.toggle('hidden', tab !== 'crawl');
+            document.getElementById('content-users').classList.toggle('hidden', tab !== 'users');
+            
+            // Load data for active tab
+            if (tab === 'users') {
+                loadUsers();
             }
         }
 
@@ -1142,6 +1257,180 @@
             const div = document.createElement('div');
             div.textContent = text;
             return div.innerHTML;
+        }
+
+        // ============================================================================
+        // USER MANAGEMENT FUNCTIONS
+        // ============================================================================
+
+        // Load users
+        async function loadUsers() {
+            const container = document.getElementById('users-list');
+            
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users`);
+                const users = await response.json();
+                
+                if (users.length === 0) {
+                    container.innerHTML = `
+                        <div class="empty-state">
+                            <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"></path>
+                            </svg>
+                            <p>No users yet. Create your first one!</p>
+                        </div>
+                    `;
+                    return;
+                }
+                
+                container.innerHTML = users.map(user => {
+                    const statusIcon = user.is_active ? '✅' : '⏸️';
+                    const superuserBadge = user.is_superuser ? '<span style="background: #f39c12; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">ADMIN</span>' : '';
+                    const mustChangePwdBadge = user.must_change_password ? '<span style="background: #e74c3c; color: white; padding: 2px 8px; border-radius: 12px; font-size: 11px; margin-left: 8px;">MUST CHANGE PWD</span>' : '';
+                    
+                    return `
+                        <div class="job-item">
+                            <div class="job-header">
+                                <div class="job-url">${statusIcon} ${escapeHtml(user.username)} ${superuserBadge} ${mustChangePwdBadge}</div>
+                            </div>
+                            <div class="job-meta">
+                                <span>📧 ${escapeHtml(user.email)}</span>
+                                <span>🆔 ID: ${user.id}</span>
+                                <span>📅 ${formatDate(user.created_at)}</span>
+                            </div>
+                            <div class="job-actions">
+                                <button class="btn btn-sm" onclick="resetPassword(${user.id}, '${escapeHtml(user.email)}')">🔑 Reset Password</button>
+                                <button class="btn ${user.is_active ? 'btn-danger' : 'btn-success'} btn-sm" onclick="toggleUserActive(${user.id})">
+                                    ${user.is_active ? '⏸️ Deactivate' : '▶️ Activate'}
+                                </button>
+                                <button class="btn btn-danger btn-sm" onclick="deleteUser(${user.id}, '${escapeHtml(user.email)}')">🗑️ Delete</button>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                container.innerHTML = `<div class="empty-state"><p>Failed to load users</p></div>`;
+                console.error('Failed to load users:', error);
+            }
+        }
+
+        // Create user
+        document.getElementById('user-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const data = {
+                email: document.getElementById('user-email').value,
+                username: document.getElementById('user-username').value,
+                password: document.getElementById('user-password').value || null,
+                is_superuser: document.getElementById('user-is-superuser').checked
+            };
+            
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    showToast('User created successfully!', 'success');
+                    
+                    // Show password modal if a temporary password was generated
+                    if (result.temporary_password) {
+                        document.getElementById('created-user-email').value = result.user.email;
+                        document.getElementById('created-user-password').value = result.temporary_password;
+                        document.getElementById('password-modal').classList.remove('hidden');
+                    }
+                    
+                    document.getElementById('user-form').reset();
+                    loadUsers();
+                    loadStats();
+                } else {
+                    const error = await response.json();
+                    showToast(`Failed: ${error.detail}`, 'error');
+                }
+            } catch (error) {
+                showToast('Failed to create user', 'error');
+                console.error('Failed to create user:', error);
+            }
+        });
+
+        // Close password modal
+        function closePasswordModal() {
+            document.getElementById('password-modal').classList.add('hidden');
+        }
+
+        // Reset user password
+        async function resetPassword(userId, userEmail) {
+            if (!confirm(`Reset password for ${userEmail}?`)) return;
+            
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users/${userId}/reset-password`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({})
+                });
+                
+                if (response.ok) {
+                    const result = await response.json();
+                    
+                    // Show new password
+                    document.getElementById('created-user-email').value = userEmail;
+                    document.getElementById('created-user-password').value = result.temporary_password;
+                    document.getElementById('password-modal').classList.remove('hidden');
+                    
+                    showToast('Password reset successfully', 'success');
+                    loadUsers();
+                } else {
+                    showToast('Failed to reset password', 'error');
+                }
+            } catch (error) {
+                showToast('Failed to reset password', 'error');
+                console.error(error);
+            }
+        }
+
+        // Toggle user active status
+        async function toggleUserActive(userId) {
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users/${userId}/toggle-active`, {
+                    method: 'PATCH'
+                });
+                
+                if (response.ok) {
+                    showToast('User status updated', 'success');
+                    loadUsers();
+                    loadStats();
+                } else {
+                    showToast('Failed to update user status', 'error');
+                }
+            } catch (error) {
+                showToast('Failed to update user status', 'error');
+                console.error(error);
+            }
+        }
+
+        // Delete user
+        async function deleteUser(userId, userEmail) {
+            if (!confirm(`Delete user ${userEmail}? This will also delete all their conversations and artifacts.`)) return;
+            
+            try {
+                const response = await fetchWithAuth(`${API_BASE}/admin/users/${userId}`, {
+                    method: 'DELETE'
+                });
+                
+                if (response.ok) {
+                    showToast('User deleted', 'success');
+                    loadUsers();
+                    loadStats();
+                } else {
+                    showToast('Failed to delete user', 'error');
+                }
+            } catch (error) {
+                showToast('Failed to delete user', 'error');
+                console.error(error);
+            }
         }
 
         // Initial auth check

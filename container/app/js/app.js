@@ -2,6 +2,336 @@
 // PowerNOVA Chat App   //
 // ==================== //
 
+// ============================================
+// AUTHENTICATION MODULE
+// ============================================
+const Auth = {
+    token: null,
+    user: null,
+    
+    init() {
+        // Check if user is logged in
+        this.token = localStorage.getItem('auth_token');
+        if (this.token) {
+            this.verifyToken();
+        } else {
+            this.showGuestMode();
+        }
+        
+        this.attachAuthListeners();
+    },
+    
+    attachAuthListeners() {
+        // Login button
+        const loginBtn = document.getElementById('loginBtn');
+        if (loginBtn) {
+            loginBtn.addEventListener('click', () => this.showLoginModal());
+        }
+        
+        // User menu button
+        const userMenuBtn = document.getElementById('userMenuBtn');
+        if (userMenuBtn) {
+            userMenuBtn.addEventListener('click', () => this.toggleUserMenu());
+        }
+        
+        // Login form
+        const loginForm = document.getElementById('loginForm');
+        if (loginForm) {
+            loginForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.login();
+            });
+        }
+        
+        // Password change form
+        const passwordChangeForm = document.getElementById('passwordChangeForm');
+        if (passwordChangeForm) {
+            passwordChangeForm.addEventListener('submit', (e) => {
+                e.preventDefault();
+                this.changePassword();
+            });
+        }
+        
+        // Logout button
+        const logoutBtn = document.getElementById('logoutBtn');
+        if (logoutBtn) {
+            logoutBtn.addEventListener('click', () => this.logout());
+        }
+        
+        // Change password from menu
+        const changePasswordBtn = document.getElementById('changePasswordBtn');
+        if (changePasswordBtn) {
+            changePasswordBtn.addEventListener('click', () => {
+                this.hideUserMenu();
+                this.showPasswordChangeModal();
+            });
+        }
+        
+        // Close modal when clicking overlay
+        const modals = ['loginModal', 'passwordChangeModal'];
+        modals.forEach(modalId => {
+            const modal = document.getElementById(modalId);
+            if (modal) {
+                modal.addEventListener('click', (e) => {
+                    if (e.target === modal) {
+                        this.closeModal(modalId);
+                    }
+                });
+            }
+        });
+    },
+    
+    showGuestMode() {
+        document.getElementById('loginBtn').style.display = 'flex';
+        document.getElementById('userMenuBtn').style.display = 'none';
+    },
+    
+    showLoggedInMode(user) {
+        this.user = user;
+        document.getElementById('loginBtn').style.display = 'none';
+        document.getElementById('userMenuBtn').style.display = 'flex';
+        document.getElementById('usernameText').textContent = user.username;
+        document.getElementById('userEmail').textContent = user.email;
+    },
+    
+    async verifyToken() {
+        try {
+            const response = await fetch(`${window.PowerNOVA.getApiUrl()}/api/auth/me`, {
+                headers: {
+                    'Authorization': `Bearer ${this.token}`
+                }
+            });
+            
+            if (response.ok) {
+                const user = await response.json();
+                this.showLoggedInMode(user);
+                
+                // Check if password must be changed
+                if (user.must_change_password) {
+                    this.showPasswordChangeModal();
+                }
+            } else {
+                // Token invalid, logout
+                this.logout();
+            }
+        } catch (error) {
+            console.error('Auth verification failed:', error);
+            this.logout();
+        }
+    },
+    
+    async login() {
+        const email = document.getElementById('loginEmail').value;
+        const password = document.getElementById('loginPassword').value;
+        const submitBtn = document.getElementById('loginSubmitBtn');
+        const errorEl = document.getElementById('loginError');
+        
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Signing in...';
+        errorEl.style.display = 'none';
+        
+        try {
+            const formData = new URLSearchParams();
+            formData.append('username', email); // OAuth2 uses 'username' field
+            formData.append('password', password);
+            
+            const response = await fetch(`${window.PowerNOVA.getApiUrl()}/api/auth/login`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: formData
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                this.token = data.access_token;
+                localStorage.setItem('auth_token', this.token);
+                
+                this.closeLoginModal();
+                this.showLoggedInMode(data.user);
+                
+                // Check if must change password
+                if (data.must_change_password) {
+                    this.showPasswordChangeModal();
+                } else {
+                    this.showSuccessToast('Welcome back!');
+                }
+            } else {
+                const error = await response.json();
+                errorEl.textContent = error.detail || 'Invalid email or password';
+                errorEl.style.display = 'block';
+            }
+        } catch (error) {
+            errorEl.textContent = 'Connection error. Please try again.';
+            errorEl.style.display = 'block';
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-sign-in-alt"></i> Sign In';
+        }
+    },
+    
+    async changePassword() {
+        const currentPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        const submitBtn = document.getElementById('passwordChangeSubmitBtn');
+        const errorEl = document.getElementById('passwordChangeError');
+        
+        errorEl.style.display = 'none';
+        
+        // Validate passwords match
+        if (newPassword !== confirmPassword) {
+            errorEl.textContent = 'New passwords do not match';
+            errorEl.style.display = 'block';
+            return;
+        }
+        
+        submitBtn.disabled = true;
+        submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Changing...';
+        
+        try {
+            const response = await fetch(`${window.PowerNOVA.getApiUrl()}/api/auth/change-password`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${this.token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    current_password: currentPassword,
+                    new_password: newPassword
+                })
+            });
+            
+            if (response.ok) {
+                const data = await response.json();
+                // Update token
+                this.token = data.access_token;
+                localStorage.setItem('auth_token', this.token);
+                
+                this.closePasswordChangeModal();
+                this.showSuccessToast('Password changed successfully!');
+                
+                // Refresh user data
+                this.verifyToken();
+            } else {
+                const error = await response.json();
+                errorEl.textContent = error.detail || 'Failed to change password';
+                errorEl.style.display = 'block';
+            }
+        } catch (error) {
+            errorEl.textContent = 'Connection error. Please try again.';
+            errorEl.style.display = 'block';
+        } finally {
+            submitBtn.disabled = false;
+            submitBtn.innerHTML = '<i class="fas fa-key"></i> Change Password';
+        }
+    },
+    
+    logout() {
+        this.token = null;
+        this.user = null;
+        localStorage.removeItem('auth_token');
+        this.showGuestMode();
+        this.hideUserMenu();
+        this.showSuccessToast('Logged out successfully');
+    },
+    
+    showLoginModal() {
+        document.getElementById('loginModal').style.display = 'flex';
+        document.getElementById('loginEmail').focus();
+    },
+    
+    closeLoginModal() {
+        document.getElementById('loginModal').style.display = 'none';
+        document.getElementById('loginForm').reset();
+        document.getElementById('loginError').style.display = 'none';
+    },
+    
+    showPasswordChangeModal() {
+        document.getElementById('passwordChangeModal').style.display = 'flex';
+        document.getElementById('currentPassword').focus();
+    },
+    
+    closePasswordChangeModal() {
+        document.getElementById('passwordChangeModal').style.display = 'none';
+        document.getElementById('passwordChangeForm').reset();
+        document.getElementById('passwordChangeError').style.display = 'none';
+    },
+    
+    closeModal(modalId) {
+        const modal = document.getElementById(modalId);
+        if (modal) {
+            modal.style.display = 'none';
+        }
+    },
+    
+    toggleUserMenu() {
+        const menu = document.getElementById('userMenu');
+        menu.style.display = menu.style.display === 'block' ? 'none' : 'block';
+    },
+    
+    hideUserMenu() {
+        document.getElementById('userMenu').style.display = 'none';
+    },
+    
+    showSuccessToast(message) {
+        // Simple toast notification (you can enhance this)
+        const toast = document.createElement('div');
+        toast.style.cssText = `
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            background: #10b981;
+            color: white;
+            padding: 1rem 1.5rem;
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            z-index: 10001;
+            animation: slideIn 0.3s ease-out;
+        `;
+        toast.textContent = message;
+        document.body.appendChild(toast);
+        
+        setTimeout(() => {
+            toast.style.animation = 'fadeOut 0.3s ease-out';
+            setTimeout(() => toast.remove(), 300);
+        }, 3000);
+    },
+    
+    requireAuth(callback) {
+        if (!this.token) {
+            this.showLoginModal();
+            return false;
+        }
+        callback();
+        return true;
+    }
+};
+
+// Close dropdowns when clicking outside
+document.addEventListener('click', (e) => {
+    const userMenu = document.getElementById('userMenu');
+    const userMenuBtn = document.getElementById('userMenuBtn');
+    
+    if (userMenu && !userMenuBtn.contains(e.target) && !userMenu.contains(e.target)) {
+        Auth.hideUserMenu();
+    }
+});
+
+// Helper function to close modals
+function closeLoginModal() {
+    Auth.closeLoginModal();
+}
+
+function closePasswordChangeModal() {
+    Auth.closePasswordChangeModal();
+}
+
+// ============================================
+// END AUTHENTICATION MODULE
+// ============================================
+
 class ChatApp {
     constructor() {
         this.messages = [];
@@ -577,17 +907,24 @@ Available icon classes: fa-clock, fa-dollar-sign, fa-chart-line, fa-file-alt, fa
     }
     
     startNewChat() {
-        this.messages = [];
-        this.messagesContainer.innerHTML = '';
-        this.messagesContainer.classList.remove('active');
-        this.welcomeScreen.classList.remove('hidden');
-        this.messageInput.value = '';
-        this.sendBtn.disabled = true;
+        // Require authentication for new chats
+        Auth.requireAuth(() => {
+            this.messages = [];
+            this.messagesContainer.innerHTML = '';
+            this.messagesContainer.classList.remove('active');
+            this.welcomeScreen.classList.remove('hidden');
+            this.messageInput.value = '';
+            this.sendBtn.disabled = true;
+        });
     }
 }
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', () => {
+    // Initialize authentication first
+    Auth.init();
+    
+    // Then initialize chat app
     const app = new ChatApp();
     console.log('PowerNOVA Chat App initialized');
 });

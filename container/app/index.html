@@ -32,6 +32,13 @@
                 <h1 class="logo-text">PowerNOVA <span class="chat-badge">Chat</span></h1>
             </div>
             <div class="header-actions">
+                <button class="btn-icon" id="loginBtn" title="Login" style="display: none;">
+                    <i class="fas fa-user"></i>
+                </button>
+                <button class="btn-icon" id="userMenuBtn" title="Account" style="display: none;">
+                    <i class="fas fa-user-circle"></i>
+                    <span class="username-text" id="usernameText"></span>
+                </button>
                 <button class="btn-icon" id="newChatBtn" title="New Conversation">
                     <i class="fas fa-plus"></i>
                 </button>
@@ -146,6 +153,86 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Login Modal -->
+    <div class="modal-overlay" id="loginModal" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>🔐 Login to PowerNOVA</h2>
+                <button class="modal-close" onclick="closeLoginModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description">Sign in to save your conversations and access them from any device</p>
+                <form id="loginForm">
+                    <div class="form-group">
+                        <label for="loginEmail">Email</label>
+                        <input type="email" id="loginEmail" required placeholder="your@email.com" autocomplete="email">
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword">Password</label>
+                        <input type="password" id="loginPassword" required placeholder="Enter your password" autocomplete="current-password">
+                    </div>
+                    <div class="error-message" id="loginError" style="display: none;"></div>
+                    <button type="submit" class="btn-primary" id="loginSubmitBtn">
+                        <i class="fas fa-sign-in-alt"></i> Sign In
+                    </button>
+                </form>
+                <div class="modal-footer-text">
+                    <p>Don't have an account? Contact your administrator.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Password Change Modal -->
+    <div class="modal-overlay" id="passwordChangeModal" style="display: none;">
+        <div class="modal-container">
+            <div class="modal-header">
+                <h2>⚠️ Change Your Password</h2>
+            </div>
+            <div class="modal-body">
+                <p class="modal-description warning">You must change your password before continuing</p>
+                <form id="passwordChangeForm">
+                    <div class="form-group">
+                        <label for="currentPassword">Current Password</label>
+                        <input type="password" id="currentPassword" required placeholder="Your temporary password" autocomplete="current-password">
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword">New Password</label>
+                        <input type="password" id="newPassword" required placeholder="At least 8 characters" minlength="8" autocomplete="new-password">
+                        <small>Minimum 8 characters</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirm New Password</label>
+                        <input type="password" id="confirmPassword" required placeholder="Re-enter new password" minlength="8" autocomplete="new-password">
+                    </div>
+                    <div class="error-message" id="passwordChangeError" style="display: none;"></div>
+                    <button type="submit" class="btn-primary" id="passwordChangeSubmitBtn">
+                        <i class="fas fa-key"></i> Change Password
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Menu Dropdown -->
+    <div class="dropdown-menu" id="userMenu" style="display: none;">
+        <div class="dropdown-item" id="userProfileItem">
+            <i class="fas fa-user"></i>
+            <span id="userEmail">user@example.com</span>
+        </div>
+        <div class="dropdown-divider"></div>
+        <button class="dropdown-item" id="changePasswordBtn">
+            <i class="fas fa-key"></i>
+            <span>Change Password</span>
+        </button>
+        <button class="dropdown-item" id="logoutBtn">
+            <i class="fas fa-sign-out-alt"></i>
+            <span>Logout</span>
+        </button>
     </div>
 
     <script src="js/app.js"></script>

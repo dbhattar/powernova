@@ -19,8 +19,13 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy application code
 COPY . .
 
+# Copy and set permissions for startup script
+COPY api/startup.sh /app/startup.sh
+RUN chmod +x /app/startup.sh
+
 # Expose port
 EXPOSE 8000
 
-# Run with auto-reload for development
+# Use startup script that runs migrations before starting server
+ENTRYPOINT ["/app/startup.sh"]
 CMD ["uvicorn", "main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]

@@ -51,6 +51,23 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# Add middleware to handle OPTIONS requests before dependencies
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
+
+class OptionsMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request, call_next):
+        if request.method == "OPTIONS":
+            return Response(status_code=200, headers={
+                "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
+                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+                "Access-Control-Allow-Headers": "*",
+                "Access-Control-Max-Age": "3600",
+            })
+        return await call_next(request)
+
+app.add_middleware(OptionsMiddleware)
+
 # CORS Configuration
 # Allow requests from frontend domains
 ALLOWED_ORIGINS = [
@@ -86,6 +103,10 @@ app.include_router(admin.router, prefix="/api", tags=["Admin"])
 # Import and include RAG router
 from routes import rag
 app.include_router(rag.router, prefix="/api", tags=["RAG"])
+
+# Import and include auth router
+from routes import auth
+app.include_router(auth.router, prefix="/api", tags=["Authentication"])
 
 # Health check endpoint
 @app.get("/health")
