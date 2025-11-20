@@ -52,6 +52,30 @@
             padding: 25px;
             border-radius: 12px;
             box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .stat-card.clickable {
+            cursor: pointer;
+        }
+
+        .stat-card.clickable:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 12px rgba(0, 0, 0, 0.15);
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        .stat-card.clickable:hover h3,
+        .stat-card.clickable:hover .stat-label {
+            color: white;
+        }
+
+        .stat-card.clickable:hover .stat-value {
+            transform: scale(1.1);
+        }
+
+        .stat-card.clickable:active {
+            transform: translateY(0);
         }
 
         .stat-card h3 {
@@ -584,6 +608,11 @@
                 <div class="stat-value" id="stat-embeddings">-</div>
                 <div class="stat-label">Ready for RAG</div>
             </div>
+            <div class="stat-card clickable" onclick="generateEmbeddings()" title="Click to generate embeddings for documents without them">
+                <h3>Generate Embeddings</h3>
+                <div class="stat-value" style="font-size: 24px;">🧠</div>
+                <div class="stat-label" id="embeddings-status">Click to process</div>
+            </div>
         </div>
 
         <!-- Main Content -->
@@ -1054,6 +1083,58 @@
             const sizes = ['B', 'KB', 'MB', 'GB'];
             const i = Math.floor(Math.log(bytes) / Math.log(k));
             return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
+        }
+
+        // Generate embeddings for documents without them
+        async function generateEmbeddings() {
+            const statusEl = document.getElementById('embeddings-status');
+            const originalText = statusEl.textContent;
+            
+            try {
+                statusEl.textContent = 'Processing...';
+                statusEl.style.color = '#f39c12';
+                
+                const response = await fetch(`${API_BASE}/rag/reprocess-embeddings?limit=200`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    }
+                });
+                
+                if (!response.ok) {
+                    throw new Error('Failed to generate embeddings');
+                }
+                
+                const result = await response.json();
+                
+                // Show result
+                if (result.success > 0) {
+                    showToast(`✅ Generated ${result.success} embeddings successfully!`, 'success');
+                    statusEl.textContent = `✅ ${result.success} processed`;
+                    statusEl.style.color = '#2ecc71';
+                } else if (result.total === 0) {
+                    showToast('ℹ️ All documents already have embeddings', 'info');
+                    statusEl.textContent = 'All done! ✅';
+                    statusEl.style.color = '#2ecc71';
+                } else {
+                    showToast(`⚠️ ${result.failed} documents failed to process`, 'warning');
+                    statusEl.textContent = `⚠️ ${result.failed} failed`;
+                    statusEl.style.color = '#e74c3c';
+                }
+                
+                // Reload stats after 1 second
+                setTimeout(() => {
+                    loadStats();
+                    statusEl.textContent = originalText;
+                    statusEl.style.color = '';
+                }, 2000);
+                
+            } catch (error) {
+                console.error('Failed to generate embeddings:', error);
+                showToast('❌ Failed to generate embeddings', 'error');
+                statusEl.textContent = originalText;
+                statusEl.style.color = '';
+            }
         }
 
         // Escape HTML to prevent XSS

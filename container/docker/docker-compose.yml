@@ -86,11 +86,11 @@ services:
     networks:
       - powernova-network
 
-  # PostgreSQL Database
+  # PostgreSQL Database with pgvector extension
   # NOTE: Database is NOT exposed externally - only accessible via internal network
   # API service connects via: powernova-postgres:5432
   powernova-postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: powernova-postgres
     environment:
       - POSTGRES_DB=powernova

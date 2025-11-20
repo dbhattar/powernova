@@ -6,6 +6,7 @@ import logging
 import requests
 from typing import Set, List, Optional, Dict
 from urllib.parse import urljoin, urlparse, urlunparse
+from urllib.robotparser import RobotFileParser
 from bs4 import BeautifulSoup
 import re
 import time
@@ -59,12 +60,22 @@ class WebCrawler:
         self.documents_found = 0
         self.pages_crawled = 0
         
+        # robots.txt parsers cache (one per domain)
+        self.robots_parsers: Dict[str, RobotFileParser] = {}
+        
         # Request settings
         self.session = requests.Session()
+        # Identify as a legitimate bot with contact information
+        # Format follows best practices: BotName/version (+URL for more info)
+        self.user_agent = 'PowerNOVA-Crawler/1.0 bot for document indexing)'
         self.session.headers.update({
-            'User-Agent': 'PowerNOVA-Crawler/1.0 (Document Indexing Bot)'
+            'User-Agent': self.user_agent,
+            'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+            'Accept-Language': 'en-US,en;q=0.5',
+            'Accept-Encoding': 'gzip, deflate',
+            'Connection': 'keep-alive'
         })
-        self.request_delay = 0.5  # Polite crawling delay
+        self.request_delay = 1.0  # Polite crawling delay (1 second between requests)
     
     def _is_allowed_domain(self, url: str) -> bool:
         """Check if URL domain is allowed"""
@@ -94,6 +105,64 @@ class WebCrawler:
                 return True
         
         return False
+    
+    def _get_robots_parser(self, url: str) -> Optional[RobotFileParser]:
+        """
+        Get or create robots.txt parser for a domain
+        
+        Args:
+            url: URL to get parser for
+            
+        Returns:
+            RobotFileParser instance or None if robots.txt is inaccessible
+        """
+        parsed = urlparse(url)
+        domain = f"{parsed.scheme}://{parsed.netloc}"
+        
+        # Return cached parser if exists
+        if domain in self.robots_parsers:
+            return self.robots_parsers[domain]
+        
+        # Create new parser
+        robots_url = f"{domain}/robots.txt"
+        parser = RobotFileParser()
+        parser.set_url(robots_url)
+        
+        try:
+            parser.read()
+            self.robots_parsers[domain] = parser
+            logger.info(f"Loaded robots.txt from {robots_url}")
+            return parser
+        except Exception as e:
+            # If robots.txt doesn't exist or is inaccessible, assume we can crawl
+            logger.debug(f"Could not read robots.txt from {robots_url}: {e}")
+            # Cache a permissive parser
+            parser.allow_all = True
+            self.robots_parsers[domain] = parser
+            return parser
+    
+    def _is_allowed_by_robots(self, url: str) -> bool:
+        """
+        Check if URL is allowed by robots.txt
+        
+        Args:
+            url: URL to check
+            
+        Returns:
+            True if allowed, False otherwise
+        """
+        parser = self._get_robots_parser(url)
+        if parser is None:
+            # If we can't get parser, be conservative and allow
+            return True
+        
+        # Check if our user agent can fetch this URL
+        allowed = parser.can_fetch(self.user_agent, url)
+        
+        if not allowed:
+            logger.info(f"Blocked by robots.txt: {url}")
+        
+        return allowed
     
     def _matches_patterns(self, url: str) -> bool:
         """Check if URL matches include/exclude patterns"""
@@ -290,9 +359,19 @@ class WebCrawler:
             
             self.db.add(document)
             self.db.commit()
+            self.db.refresh(document)  # Get the document ID
             
             self.documents_found += 1
             logger.info(f"Saved {file_ext} document: {title} ({file_size} bytes)")
+            
+            # Generate embedding in background
+            # Note: In production, consider using a queue for this
+            try:
+                from services.embedding_processor import process_document_embedding
+                process_document_embedding(document.id, self.db)
+            except Exception as e:
+                logger.warning(f"Failed to generate embedding for document {document.id}: {e}")
+                # Don't fail the whole crawl if embedding generation fails
             
             return True
             
@@ -322,11 +401,20 @@ class WebCrawler:
             depth: Current depth
         """
         try:
+            # Check robots.txt before crawling
+            if not self._is_allowed_by_robots(url):
+                logger.info(f"Skipping {url} - disallowed by robots.txt")
+                return
+            
             # Mark as visited now that we're actually crawling it
             self.visited_urls.add(url)
             self.pages_crawled += 1
             
             logger.info(f"Crawling page {self.pages_crawled}/{self.max_pages}: {url} (depth: {depth})")
+            
+            # Polite delay between requests
+            if self.pages_crawled > 1:
+                time.sleep(self.request_delay)
             
             # Fetch the page/document
             response = self.session.get(url, timeout=30)
@@ -396,6 +484,10 @@ class WebCrawler:
                         continue
                     
                     if not self._matches_patterns(normalized_url):
+                        continue
+                    
+                    # Check robots.txt before adding to queue
+                    if not self._is_allowed_by_robots(normalized_url):
                         continue
                     
                     # Add to queue
@@ -470,14 +562,18 @@ class WebCrawler:
             self.db.commit()
 
 
-def run_crawler(job_id: int, db: Session):
+def run_crawler(job_id: int):
     """
     Run crawler for a job (to be called as background task)
     
     Args:
         job_id: Crawl job ID
-        db: Database session
     """
+    # Import here to avoid circular dependency
+    from database.session import SessionLocal
+    
+    # Create a new database session for the background task
+    db = SessionLocal()
     try:
         crawler = WebCrawler(job_id, db)
         crawler.run()
@@ -494,3 +590,5 @@ def run_crawler(job_id: int, db: Session):
                 db.commit()
         except:
             pass
+    finally:
+        db.close()

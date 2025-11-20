@@ -83,6 +83,10 @@ print("=" * 50)
 app.include_router(chat.router, prefix="/api", tags=["Chat"])
 app.include_router(admin.router, prefix="/api", tags=["Admin"])
 
+# Import and include RAG router
+from routes import rag
+app.include_router(rag.router, prefix="/api", tags=["RAG"])
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():

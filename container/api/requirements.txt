@@ -26,6 +26,9 @@ typing-inspection==0.4.2
 typing_extensions==4.15.0
 uvicorn==0.38.0
 
+# Vector database support
+pgvector==0.3.6
+
 # Web crawling and document processing
 beautifulsoup4==4.12.3
 requests==2.31.0

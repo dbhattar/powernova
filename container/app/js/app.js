@@ -251,7 +251,7 @@ class ChatApp {
                     content: msg.content
                 }));
             
-            // Call the streaming API
+            // Call the streaming API with RAG enabled
             const response = await fetch(`${apiUrl}/api/chat/stream`, {
                 method: 'POST',
                 headers: {
@@ -262,7 +262,10 @@ class ChatApp {
                     model: 'gpt-4o-mini',
                     temperature: 0.7,
                     max_tokens: 2000,
-                    stream: true
+                    stream: true,
+                    use_rag: true,  // Enable RAG
+                    top_k: 5,
+                    similarity_threshold: 0.5
                 })
             });
             
@@ -279,6 +282,7 @@ class ChatApp {
                 id: messageId,
                 role: 'assistant',
                 content: '',
+                sources: null,  // Will be populated from RAG
                 timestamp: new Date()
             };
             
@@ -288,6 +292,7 @@ class ChatApp {
             // Get the message bubble for updating
             const messageEl = this.messagesContainer.querySelector(`[data-id="${messageId}"]`);
             const bubble = messageEl.querySelector('.message-bubble');
+            const messageContent = messageEl.querySelector('.message-content');
             
             // Read the stream
             const reader = response.body.getReader();
@@ -318,35 +323,71 @@ class ChatApp {
                         try {
                             const parsed = JSON.parse(data);
                             
-                            // Check for error
-                            if (parsed.error) {
+                            // Handle sources (sent first by RAG)
+                            if (parsed.type === 'sources' && parsed.sources) {
+                                message.sources = parsed.sources;
+                                // Update the rendered message to include sources
+                                const existingSources = messageContent.querySelector('.message-sources');
+                                if (existingSources) {
+                                    existingSources.remove();
+                                }
+                                
+                                const sourcesEl = document.createElement('div');
+                                sourcesEl.className = 'message-sources';
+                                sourcesEl.innerHTML = '<h4>Sources:</h4>';
+                                
+                                parsed.sources.forEach(source => {
+                                    const link = document.createElement('a');
+                                    link.className = 'source-link';
+                                    link.href = source.url;
+                                    link.target = '_blank';
+                                    link.innerHTML = `<i class="fas fa-external-link-alt"></i> ${source.title}`;
+                                    sourcesEl.appendChild(link);
+                                });
+                                
+                                messageContent.appendChild(sourcesEl);
+                            }
+                            
+                            // Handle content
+                            if (parsed.type === 'content') {
+                                // Check for error
+                                if (parsed.error) {
+                                    console.error('Stream error:', parsed.error);
+                                    bubble.textContent = message.content + '\n\n[Error: ' + parsed.error + ']';
+                                    this.isTyping = false;
+                                    break;
+                                }
+                                
+                                // Add content to message
+                                if (parsed.content) {
+                                    message.content += parsed.content;
+                                    // Re-render markdown on each chunk
+                                    marked.setOptions({
+                                        breaks: true,
+                                        gfm: true,
+                                        headerIds: false,
+                                        mangle: false
+                                    });
+                                    bubble.innerHTML = marked.parse(message.content || '');
+                                    // Apply syntax highlighting to code blocks
+                                    bubble.querySelectorAll('pre code').forEach((block) => {
+                                        hljs.highlightElement(block);
+                                    });
+                                    this.scrollToBottom();
+                                }
+                                
+                                // Handle completion
+                                if (parsed.done || parsed.finish_reason) {
+                                    this.isTyping = false;
+                                }
+                            }
+                            
+                            // Handle error type
+                            if (parsed.type === 'error') {
                                 console.error('Stream error:', parsed.error);
                                 bubble.textContent = message.content + '\n\n[Error: ' + parsed.error + ']';
                                 this.isTyping = false;
                                 break;
-                            }
-                            
-                            // Add content to message
-                            if (parsed.content) {
-                                message.content += parsed.content;
-                                // Re-render markdown on each chunk
-                                marked.setOptions({
-                                    breaks: true,
-                                    gfm: true,
-                                    headerIds: false,
-                                    mangle: false
-                                });
-                                bubble.innerHTML = marked.parse(message.content || '');
-                                // Apply syntax highlighting to code blocks
-                                bubble.querySelectorAll('pre code').forEach((block) => {
-                                    hljs.highlightElement(block);
-                                });
-                                this.scrollToBottom();
-                            }
-                            
-                            // Handle completion
-                            if (parsed.done || parsed.finish_reason) {
-                                this.isTyping = false;
                             }
                         } catch (e) {
                             console.error('Error parsing SSE data:', e);

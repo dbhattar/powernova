@@ -130,8 +130,8 @@ async def create_crawl_job(
     db.commit()
     db.refresh(crawl_job)
     
-    # Start crawl job in background
-    background_tasks.add_task(run_crawler, crawl_job.id, db)
+    # Start crawl job in background (don't pass db session - it will create its own)
+    background_tasks.add_task(run_crawler, crawl_job.id)
     
     return crawl_job
 

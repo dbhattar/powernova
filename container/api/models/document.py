@@ -3,6 +3,7 @@ Document model - Stores crawled documents and their metadata
 """
 from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON, Enum as SQLEnum
 from sqlalchemy.orm import relationship
+from pgvector.sqlalchemy import Vector
 from datetime import datetime
 import enum
 from .base import Base, TimestampMixin
@@ -44,6 +45,7 @@ class Document(Base, TimestampMixin):
         crawl_job_id: Foreign key to CrawlJob
         embedding_generated: Whether embeddings have been generated
         chunk_count: Number of text chunks created for RAG
+        embedding: Vector embedding for semantic search (1536 dimensions)
     """
     __tablename__ = "documents"
     
@@ -71,6 +73,7 @@ class Document(Base, TimestampMixin):
     # RAG/Embedding info
     embedding_generated = Column(Boolean, default=False)
     chunk_count = Column(Integer, default=0)
+    embedding = Column(Vector(1536), nullable=True)  # OpenAI text-embedding-3-small (1536 dims)
     
     def __repr__(self):
         return f"<Document(id={self.id}, title='{self.title}', url='{self.url}')>"

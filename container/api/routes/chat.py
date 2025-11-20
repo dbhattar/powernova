@@ -1,7 +1,7 @@
 """
 Chat routes - Handle chat completions with OpenAI streaming
 """
-from fastapi import APIRouter, HTTPException, Request
+from fastapi import APIRouter, HTTPException, Request, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
@@ -9,6 +9,10 @@ import json
 import os
 from openai import AsyncOpenAI
 import asyncio
+from sqlalchemy.orm import Session
+
+from database import get_db
+from services.rag_service import get_rag_service
 
 router = APIRouter()
 
@@ -31,6 +35,9 @@ class ChatRequest(BaseModel):
     temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
     max_tokens: Optional[int] = Field(default=2000, ge=1, le=4096, description="Maximum tokens to generate")
     stream: bool = Field(default=True, description="Whether to stream the response")
+    use_rag: bool = Field(default=True, description="Whether to use RAG for context")
+    top_k: int = Field(default=5, description="Number of documents to retrieve for RAG")
+    similarity_threshold: float = Field(default=0.5, ge=0.0, le=1.0, description="Minimum similarity for RAG documents")
 
 class ChatResponse(BaseModel):
     id: str
@@ -40,12 +47,15 @@ class ChatResponse(BaseModel):
     finish_reason: Optional[str] = None
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest):
+async def chat_stream(request: ChatRequest, db: Session = Depends(get_db)):
     """
-    Stream chat completion from OpenAI
+    Stream chat completion from OpenAI with optional RAG
     
     This endpoint proxies requests to OpenAI's chat completion API
     and streams the response back to the client using Server-Sent Events (SSE).
+    
+    If use_rag=True, retrieves relevant documents from the vector database
+    and includes them as context in the system message.
     
     Returns:
         StreamingResponse: SSE stream of chat completion chunks
@@ -68,11 +78,74 @@ async def chat_stream(request: ChatRequest):
     # Convert Pydantic models to dicts for OpenAI API
     messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
     
+    # Retrieve relevant documents if RAG is enabled
+    relevant_docs = []
+    if request.use_rag:
+        try:
+            # Get the last user message as the query
+            user_messages = [msg for msg in request.messages if msg.role == "user"]
+            if user_messages:
+                last_query = user_messages[-1].content
+                
+                # Search for relevant documents
+                rag_service = get_rag_service(db)
+                relevant_docs = rag_service.search_similar_documents(
+                    query=last_query,
+                    top_k=request.top_k,
+                    similarity_threshold=request.similarity_threshold
+                )
+                
+                # If we found relevant documents, add them to the system message
+                if relevant_docs:
+                    context_parts = []
+                    for i, doc in enumerate(relevant_docs, 1):
+                        context_parts.append(f"""
+[Document {i}]
+Title: {doc['title']}
+URL: {doc['url']}
+Similarity: {doc['similarity']:.2%}
+
+{doc['content_full']}
+                        """.strip())
+                    
+                    context = "\n\n---\n\n".join(context_parts)
+                    
+                    # Prepend system message with RAG context
+                    rag_system_message = {
+                        "role": "system",
+                        "content": f"""You are a helpful assistant that answers questions based on the provided documents and your knowledge.
+
+Use the documents below as your PRIMARY source of information. If the documents contain relevant information, cite them by mentioning the document title or URL. If the documents don't contain enough information, you can use your general knowledge but indicate that you're doing so.
+
+Retrieved Documents:
+{context}
+
+Answer the user's question based on these documents first, then supplement with your knowledge if needed."""
+                    }
+                    
+                    # Insert RAG system message at the beginning
+                    messages = [rag_system_message] + messages
+        except Exception as e:
+            print(f"Error retrieving RAG context: {str(e)}")
+            # Continue without RAG if there's an error
+    
     async def generate_stream():
         """
         Generator function that streams chat completions from OpenAI
         """
         try:
+            # Send sources first if we have them
+            if relevant_docs:
+                sources_data = {
+                    "type": "sources",
+                    "sources": [{
+                        "title": doc['title'],
+                        "url": doc['url'],
+                        "similarity": doc['similarity']
+                    } for doc in relevant_docs]
+                }
+                yield f"data: {json.dumps(sources_data)}\n\n"
+            
             # Create streaming chat completion
             stream = await openai_client.chat.completions.create(
                 model=request.model,
@@ -91,6 +164,7 @@ async def chat_stream(request: ChatRequest):
                     if choice.delta.content:
                         # Format as SSE (Server-Sent Events)
                         data = {
+                            "type": "content",
                             "id": chunk.id,
                             "content": choice.delta.content,
                             "role": "assistant",
@@ -102,6 +176,7 @@ async def chat_stream(request: ChatRequest):
                     # Send finish signal
                     if choice.finish_reason:
                         data = {
+                            "type": "content",
                             "id": chunk.id,
                             "content": "",
                             "role": "assistant",
@@ -118,8 +193,8 @@ async def chat_stream(request: ChatRequest):
             # Log error and send error message to client
             print(f"Error in chat stream: {str(e)}")
             error_data = {
-                "error": str(e),
-                "type": "stream_error"
+                "type": "error",
+                "error": str(e)
             }
             yield f"data: {json.dumps(error_data)}\n\n"
     
