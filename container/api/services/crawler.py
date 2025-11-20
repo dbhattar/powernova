@@ -511,14 +511,15 @@ class WebCrawler:
             self.db.commit()
             
             logger.info(f"Starting crawl job {self.job_id}: {self.start_url}")
-            logger.info(f"Max depth: {self.max_depth}, Max pages: {self.max_pages}")
+            logger.info(f"Max depth: {self.max_depth}, Max pages: {self.max_pages if self.max_pages != -1 else 'unlimited'}")
             
             # Mark start URL as queued
             normalized_start = self._normalize_url(self.start_url)
             self.queued_urls.add(normalized_start)
             
             # Crawl loop - continue while we have URLs to visit AND haven't hit max pages
-            while self.to_visit and self.pages_crawled < self.max_pages:
+            # If max_pages is -1, crawl until no more links are available
+            while self.to_visit and (self.max_pages == -1 or self.pages_crawled < self.max_pages):
                 # Check if job was cancelled
                 self.db.refresh(self.job)
                 if self.job.status == CrawlStatus.CANCELLED:

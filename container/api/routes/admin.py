@@ -51,7 +51,7 @@ class CrawlJobCreate(BaseModel):
     """Request model for creating a new crawl job"""
     start_url: HttpUrl = Field(..., description="URL to start crawling from")
     max_depth: int = Field(default=2, ge=0, le=10, description="Maximum crawl depth (0 = only start URL)")
-    max_pages: int = Field(default=100, ge=1, le=1000, description="Maximum pages to crawl")
+    max_pages: int = Field(default=100, ge=-1, le=1000, description="Maximum pages to crawl")
     allowed_domains: List[str] = Field(default=[], description="List of allowed domains (empty = same domain only)")
     file_types: List[str] = Field(default=["html", "pdf"], description="File types to download")
     include_patterns: List[str] = Field(default=[], description="URL patterns to include (regex)")
