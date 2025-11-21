@@ -290,3 +290,134 @@ async def chat_health():
             "status": "unhealthy",
             "message": f"Cannot access OpenAI API: {str(e)}"
         }
+
+
+# Pydantic models for follow-up questions
+class FollowUpQuestion(BaseModel):
+    """Single follow-up question"""
+    text: str = Field(..., description="The question text")
+    icon: str = Field(..., description="Font Awesome icon class")
+
+
+class FollowUpRequest(BaseModel):
+    """Request model for generating follow-up questions"""
+    messages: List[Message] = Field(..., description="Conversation history to generate questions from")
+    count: int = Field(default=3, ge=1, le=5, description="Number of questions to generate")
+
+
+class FollowUpResponse(BaseModel):
+    """Response model for follow-up questions"""
+    questions: List[FollowUpQuestion] = Field(..., description="List of follow-up questions")
+
+
+@router.post("/chat/follow-up-questions", response_model=FollowUpResponse)
+async def generate_follow_up_questions(request: FollowUpRequest):
+    """
+    Generate contextual follow-up questions based on conversation history
+    
+    This endpoint uses an LLM to analyze the conversation and suggest
+    relevant follow-up questions for the user.
+    
+    Returns:
+        FollowUpResponse: List of follow-up questions with icons
+    """
+    
+    # Check if OpenAI client is initialized
+    if not openai_client:
+        raise HTTPException(
+            status_code=500,
+            detail="OpenAI API key not configured. Please set OPENAI_API_KEY environment variable."
+        )
+    
+    # System prompt for generating follow-up questions
+    system_prompt = """You are a helpful assistant that generates relevant follow-up questions for conversations about energy markets, regulations, and grid operations.
+
+Based on the conversation context, generate exactly {count} relevant follow-up questions that the user might want to ask next. The questions should:
+1. Be specific and actionable
+2. Build upon the current conversation
+3. Explore related topics or dive deeper into mentioned concepts
+4. Be relevant to energy markets, CAISO, ERCOT, PJM, MISO, FERC regulations, or grid operations
+
+Return ONLY a JSON array with exactly {count} objects, each with "text" and "icon" properties. Use Font Awesome icon classes.
+Example format:
+[
+  {{"text": "What are the timeline requirements?", "icon": "fas fa-clock"}},
+  {{"text": "How do costs compare across regions?", "icon": "fas fa-dollar-sign"}},
+  {{"text": "What are the next steps in the process?", "icon": "fas fa-list-ol"}}
+]
+
+Available icon classes: fa-clock, fa-dollar-sign, fa-chart-line, fa-file-alt, fa-gavel, fa-industry, fa-bolt, fa-sun, fa-wind, fa-battery-full, fa-plug, fa-network-wired, fa-database, fa-info-circle, fa-list-ol, fa-calendar-alt, fa-tools, fa-shield-alt, fa-globe-americas, fa-exchange-alt, fa-balance-scale
+
+IMPORTANT: Return ONLY the JSON array, no additional text or explanation."""
+    
+    # Format system prompt with count
+    system_prompt = system_prompt.format(count=request.count)
+    
+    try:
+        # Convert Pydantic messages to dict format
+        conversation_messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
+        
+        # Prepare messages for OpenAI
+        messages = [
+            {"role": "system", "content": system_prompt},
+            *conversation_messages
+        ]
+        
+        # Call OpenAI API
+        response = await openai_client.chat.completions.create(
+            model="gpt-4o-mini",
+            messages=messages,
+            temperature=0.8,
+            max_tokens=300,
+            stream=False
+        )
+        
+        # Extract response content
+        content = response.choices[0].message.content
+        
+        # Parse JSON response
+        try:
+            # Extract JSON array from response (handle cases where LLM adds extra text)
+            import re
+            json_match = re.search(r'\[[\s\S]*\]', content)
+            
+            if json_match:
+                questions_data = json.loads(json_match.group(0))
+                
+                # Validate and convert to FollowUpQuestion objects
+                if isinstance(questions_data, list):
+                    questions = []
+                    for q in questions_data[:request.count]:
+                        if isinstance(q, dict) and 'text' in q and 'icon' in q:
+                            questions.append(FollowUpQuestion(text=q['text'], icon=q['icon']))
+                    
+                    if questions:
+                        return FollowUpResponse(questions=questions)
+            
+            # If parsing fails, return fallback questions
+            raise ValueError("Could not parse valid questions from response")
+            
+        except (json.JSONDecodeError, ValueError) as parse_error:
+            print(f"Error parsing follow-up questions: {str(parse_error)}")
+            print(f"Raw response: {content}")
+            
+            # Return fallback questions
+            fallback_questions = [
+                FollowUpQuestion(text="Can you provide more details on this topic?", icon="fas fa-info-circle"),
+                FollowUpQuestion(text="What are the latest regulatory changes?", icon="fas fa-gavel"),
+                FollowUpQuestion(text="How does this compare to other regions?", icon="fas fa-globe-americas")
+            ]
+            
+            return FollowUpResponse(questions=fallback_questions[:request.count])
+    
+    except Exception as e:
+        print(f"Error generating follow-up questions: {str(e)}")
+        
+        # Return fallback questions on error
+        fallback_questions = [
+            FollowUpQuestion(text="Can you provide more details on this topic?", icon="fas fa-info-circle"),
+            FollowUpQuestion(text="What are the latest regulatory changes?", icon="fas fa-gavel"),
+            FollowUpQuestion(text="How does this compare to other regions?", icon="fas fa-globe-americas")
+        ]
+        
+        return FollowUpResponse(questions=fallback_questions[:request.count])

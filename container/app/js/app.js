@@ -794,39 +794,15 @@ class ChatApp {
                     content: msg.content
                 }));
             
-            // Create a system prompt for generating follow-up questions
-            const systemPrompt = `You are a helpful assistant that generates relevant follow-up questions for conversations about energy markets, regulations, and grid operations.
-
-Based on the conversation context, generate exactly 3 relevant follow-up questions that the user might want to ask next. The questions should:
-1. Be specific and actionable
-2. Build upon the current conversation
-3. Explore related topics or dive deeper into mentioned concepts
-4. Be relevant to energy markets, CAISO, ERCOT, PJM, MISO, FERC regulations, or grid operations
-
-Return ONLY a JSON array with exactly 3 objects, each with "text" and "icon" properties. Use Font Awesome icon classes.
-Example format:
-[
-  {"text": "What are the timeline requirements?", "icon": "fas fa-clock"},
-  {"text": "How do costs compare across regions?", "icon": "fas fa-dollar-sign"},
-  {"text": "What are the next steps in the process?", "icon": "fas fa-list-ol"}
-]
-
-Available icon classes: fa-clock, fa-dollar-sign, fa-chart-line, fa-file-alt, fa-gavel, fa-industry, fa-bolt, fa-sun, fa-wind, fa-battery-full, fa-plug, fa-network-wired, fa-database, fa-info-circle, fa-list-ol, fa-calendar-alt, fa-tools, fa-shield-alt, fa-globe-americas, fa-exchange-alt, fa-balance-scale`;
-            
-            // Make API call to generate follow-up questions
-            const response = await fetch(`${apiUrl}/api/chat`, {
+            // Make API call to generate follow-up questions using dedicated endpoint
+            const response = await fetch(`${apiUrl}/api/chat/follow-up-questions`, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
                 body: JSON.stringify({
-                    messages: [
-                        { role: 'system', content: systemPrompt },
-                        ...recentMessages
-                    ],
-                    model: 'gpt-4o-mini',
-                    temperature: 0.8,
-                    max_tokens: 300
+                    messages: recentMessages,
+                    count: 3
                 })
             });
             
@@ -836,26 +812,13 @@ Available icon classes: fa-clock, fa-dollar-sign, fa-chart-line, fa-file-alt, fa
             }
             
             const data = await response.json();
-            const content = data.response || data.content || '';
             
-            // Try to parse JSON from the response
-            try {
-                // Extract JSON array from response (handle cases where LLM adds extra text)
-                const jsonMatch = content.match(/\[[\s\S]*\]/);
-                if (jsonMatch) {
-                    const followUps = JSON.parse(jsonMatch[0]);
-                    
-                    // Validate the response
-                    if (Array.isArray(followUps) && followUps.length > 0) {
-                        // Ensure we have exactly 3 questions with proper structure
-                        return followUps.slice(0, 3).filter(q => q.text && q.icon);
-                    }
-                }
-            } catch (parseError) {
-                console.error('Error parsing follow-up questions:', parseError);
+            // Validate the response
+            if (data.questions && Array.isArray(data.questions) && data.questions.length > 0) {
+                return data.questions;
             }
             
-            // Return fallback questions if parsing fails
+            // Return fallback questions if no valid questions returned
             return this.getFallbackFollowUps();
             
         } catch (error) {
