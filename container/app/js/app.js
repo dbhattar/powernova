@@ -92,6 +92,11 @@ const Auth = {
         document.getElementById('userMenuBtn').style.display = 'flex';
         document.getElementById('usernameText').textContent = user.username;
         document.getElementById('userEmail').textContent = user.email;
+        
+        // Load user conversations
+        if (typeof Conversations !== 'undefined' && Conversations.loadConversations) {
+            Conversations.loadConversations();
+        }
     },
     
     async verifyToken() {
@@ -247,6 +252,14 @@ const Auth = {
         this.showGuestMode();
         this.hideUserMenu();
         this.showSuccessToast('Logged out successfully');
+        
+        // Clear conversations
+        if (typeof Conversations !== 'undefined') {
+            Conversations.currentConversationId = null;
+            Conversations.conversations = [];
+            Conversations.documents = [];
+            Conversations.renderConversationsList();
+        }
     },
     
     showLoginModal() {
@@ -361,13 +374,13 @@ class ChatApp {
         this.messagesContainer = document.getElementById('messagesContainer');
         this.messageInput = document.getElementById('messageInput');
         this.sendBtn = document.getElementById('sendBtn');
-        this.sidebar = document.getElementById('sidebar');
+        this.sidebar = document.getElementById('conversationsSidebar'); // Updated ID
         
         // Buttons
         this.newChatBtn = document.getElementById('newChatBtn');
         this.historyBtn = document.getElementById('historyBtn');
         this.attachBtn = document.getElementById('attachBtn');
-        this.closeSidebar = document.getElementById('closeSidebar');
+        this.closeSidebar = document.getElementById('sidebarToggle'); // Updated ID
         
         // Example buttons
         this.exampleBtns = document.querySelectorAll('.example-btn');
@@ -409,18 +422,15 @@ class ChatApp {
         
         // History toggle
         this.historyBtn.addEventListener('click', () => {
-            this.sidebar.classList.toggle('hidden');
+            this.sidebar.classList.toggle('collapsed');
         });
         
-        // Attach file
-        this.attachBtn.addEventListener('click', () => {
-            alert('File upload feature coming soon!');
-        });
-        
-        // Close sidebar
-        this.closeSidebar.addEventListener('click', () => {
-            this.sidebar.classList.add('hidden');
-        });
+        // Sidebar toggle button
+        if (this.closeSidebar) {
+            this.closeSidebar.addEventListener('click', () => {
+                this.sidebar.classList.toggle('collapsed');
+            });
+        }
     }
     
     autoResizeTextarea() {
@@ -590,6 +600,11 @@ class ChatApp {
     
     async streamAIResponse(userMessage) {
         try {
+            // Create conversation if logged in and no conversation exists
+            if (Auth.token && !Conversations.currentConversationId) {
+                await Conversations.createNewConversation();
+            }
+            
             // Get API URL from config
             const apiUrl = window.PowerNOVA?.config?.apiUrl || 'http://localhost:8000';
             
@@ -601,22 +616,38 @@ class ChatApp {
                     content: msg.content
                 }));
             
+            // Prepare request body
+            const requestBody = {
+                messages: messages,
+                model: 'gpt-4o-mini',
+                temperature: 0.7,
+                max_tokens: 2000,
+                stream: true,
+                use_rag: true,  // Enable RAG
+                top_k: 5,
+                similarity_threshold: 0.5
+            };
+            
+            // Add conversation_id if available
+            if (Conversations.currentConversationId) {
+                requestBody.conversation_id = Conversations.currentConversationId;
+            }
+            
+            // Prepare headers
+            const headers = {
+                'Content-Type': 'application/json'
+            };
+            
+            // Add auth token if available
+            if (Auth.token) {
+                headers['Authorization'] = `Bearer ${Auth.token}`;
+            }
+            
             // Call the streaming API with RAG enabled
             const response = await fetch(`${apiUrl}/api/chat/stream`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({
-                    messages: messages,
-                    model: 'gpt-4o-mini',
-                    temperature: 0.7,
-                    max_tokens: 2000,
-                    stream: true,
-                    use_rag: true,  // Enable RAG
-                    top_k: 5,
-                    similarity_threshold: 0.5
-                })
+                headers: headers,
+                body: JSON.stringify(requestBody)
             });
             
             if (!response.ok) {
@@ -895,9 +926,11 @@ class ChatApp {
     }
     
     startNewChat() {
-        // Require authentication for new chats
-        Auth.requireAuth(() => {
-            // Track new chat started
+        // Create new conversation if logged in
+        if (Auth.token) {
+            Conversations.createNewConversation();
+        } else {
+            // Guest mode - just clear UI
             if (window.PowerNOVA?.Analytics) {
                 window.PowerNOVA.Analytics.trackNewChat();
             }
@@ -908,9 +941,24 @@ class ChatApp {
             this.welcomeScreen.classList.remove('hidden');
             this.messageInput.value = '';
             this.sendBtn.disabled = true;
-        });
+        }
     }
 }
+
+// Make addMessageToUI globally accessible for Conversations module
+window.addMessageToUI = function(role, content, isAssistant = false) {
+    // Delegate to ChatApp instance
+    if (window.chatAppInstance) {
+        const message = {
+            id: Date.now() + Math.random(),
+            role: role,
+            content: content,
+            timestamp: new Date()
+        };
+        window.chatAppInstance.messages.push(message);
+        window.chatAppInstance.renderMessage(message);
+    }
+};
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
@@ -922,7 +970,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize authentication
     Auth.init();
     
+    // Initialize conversations module
+    await Conversations.init();
+    
     // Then initialize chat app
     const app = new ChatApp();
+    window.chatAppInstance = app;  // Store global reference for Conversations module
     console.log('PowerNOVA Chat App initialized');
 });

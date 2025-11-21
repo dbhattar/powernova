@@ -36,6 +36,9 @@
     
     <!-- Google Analytics Module -->
     <script src="js/analytics.js"></script>
+    
+    <!-- Conversations Management Module -->
+    <script src="js/conversations.js"></script>
 </head>
 <body>
     <!-- Header -->
@@ -65,24 +68,27 @@
 
     <!-- Main Container -->
     <div class="main-container">
-        <!-- Sidebar -->
-        <aside class="sidebar" id="sidebar">
+        <!-- Conversations Sidebar -->
+        <aside class="conversations-sidebar" id="conversationsSidebar">
             <div class="sidebar-header">
-                <h2>Recent Chats</h2>
-                <button class="btn-close" id="closeSidebar">
-                    <i class="fas fa-times"></i>
+                <h2><i class="fas fa-comments"></i> Conversations</h2>
+                <button class="btn-new-conversation" id="newConversationBtn" title="New Conversation">
+                    <i class="fas fa-plus"></i>
                 </button>
             </div>
-            <div class="chat-list" id="chatList">
-                <!-- Chat history will be populated here -->
-                <div class="chat-item">
-                    <i class="fas fa-comment-dots"></i>
-                    <div class="chat-item-content">
-                        <div class="chat-item-title">Welcome to PowerNOVA</div>
-                        <div class="chat-item-preview">Start a new conversation...</div>
-                    </div>
+            
+            <div class="conversations-list" id="conversationsList">
+                <!-- Conversations will be populated here dynamically -->
+                <div class="conversations-empty" id="conversationsEmpty">
+                    <i class="fas fa-inbox"></i>
+                    <p>No conversations yet</p>
+                    <small>Click + to start a new chat</small>
                 </div>
             </div>
+            
+            <button class="sidebar-toggle" id="sidebarToggle" title="Toggle Sidebar">
+                <i class="fas fa-chevron-left"></i>
+            </button>
         </aside>
 
         <!-- Chat Area -->
@@ -140,11 +146,33 @@
                 <!-- Messages will be dynamically added here -->
             </div>
 
+            <!-- Documents Panel (shown when conversation is selected) -->
+            <div class="documents-panel" id="documentsPanel" style="display: none;">
+                <div class="documents-panel-header">
+                    <h3><i class="fas fa-file-alt"></i> Attached Documents</h3>
+                    <button class="btn-close-panel" id="closeDocumentsPanel">
+                        <i class="fas fa-times"></i>
+                    </button>
+                </div>
+                <div class="documents-content" id="documentsContent">
+                    <div class="documents-empty">
+                        <i class="fas fa-inbox"></i>
+                        <h4>No documents uploaded</h4>
+                        <p>Upload documents to enhance AI responses</p>
+                    </div>
+                </div>
+            </div>
+
             <!-- Input Area -->
             <div class="input-container">
                 <div class="input-wrapper">
-                    <button class="btn-attach" id="attachBtn" title="Attach file">
+                    <button class="btn-attach" id="attachBtn" title="Upload document">
                         <i class="fas fa-paperclip"></i>
+                    </button>
+                    <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md" style="display: none;" />
+                    <button class="btn-documents" id="documentsBtn" title="View documents" style="display: none;">
+                        <i class="fas fa-file-alt"></i>
+                        <span class="document-badge" id="documentsBadge">0</span>
                     </button>
                     <textarea 
                         id="messageInput" 
@@ -164,6 +192,56 @@
                 </div>
             </div>
         </main>
+    </div>
+
+    <!-- Rename Conversation Modal -->
+    <div class="modal-overlay" id="renameConversationModal" style="display: none;">
+        <div class="modal-container modal-small">
+            <div class="modal-header">
+                <h2>✏️ Rename Conversation</h2>
+                <button class="modal-close" onclick="Conversations.closeRenameModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="renameConversationForm">
+                    <div class="form-group">
+                        <label for="conversationTitle">Conversation Title</label>
+                        <input type="text" id="conversationTitle" required placeholder="Enter a new title" maxlength="500">
+                    </div>
+                    <div class="error-message" id="renameError" style="display: none;"></div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-secondary" onclick="Conversations.closeRenameModal()">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn-primary">
+                            <i class="fas fa-save"></i> Save
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Upload Progress Modal -->
+    <div class="modal-overlay" id="uploadProgressModal" style="display: none;">
+        <div class="modal-container modal-small">
+            <div class="modal-header">
+                <h2>📤 Uploading Document</h2>
+            </div>
+            <div class="modal-body">
+                <div class="upload-progress">
+                    <div class="upload-file-info">
+                        <i class="fas fa-file-alt"></i>
+                        <span id="uploadFileName">document.pdf</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" id="uploadProgress"></div>
+                    </div>
+                    <p class="upload-status" id="uploadStatus">Uploading...</p>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Login Modal -->

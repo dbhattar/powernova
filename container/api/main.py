@@ -109,6 +109,10 @@ app.include_router(rag.router, prefix="/api", tags=["RAG"])
 from routes import auth
 app.include_router(auth.router, prefix="/api", tags=["Authentication"])
 
+# Import and include conversations router
+from routes import conversations
+app.include_router(conversations.router, prefix="/api", tags=["Conversations"])
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():

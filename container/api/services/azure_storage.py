@@ -86,7 +86,7 @@ class AzureStorageService:
         
         Args:
             content: Document content as bytes
-            url: Original URL of the document
+            url: Original URL of the document OR pre-formatted blob path
             file_extension: File extension
             job_id: Crawl job ID
             content_type: MIME type (e.g., 'application/pdf', 'text/html')
@@ -100,8 +100,14 @@ class AzureStorageService:
         if not self.blob_service_client:
             raise Exception("Azure Storage not configured")
         
-        # Generate blob path
-        blob_path = self._generate_blob_path(url, file_extension, job_id)
+        # Check if url is already a blob path (user uploads) or needs generation (crawled docs)
+        # User upload paths start with "user_upload/", crawler paths are URLs
+        if url.startswith("user_upload/"):
+            # Already a properly formatted blob path, just add extension
+            blob_path = f"{url}.{file_extension}"
+        else:
+            # Generate blob path from URL (for crawled documents)
+            blob_path = self._generate_blob_path(url, file_extension, job_id)
         
         # Determine content type
         if not content_type:

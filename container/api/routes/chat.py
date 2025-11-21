@@ -13,6 +13,9 @@ from sqlalchemy.orm import Session
 
 from database import get_db
 from services.rag_service import get_rag_service
+from services.conversation_service import get_conversation_service
+from services.auth import get_current_user
+from models import User
 
 router = APIRouter()
 
@@ -31,6 +34,7 @@ class Message(BaseModel):
 
 class ChatRequest(BaseModel):
     messages: List[Message] = Field(..., description="List of chat messages")
+    conversation_id: Optional[int] = Field(default=None, description="ID of the conversation to save messages to")
     model: str = Field(default="gpt-4o-mini", description="OpenAI model to use")
     temperature: Optional[float] = Field(default=0.7, ge=0.0, le=2.0, description="Sampling temperature")
     max_tokens: Optional[int] = Field(default=2000, ge=1, le=4096, description="Maximum tokens to generate")
@@ -47,7 +51,11 @@ class ChatResponse(BaseModel):
     finish_reason: Optional[str] = None
 
 @router.post("/chat/stream")
-async def chat_stream(request: ChatRequest, db: Session = Depends(get_db)):
+async def chat_stream(
+    request: ChatRequest, 
+    db: Session = Depends(get_db),
+    current_user: Optional[User] = Depends(get_current_user)
+):
     """
     Stream chat completion from OpenAI with optional RAG
     
@@ -56,6 +64,8 @@ async def chat_stream(request: ChatRequest, db: Session = Depends(get_db)):
     
     If use_rag=True, retrieves relevant documents from the vector database
     and includes them as context in the system message.
+    
+    If conversation_id is provided and user is authenticated, saves messages to the database.
     
     Returns:
         StreamingResponse: SSE stream of chat completion chunks
@@ -75,6 +85,18 @@ async def chat_stream(request: ChatRequest, db: Session = Depends(get_db)):
             detail="At least one message is required"
         )
     
+    # If conversation_id is provided, verify user owns it
+    conv_service = None
+    conversation = None
+    if request.conversation_id and current_user:
+        conv_service = get_conversation_service(db)
+        conversation = conv_service.get_conversation(request.conversation_id, current_user.id)
+        if not conversation:
+            raise HTTPException(
+                status_code=404,
+                detail="Conversation not found or you don't have access to it"
+            )
+    
     # Convert Pydantic models to dicts for OpenAI API
     messages = [{"role": msg.role, "content": msg.content} for msg in request.messages]
     
@@ -87,12 +109,17 @@ async def chat_stream(request: ChatRequest, db: Session = Depends(get_db)):
             if user_messages:
                 last_query = user_messages[-1].content
                 
-                # Search for relevant documents
+                # Search for relevant documents across hierarchy:
+                # 1. Platform documents (crawled, available to all)
+                # 2. User library documents (if user is authenticated)
+                # 3. Conversation documents (if conversation_id provided)
                 rag_service = get_rag_service(db)
                 relevant_docs = rag_service.search_similar_documents(
                     query=last_query,
                     top_k=request.top_k,
-                    similarity_threshold=request.similarity_threshold
+                    similarity_threshold=request.similarity_threshold,
+                    conversation_id=request.conversation_id if request.conversation_id else None,
+                    user_id=current_user.id if current_user else None
                 )
                 
                 # If we found relevant documents, add them to the system message
@@ -133,7 +160,23 @@ Answer the user's question based on these documents first, then supplement with 
         """
         Generator function that streams chat completions from OpenAI
         """
+        assistant_message_content = ""  # Collect full assistant response
+        
         try:
+            # Save user message to database if conversation_id is provided
+            if conversation and conv_service and current_user:
+                # Get the last user message
+                user_messages = [msg for msg in request.messages if msg.role == "user"]
+                if user_messages:
+                    last_user_message = user_messages[-1].content
+                    conv_service.add_message(
+                        conversation_id=request.conversation_id,
+                        user_id=current_user.id,
+                        role="user",
+                        content=last_user_message,
+                        token_count=len(last_user_message.split())  # Rough estimate
+                    )
+            
             # Send sources first if we have them
             if relevant_docs:
                 sources_data = {
@@ -162,6 +205,9 @@ Answer the user's question based on these documents first, then supplement with 
                     
                     # Check if there's content to send
                     if choice.delta.content:
+                        # Accumulate content for database save
+                        assistant_message_content += choice.delta.content
+                        
                         # Format as SSE (Server-Sent Events)
                         data = {
                             "type": "content",
@@ -175,6 +221,27 @@ Answer the user's question based on these documents first, then supplement with 
                     
                     # Send finish signal
                     if choice.finish_reason:
+                        # Save assistant message to database if conversation_id is provided
+                        if conversation and conv_service and current_user and assistant_message_content:
+                            conv_service.add_message(
+                                conversation_id=request.conversation_id,
+                                user_id=current_user.id,
+                                role="assistant",
+                                content=assistant_message_content,
+                                model=chunk.model,
+                                token_count=len(assistant_message_content.split())  # Rough estimate
+                            )
+                            
+                            # Auto-generate title if this is the first exchange (2 messages)
+                            if len(conversation.messages) == 2 and conversation.title == "New Conversation":
+                                try:
+                                    await conv_service.auto_generate_title(
+                                        conversation_id=request.conversation_id,
+                                        user_id=current_user.id
+                                    )
+                                except Exception as e:
+                                    print(f"Error auto-generating title: {str(e)}")
+                        
                         data = {
                             "type": "content",
                             "id": chunk.id,

@@ -371,11 +371,12 @@ body {
     -webkit-overflow-scrolling: touch;
     padding: 2rem;
     display: none;
+    flex-direction: column;
     min-height: 0;
 }
 
 .messages-container.active {
-    display: block;
+    display: flex;
 }
 
 .message {
@@ -409,8 +410,8 @@ body {
 }
 
 .message-content {
-    flex: 1;
     max-width: 70%;
+    min-width: 0; /* Prevent flex shrinking issues */
 }
 
 .message.user .message-content {
@@ -1211,3 +1212,741 @@ body {
 ::-webkit-scrollbar-thumb:hover {
     background: var(--text-tertiary);
 }
+
+/* ============================================
+   CONVERSATION MANAGEMENT STYLES
+   ============================================ */
+
+/* Conversations Sidebar */
+.conversations-sidebar {
+    width: 300px;
+    background: var(--bg-primary);
+    border-right: 1px solid var(--border-color);
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    transition: transform 0.3s ease;
+    z-index: 10;
+}
+
+.conversations-sidebar.collapsed {
+    transform: translateX(-100%);
+}
+
+.conversations-sidebar .sidebar-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.conversations-sidebar .sidebar-header h2 {
+    font-size: 1.125rem;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.btn-new-conversation {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    border: none;
+    padding: 0.625rem 1rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    font-size: 0.875rem;
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    transition: var(--transition);
+    width: 100%;
+    justify-content: center;
+}
+
+.btn-new-conversation:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--shadow-md);
+}
+
+.btn-new-conversation i {
+    font-size: 1rem;
+}
+
+.conversations-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 0.5rem;
+}
+
+.conversations-empty {
+    padding: 2rem 1rem;
+    text-align: center;
+    color: var(--text-secondary);
+}
+
+.conversations-empty i {
+    font-size: 2.5rem;
+    color: var(--text-tertiary);
+    margin-bottom: 1rem;
+    display: block;
+}
+
+.conversations-empty p {
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+/* Conversation Item */
+.conversation-item {
+    padding: 0.875rem;
+    border-radius: var(--radius-md);
+    cursor: pointer;
+    transition: var(--transition);
+    margin-bottom: 0.5rem;
+    border: 1px solid transparent;
+    background: var(--bg-secondary);
+    position: relative;
+}
+
+.conversation-item:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+}
+
+.conversation-item.active {
+    background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
+    color: white;
+    border-color: var(--primary-color);
+}
+
+.conversation-item.active .conversation-title,
+.conversation-item.active .conversation-meta {
+    color: white;
+}
+
+.conversation-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 0.5rem;
+}
+
+.conversation-title {
+    font-weight: 600;
+    font-size: 0.9375rem;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+    line-height: 1.4;
+    word-break: break-word;
+    flex: 1;
+    padding-right: 0.5rem;
+}
+
+.conversation-actions {
+    display: flex;
+    gap: 0.25rem;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.conversation-item:hover .conversation-actions,
+.conversation-item.active .conversation-actions {
+    opacity: 1;
+}
+
+.btn-conversation-action {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    transition: var(--transition);
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-conversation-action:hover {
+    background: rgba(0, 0, 0, 0.1);
+}
+
+.conversation-item.active .btn-conversation-action {
+    color: white;
+}
+
+.conversation-item.active .btn-conversation-action:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.btn-conversation-action.delete:hover {
+    background: var(--danger-color);
+    color: white;
+}
+
+.conversation-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+}
+
+.conversation-timestamp {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+}
+
+.conversation-timestamp i {
+    font-size: 0.75rem;
+}
+
+.conversation-preview {
+    font-size: 0.8125rem;
+    color: var(--text-secondary);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+}
+
+.conversation-item.active .conversation-preview {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.conversation-stats {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 0.5rem;
+}
+
+.stat-badge {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+}
+
+.conversation-item.active .stat-badge {
+    color: rgba(255, 255, 255, 0.9);
+}
+
+.stat-badge i {
+    font-size: 0.875rem;
+}
+
+/* Sidebar Toggle Button */
+.sidebar-toggle {
+    position: absolute;
+    top: 1rem;
+    left: 100%;
+    background: var(--bg-primary);
+    border: 1px solid var(--border-color);
+    border-left: none;
+    border-radius: 0 var(--radius-md) var(--radius-md) 0;
+    padding: 0.5rem;
+    cursor: pointer;
+    color: var(--text-secondary);
+    transition: var(--transition);
+    z-index: 20;
+}
+
+.sidebar-toggle:hover {
+    background: var(--primary-color);
+    color: white;
+}
+
+.sidebar-toggle i {
+    font-size: 1rem;
+}
+
+/* Documents Panel */
+.documents-panel {
+    position: absolute;
+    right: 0;
+    top: 0;
+    bottom: 0;
+    width: 320px;
+    background: var(--bg-primary);
+    box-shadow: -4px 0 12px rgba(0, 0, 0, 0.1);
+    transform: translateX(100%);
+    transition: transform 0.3s ease;
+    z-index: 15;
+    display: flex;
+    flex-direction: column;
+}
+
+.documents-panel:not([style*="display: none"]) {
+    transform: translateX(0);
+}
+
+.documents-panel-header {
+    padding: 1.5rem;
+    border-bottom: 1px solid var(--border-color);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.documents-panel-header h3 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.documents-panel-header i {
+    color: var(--primary-color);
+    font-size: 1.125rem;
+}
+
+.btn-close-panel {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 1.25rem;
+    padding: 0.25rem;
+    transition: var(--transition);
+}
+
+.btn-close-panel:hover {
+    color: var(--primary-color);
+}
+
+.documents-content {
+    flex: 1;
+    overflow-y: auto;
+    padding: 1rem;
+}
+
+.documents-empty {
+    text-align: center;
+    padding: 3rem 1.5rem;
+    color: var(--text-secondary);
+}
+
+.documents-empty i {
+    font-size: 3rem;
+    color: var(--text-tertiary);
+    margin-bottom: 1rem;
+    display: block;
+}
+
+.documents-empty h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+    color: var(--text-primary);
+}
+
+.documents-empty p {
+    font-size: 0.875rem;
+    line-height: 1.5;
+}
+
+/* Document Item */
+.document-item {
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: var(--radius-md);
+    padding: 1rem;
+    margin-bottom: 0.75rem;
+    transition: var(--transition);
+}
+
+.document-item:hover {
+    box-shadow: var(--shadow-sm);
+    border-color: var(--primary-color);
+}
+
+.document-header {
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    margin-bottom: 0.75rem;
+}
+
+.document-icon {
+    width: 40px;
+    height: 40px;
+    border-radius: var(--radius-md);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.25rem;
+    flex-shrink: 0;
+}
+
+.document-icon.pdf {
+    background: #fef3f2;
+    color: #ef4444;
+}
+
+.document-icon.docx {
+    background: #eff6ff;
+    color: #3b82f6;
+}
+
+.document-icon.txt,
+.document-icon.md {
+    background: #f7fee7;
+    color: #84cc16;
+}
+
+.document-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.document-name {
+    font-weight: 600;
+    font-size: 0.875rem;
+    color: var(--text-primary);
+    margin-bottom: 0.25rem;
+    word-break: break-word;
+    line-height: 1.4;
+}
+
+.document-meta {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    display: flex;
+    flex-direction: column;
+    gap: 0.125rem;
+}
+
+.document-actions {
+    display: flex;
+    gap: 0.25rem;
+}
+
+.btn-document-action {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: var(--radius-sm);
+    font-size: 0.875rem;
+    transition: var(--transition);
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.btn-document-action:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.btn-document-action.delete:hover {
+    background: var(--danger-color);
+    color: white;
+}
+
+.document-footer {
+    padding-top: 0.75rem;
+    border-top: 1px solid var(--border-light);
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+/* Status Badge */
+.status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.625rem;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+}
+
+.status-badge.completed {
+    background: #d1fae5;
+    color: #065f46;
+}
+
+.status-badge.processing {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.status-badge.failed {
+    background: #fee2e2;
+    color: #991b1b;
+}
+
+.status-badge.pending {
+    background: #e0e7ff;
+    color: #3730a3;
+}
+
+.status-badge i {
+    font-size: 0.75rem;
+}
+
+/* Documents Button in Input Area */
+.btn-documents {
+    position: relative;
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 1.25rem;
+    padding: 0.5rem;
+    transition: var(--transition);
+}
+
+.btn-documents:hover {
+    color: var(--primary-color);
+}
+
+.btn-documents.active {
+    color: var(--primary-color);
+}
+
+.document-badge {
+    position: absolute;
+    top: 0.25rem;
+    right: 0.25rem;
+    background: var(--primary-color);
+    color: white;
+    font-size: 0.625rem;
+    font-weight: 700;
+    padding: 0.125rem 0.375rem;
+    border-radius: 10px;
+    min-width: 16px;
+    text-align: center;
+}
+
+/* Upload Button */
+.btn-upload {
+    background: transparent;
+    border: none;
+    color: var(--text-secondary);
+    cursor: pointer;
+    font-size: 1.25rem;
+    padding: 0.5rem;
+    transition: var(--transition);
+}
+
+.btn-upload:hover {
+    color: var(--primary-color);
+}
+
+#fileInput {
+    display: none;
+}
+
+/* Rename Conversation Modal */
+.modal-small {
+    max-width: 450px;
+}
+
+.rename-form {
+    display: flex;
+    flex-direction: column;
+    gap: 1rem;
+}
+
+.rename-form .form-group {
+    margin-bottom: 0;
+}
+
+.rename-form input {
+    width: 100%;
+}
+
+.modal-actions {
+    display: flex;
+    gap: 0.75rem;
+    margin-top: 1.5rem;
+}
+
+.modal-actions .btn-primary {
+    flex: 1;
+}
+
+.btn-secondary {
+    flex: 1;
+    padding: 0.875rem 1.5rem;
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.btn-secondary:hover {
+    background: var(--bg-tertiary);
+    border-color: var(--text-secondary);
+}
+
+/* Upload Progress Modal */
+.upload-progress {
+    padding: 1.5rem 0;
+}
+
+.upload-progress h4 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin-bottom: 0.5rem;
+}
+
+.upload-filename {
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    margin-bottom: 1.5rem;
+    word-break: break-word;
+}
+
+.progress-bar {
+    width: 100%;
+    height: 10px;
+    background: var(--bg-tertiary);
+    border-radius: 5px;
+    overflow: hidden;
+    margin-bottom: 0.75rem;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--primary-color), var(--secondary-color));
+    transition: width 0.3s ease;
+    border-radius: 5px;
+}
+
+.progress-text {
+    text-align: center;
+    font-size: 0.875rem;
+    color: var(--text-secondary);
+    font-weight: 600;
+}
+
+/* Source Badges in Messages */
+.source-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.25rem;
+    padding: 0.25rem 0.5rem;
+    border-radius: 4px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.025em;
+    margin-left: 0.5rem;
+}
+
+.source-badge.badge-platform {
+    background: #dbeafe;
+    color: #1e40af;
+}
+
+.source-badge.badge-uploaded {
+    background: #fef3c7;
+    color: #92400e;
+}
+
+.source-badge i {
+    font-size: 0.7rem;
+}
+
+/* ============================================
+   RESPONSIVE DESIGN FOR CONVERSATION MANAGEMENT
+   ============================================ */
+
+@media (max-width: 1024px) {
+    .conversations-sidebar {
+        width: 280px;
+    }
+    
+    .documents-panel {
+        width: 300px;
+    }
+}
+
+@media (max-width: 768px) {
+    .conversations-sidebar {
+        position: absolute;
+        top: 0;
+        left: 0;
+        bottom: 0;
+        z-index: 100;
+        box-shadow: var(--shadow-xl);
+        width: 85%;
+        max-width: 300px;
+    }
+    
+    .conversations-sidebar:not(.collapsed) {
+        transform: translateX(0);
+    }
+    
+    .documents-panel {
+        width: 100%;
+        max-width: 100%;
+    }
+    
+    .sidebar-toggle {
+        display: none;
+    }
+}
+
+@media (max-width: 480px) {
+    .conversations-sidebar {
+        width: 90%;
+        max-width: none;
+    }
+    
+    .conversation-item {
+        padding: 0.75rem;
+    }
+    
+    .conversation-title {
+        font-size: 0.875rem;
+    }
+    
+    .conversation-meta,
+    .conversation-preview {
+        font-size: 0.75rem;
+    }
+    
+    .document-item {
+        padding: 0.875rem;
+    }
+    
+    .document-icon {
+        width: 36px;
+        height: 36px;
+        font-size: 1.125rem;
+    }
+    
+    .document-name {
+        font-size: 0.8125rem;
+    }
+    
+    .document-meta {
+        font-size: 0.7rem;
+    }
+}
+
+/* ============================================
+   END CONVERSATION MANAGEMENT STYLES
+   ============================================ */
