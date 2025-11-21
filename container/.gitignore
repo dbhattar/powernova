@@ -63,3 +63,6 @@ api/**/__pycache__/
 
 # OS
 Thumbs.db
+
+# Certs
+certs/
