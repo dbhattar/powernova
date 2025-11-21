@@ -152,6 +152,16 @@ const Auth = {
                 this.closeLoginModal();
                 this.showLoggedInMode(data.user);
                 
+                // Track successful login
+                if (window.PowerNOVA?.Analytics) {
+                    window.PowerNOVA.Analytics.trackLogin('email');
+                    window.PowerNOVA.Analytics.setUserId(String(data.user.id));
+                    window.PowerNOVA.Analytics.setUserProperties({
+                        user_type: data.user.is_superuser ? 'admin' : 'user',
+                        email_verified: data.user.is_verified
+                    });
+                }
+                
                 // Check if must change password
                 if (data.must_change_password) {
                     this.showPasswordChangeModal();
@@ -382,6 +392,12 @@ class ChatApp {
         this.exampleBtns.forEach(btn => {
             btn.addEventListener('click', () => {
                 const question = btn.dataset.question;
+                
+                // Track example question clicked
+                if (window.PowerNOVA?.Analytics) {
+                    window.PowerNOVA.Analytics.trackExampleClick(question);
+                }
+                
                 this.messageInput.value = question;
                 this.sendBtn.disabled = false;
                 this.sendMessage();
@@ -417,6 +433,14 @@ class ChatApp {
     sendMessage() {
         const text = this.messageInput.value.trim();
         if (!text || this.isTyping) return;
+        
+        // Track chat message sent
+        if (window.PowerNOVA?.Analytics) {
+            window.PowerNOVA.Analytics.trackChatMessage({
+                messageLength: text.length,
+                conversationLength: this.messages.length
+            });
+        }
         
         // Hide welcome screen and show messages
         this.welcomeScreen.classList.add('hidden');
@@ -768,6 +792,11 @@ class ChatApp {
             btn.className = 'followup-btn';
             btn.innerHTML = `<i class="${followUp.icon}"></i><span>${followUp.text}</span>`;
             btn.addEventListener('click', () => {
+                // Track follow-up question clicked
+                if (window.PowerNOVA?.Analytics) {
+                    window.PowerNOVA.Analytics.trackFollowUpClick(followUp.text);
+                }
+                
                 this.messageInput.value = followUp.text;
                 this.sendBtn.disabled = false;
                 this.sendMessage();
@@ -868,6 +897,11 @@ class ChatApp {
     startNewChat() {
         // Require authentication for new chats
         Auth.requireAuth(() => {
+            // Track new chat started
+            if (window.PowerNOVA?.Analytics) {
+                window.PowerNOVA.Analytics.trackNewChat();
+            }
+            
             this.messages = [];
             this.messagesContainer.innerHTML = '';
             this.messagesContainer.classList.remove('active');
@@ -879,8 +913,13 @@ class ChatApp {
 }
 
 // Initialize app when DOM is loaded
-document.addEventListener('DOMContentLoaded', () => {
-    // Initialize authentication first
+document.addEventListener('DOMContentLoaded', async () => {
+    // Initialize Google Analytics first (production only)
+    if (window.PowerNOVA?.Analytics) {
+        await window.PowerNOVA.Analytics.init();
+    }
+    
+    // Initialize authentication
     Auth.init();
     
     // Then initialize chat app

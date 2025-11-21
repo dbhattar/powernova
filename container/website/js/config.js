@@ -9,7 +9,28 @@
     const config = {
         chatUrl: 'https://app.powernova.ai',
         apiUrl: 'https://api.powernova.ai',
-        environment: 'production'
+        environment: 'production',
+        
+        // Firebase configuration for Google Analytics
+        // Only active in production environment
+        // For Firebase JS SDK v7.20.0 and later, measurementId is optional
+        firebase: {
+            apiKey: "AIzaSyDQiD7r9N1AT4l5aoI0Y3yj6YY2DKt7czM",
+            authDomain: "powernova-6753c.firebaseapp.com",
+            projectId: "powernova-6753c",
+            storageBucket: "powernova-6753c.firebasestorage.app",
+            messagingSenderId: "724076757764",
+            appId: "1:724076757764:web:cd328f37ba41d2deaac651",
+            measurementId: "G-XL0MQCC6TN"
+        },        
+        
+        // Analytics configuration
+        analytics: {
+            enabled: true,
+            trackPageViews: true,
+            trackEvents: true,
+            debug: false
+        }
     };
     
     // Make config globally available

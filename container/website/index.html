@@ -11,6 +11,20 @@
     
     <!-- Environment Configuration - Must load before other scripts -->
     <script src="js/config.js"></script>
+    
+    <!-- Firebase SDK - Only loads if config.firebase is set (production only) -->
+    <script>
+        // Conditionally load Firebase only in production
+        if (window.PowerNOVA?.config?.firebase && window.PowerNOVA?.config?.environment === 'production') {
+            // Firebase App (Core)
+            document.write('<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-app-compat.js"><\/script>');
+            // Firebase Analytics
+            document.write('<script src="https://www.gstatic.com/firebasejs/10.7.1/firebase-analytics-compat.js"><\/script>');
+        }
+    </script>
+    
+    <!-- Google Analytics Module -->
+    <script src="js/analytics.js"></script>
 </head>
 <body>
     <!-- Navigation -->

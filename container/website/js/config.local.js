@@ -8,7 +8,17 @@
     const config = {
         chatUrl: 'http://localhost:8081',
         apiUrl: 'http://localhost:8000',
-        environment: 'local'
+        environment: 'local',
+        
+        // Firebase/Analytics disabled in local development
+        firebase: null,
+        
+        analytics: {
+            enabled: false,
+            trackPageViews: false,
+            trackEvents: false,
+            debug: false
+        }
     };
     
     // Make config globally available
@@ -46,6 +56,7 @@
         console.log('[PowerNOVA] 🏠 LOCAL DEVELOPMENT MODE');
         console.log('[PowerNOVA] Chat URL:', config.chatUrl);
         console.log('[PowerNOVA] API URL:', config.apiUrl);
+        console.log('[PowerNOVA] Analytics: DISABLED');
     });
     
 })();
