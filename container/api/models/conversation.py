@@ -38,6 +38,7 @@ class Conversation(Base, TimestampMixin):
     # Relationships
     user = relationship("User", back_populates="conversations")
     messages = relationship("Message", back_populates="conversation", cascade="all, delete-orphan", order_by="Message.created_at")
+    conversation_documents = relationship("ConversationDocument", back_populates="conversation", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Conversation(id={self.id}, user_id={self.user_id}, title='{self.title}')>"

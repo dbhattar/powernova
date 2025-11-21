@@ -33,7 +33,7 @@ class ConversationDocument(Base, TimestampMixin):
     uploaded_by = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"), nullable=True)
     
     # Relationships
-    conversation = relationship("Conversation", backref="conversation_documents")
+    conversation = relationship("Conversation", back_populates="conversation_documents")
     document = relationship("Document", backref="conversation_links")
     user = relationship("User")
     

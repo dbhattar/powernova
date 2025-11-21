@@ -47,11 +47,37 @@ const Conversations = {
         const fileInput = document.getElementById('fileInput');
         
         if (attachBtn && fileInput) {
-            attachBtn.addEventListener('click', () => {
-                if (!this.currentConversationId) {
-                    this.showError('Please start a conversation first before uploading documents');
+            attachBtn.addEventListener('click', async () => {
+                // Check if user is logged in
+                if (!Auth.token) {
+                    Auth.showLoginModal();
                     return;
                 }
+                
+                // If no conversation exists, create one first
+                if (!this.currentConversationId) {
+                    console.log('No conversation exists, creating one...');
+                    try {
+                        await this.createNewConversation();
+                        
+                        // Check if conversation was created successfully
+                        if (!this.currentConversationId) {
+                            console.error('Conversation creation failed - currentConversationId is still null');
+                            this.showError('Failed to create conversation. Please try creating a new conversation manually.');
+                            return;
+                        }
+                        
+                        console.log('Conversation created successfully:', this.currentConversationId);
+                        // After creating conversation, proceed with file picker
+                        // Small delay to ensure UI is updated
+                        setTimeout(() => fileInput.click(), 200);
+                    } catch (error) {
+                        console.error('Error during conversation creation:', error);
+                        this.showError('Failed to create conversation for document upload');
+                    }
+                    return;
+                }
+                
                 fileInput.click();
             });
             
@@ -410,6 +436,14 @@ const Conversations = {
     async handleFileUpload(event) {
         const file = event.target.files[0];
         if (!file) return;
+        
+        // Safety check - ensure we have a conversation
+        if (!this.currentConversationId) {
+            console.error('No conversation ID available during file upload');
+            this.showError('Please start a conversation first before uploading documents');
+            event.target.value = '';
+            return;
+        }
         
         // Validate file type
         const allowedTypes = ['.pdf', '.docx', '.txt', '.md'];
