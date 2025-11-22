@@ -74,7 +74,6 @@ app.add_middleware(OptionsMiddleware)
 ALLOWED_ORIGINS = [
     "https://app.powernova.ai",                      # Production chat app (custom domain)
     "https://www.powernova.ai",                      # Production landing page
-    "https://powernova-chat-app.azurewebsites.net",  # Production chat app (Azure default domain)
     "http://localhost:8081",                          # Local chat app
     "http://localhost:8080",                          # Local landing page
 ]
