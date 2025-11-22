@@ -5,7 +5,7 @@ import logging
 from typing import List, Dict, Optional
 from sqlalchemy.orm import Session
 from sqlalchemy import text
-from models import Document
+from models import Document, DocumentChunk
 from services.embedding_service import get_embedding_service
 
 logger = logging.getLogger(__name__)
@@ -34,7 +34,10 @@ class RAGService:
                                  conversation_id: Optional[int] = None,
                                  user_id: Optional[int] = None) -> List[Dict]:
         """
-        Search for documents similar to the query using vector similarity
+        Search for documents similar to the query using vector similarity on document chunks
+        
+        Now searches document_chunks table for better precision with large documents.
+        Returns chunks along with parent document info.
         
         Searches across document hierarchy:
         1. PLATFORM documents (crawled docs available to all users)
@@ -50,7 +53,7 @@ class RAGService:
             user_id: If provided, includes user's personal library documents
         
         Returns:
-            List of dicts with document info and similarity scores
+            List of dicts with chunk content, document info, and similarity scores
         """
         try:
             # Generate query embedding
@@ -61,84 +64,166 @@ class RAGService:
                 logger.error("Failed to generate query embedding")
                 return []
             
-            # Build SQL query to search across document hierarchy
-            # We'll use UNION to combine:
-            # 1. Platform documents (scope='platform')
-            # 2. User library documents (scope='user' AND uploaded_by=user_id)
-            # 3. Conversation documents (linked via conversation_documents)
+            # Build SQL query to search across document_chunks with document hierarchy
+            # Search chunks, join parent documents, filter by scope
             
             if conversation_id is not None or user_id is not None:
                 # Complex query with multiple document sources
+                # HYBRID APPROACH: Search both new chunks AND old document embeddings
                 sql = """
-                    WITH relevant_documents AS (
-                        -- Platform documents (available to all)
+                    WITH relevant_chunks AS (
+                        -- NEW: Platform document chunks (available to all)
                         SELECT 
-                            d.id,
+                            dc.id as chunk_id,
+                            dc.chunk_index,
+                            dc.content as chunk_content,
+                            dc.word_count,
+                            d.id as document_id,
                             d.title,
                             d.url,
-                            d.content,
+                            d.document_type,
+                            d.crawl_job_id,
+                            d.document_scope,
+                            1 - (dc.embedding <=> CAST(:query_embedding AS vector)) AS similarity,
+                            'platform' as source
+                        FROM document_chunks dc
+                        INNER JOIN documents d ON dc.document_id = d.id
+                        WHERE dc.embedding IS NOT NULL
+                        AND d.document_scope = 'platform'
+                        
+                        UNION ALL
+                        
+                        -- OLD: Platform documents with old embeddings (backward compatibility)
+                        SELECT 
+                            NULL as chunk_id,
+                            0 as chunk_index,
+                            d.content as chunk_content,
+                            LENGTH(d.content) as word_count,
+                            d.id as document_id,
+                            d.title,
+                            d.url,
                             d.document_type,
                             d.crawl_job_id,
                             d.document_scope,
                             1 - (d.embedding <=> CAST(:query_embedding AS vector)) AS similarity,
-                            'platform' as source
+                            'platform_legacy' as source
                         FROM documents d
                         WHERE d.embedding IS NOT NULL
                         AND d.document_scope = 'platform'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM document_chunks dc2 WHERE dc2.document_id = d.id
+                        )
                 """
                 
                 params = {'query_embedding': str(query_embedding)}
                 
-                # Add user library documents if user_id provided
+                # Add user library document chunks if user_id provided
                 if user_id is not None:
                     sql += """
                         UNION ALL
-                        -- User library documents
+                        -- NEW: User library document chunks
                         SELECT 
-                            d.id,
+                            dc.id as chunk_id,
+                            dc.chunk_index,
+                            dc.content as chunk_content,
+                            dc.word_count,
+                            d.id as document_id,
                             d.title,
                             d.url,
-                            d.content,
+                            d.document_type,
+                            d.crawl_job_id,
+                            d.document_scope,
+                            1 - (dc.embedding <=> CAST(:query_embedding AS vector)) AS similarity,
+                            'user_library' as source
+                        FROM document_chunks dc
+                        INNER JOIN documents d ON dc.document_id = d.id
+                        WHERE dc.embedding IS NOT NULL
+                        AND d.document_scope = 'user'
+                        AND d.uploaded_by = :user_id
+                        
+                        UNION ALL
+                        
+                        -- OLD: User library documents with old embeddings (backward compatibility)
+                        SELECT 
+                            NULL as chunk_id,
+                            0 as chunk_index,
+                            d.content as chunk_content,
+                            LENGTH(d.content) as word_count,
+                            d.id as document_id,
+                            d.title,
+                            d.url,
                             d.document_type,
                             d.crawl_job_id,
                             d.document_scope,
                             1 - (d.embedding <=> CAST(:query_embedding AS vector)) AS similarity,
-                            'user_library' as source
+                            'user_library_legacy' as source
                         FROM documents d
                         WHERE d.embedding IS NOT NULL
                         AND d.document_scope = 'user'
                         AND d.uploaded_by = :user_id
+                        AND NOT EXISTS (
+                            SELECT 1 FROM document_chunks dc2 WHERE dc2.document_id = d.id
+                        )
                     """
                     params['user_id'] = user_id
                 
-                # Add conversation-specific documents if conversation_id provided
+                # Add conversation-specific document chunks if conversation_id provided
                 if conversation_id is not None:
                     sql += """
                         UNION ALL
-                        -- Conversation-specific documents
+                        -- NEW: Conversation-specific document chunks
                         SELECT 
-                            d.id,
+                            dc.id as chunk_id,
+                            dc.chunk_index,
+                            dc.content as chunk_content,
+                            dc.word_count,
+                            d.id as document_id,
                             d.title,
                             d.url,
-                            d.content,
+                            d.document_type,
+                            d.crawl_job_id,
+                            d.document_scope,
+                            1 - (dc.embedding <=> CAST(:query_embedding AS vector)) AS similarity,
+                            'conversation' as source
+                        FROM document_chunks dc
+                        INNER JOIN documents d ON dc.document_id = d.id
+                        INNER JOIN conversation_documents cd ON d.id = cd.document_id
+                        WHERE dc.embedding IS NOT NULL
+                        AND cd.conversation_id = :conversation_id
+                        
+                        UNION ALL
+                        
+                        -- OLD: Conversation documents with old embeddings (backward compatibility)
+                        SELECT 
+                            NULL as chunk_id,
+                            0 as chunk_index,
+                            d.content as chunk_content,
+                            LENGTH(d.content) as word_count,
+                            d.id as document_id,
+                            d.title,
+                            d.url,
                             d.document_type,
                             d.crawl_job_id,
                             d.document_scope,
                             1 - (d.embedding <=> CAST(:query_embedding AS vector)) AS similarity,
-                            'conversation' as source
+                            'conversation_legacy' as source
                         FROM documents d
                         INNER JOIN conversation_documents cd ON d.id = cd.document_id
                         WHERE d.embedding IS NOT NULL
                         AND cd.conversation_id = :conversation_id
+                        AND NOT EXISTS (
+                            SELECT 1 FROM document_chunks dc2 WHERE dc2.document_id = d.id
+                        )
                     """
                     params['conversation_id'] = conversation_id
                 
                 sql += """
                     )
-                    SELECT DISTINCT ON (id)
-                        id, title, url, content, document_type, crawl_job_id, 
+                    SELECT 
+                        chunk_id, chunk_index, chunk_content, word_count,
+                        document_id, title, url, document_type, crawl_job_id, 
                         document_scope, similarity, source
-                    FROM relevant_documents
+                    FROM relevant_chunks
                     WHERE similarity >= :threshold
                 """
                 params['threshold'] = similarity_threshold
@@ -154,27 +239,59 @@ class RAGService:
                         params['crawl_job_id'] = filters['crawl_job_id']
                 
                 # Order by similarity and limit
-                sql += " ORDER BY id, similarity DESC LIMIT :top_k"
+                sql += " ORDER BY similarity DESC LIMIT :top_k"
                 params['top_k'] = top_k
                 
             else:
-                # Simple query - just platform documents
+                # Simple query - platform documents (chunks + old embeddings)
+                # HYBRID APPROACH for backward compatibility
                 sql = """
-                    SELECT 
-                        id,
-                        title,
-                        url,
-                        content,
-                        document_type,
-                        crawl_job_id,
-                        document_scope,
-                        1 - (embedding <=> CAST(:query_embedding AS vector)) AS similarity,
-                        'platform' as source
-                    FROM documents
-                    WHERE embedding IS NOT NULL
-                    AND document_scope = 'platform'
+                    WITH relevant_results AS (
+                        -- NEW: Platform document chunks
+                        SELECT 
+                            dc.id as chunk_id,
+                            dc.chunk_index,
+                            dc.content as chunk_content,
+                            dc.word_count,
+                            d.id as document_id,
+                            d.title,
+                            d.url,
+                            d.document_type,
+                            d.crawl_job_id,
+                            d.document_scope,
+                            1 - (dc.embedding <=> CAST(:query_embedding AS vector)) AS similarity,
+                            'platform' as source
+                        FROM document_chunks dc
+                        INNER JOIN documents d ON dc.document_id = d.id
+                        WHERE dc.embedding IS NOT NULL
+                        AND d.document_scope = 'platform'
+                        
+                        UNION ALL
+                        
+                        -- OLD: Platform documents with old embeddings (backward compatibility)
+                        SELECT 
+                            NULL as chunk_id,
+                            0 as chunk_index,
+                            d.content as chunk_content,
+                            LENGTH(d.content) as word_count,
+                            d.id as document_id,
+                            d.title,
+                            d.url,
+                            d.document_type,
+                            d.crawl_job_id,
+                            d.document_scope,
+                            1 - (d.embedding <=> CAST(:query_embedding AS vector)) AS similarity,
+                            'platform_legacy' as source
+                        FROM documents d
+                        WHERE d.embedding IS NOT NULL
+                        AND d.document_scope = 'platform'
+                        AND NOT EXISTS (
+                            SELECT 1 FROM document_chunks dc2 WHERE dc2.document_id = d.id
+                        )
+                    )
+                    SELECT * FROM relevant_results WHERE similarity >= :threshold
                 """
-                params = {'query_embedding': str(query_embedding)}
+                params = {'query_embedding': str(query_embedding), 'threshold': similarity_threshold}
                 
                 # Add filters
                 if filters:
@@ -186,12 +303,8 @@ class RAGService:
                         sql += " AND crawl_job_id = :crawl_job_id"
                         params['crawl_job_id'] = filters['crawl_job_id']
                 
-                # Add similarity threshold
-                sql += " AND (1 - (embedding <=> CAST(:query_embedding AS vector))) >= :threshold"
-                params['threshold'] = similarity_threshold
-                
                 # Order by similarity and limit
-                sql += " ORDER BY embedding <=> CAST(:query_embedding AS vector) LIMIT :top_k"
+                sql += " ORDER BY similarity DESC LIMIT :top_k"
                 params['top_k'] = top_k
             
             # Execute query with bindparams
@@ -200,19 +313,23 @@ class RAGService:
             rows = result.fetchall()
             
             # Format results
-            documents = []
+            chunks = []
             for row in rows:
-                documents.append({
-                    'id': row[0],
-                    'title': row[1],
-                    'url': row[2],
-                    'content': row[3][:500] + '...' if len(row[3]) > 500 else row[3],  # Truncate for preview
-                    'content_full': row[3],
-                    'document_type': row[4],
-                    'crawl_job_id': row[5],
-                    'document_scope': row[6],
-                    'similarity': float(row[7]),
-                    'source': row[8]  # platform, user_library, or conversation
+                chunks.append({
+                    'chunk_id': row[0],
+                    'chunk_index': row[1],
+                    'chunk_content': row[2],
+                    'word_count': row[3],
+                    'document_id': row[4],
+                    'title': row[5],
+                    'url': row[6],
+                    'content': row[2][:500] + '...' if len(row[2]) > 500 else row[2],  # Truncate for preview
+                    'content_full': row[2],  # Full chunk content
+                    'document_type': row[7],
+                    'crawl_job_id': row[8],
+                    'document_scope': row[9],
+                    'similarity': float(row[10]),
+                    'source': row[11]  # platform, user_library, or conversation
                 })
             
             search_context = []
@@ -222,8 +339,8 @@ class RAGService:
                 search_context.append(f"user {user_id}'s library")
             search_context.append("platform documents")
             
-            logger.info(f"Found {len(documents)} similar documents from: {', '.join(search_context)}")
-            return documents
+            logger.info(f"Found {len(chunks)} similar chunks from: {', '.join(search_context)}")
+            return chunks
             
         except Exception as e:
             logger.error(f"Search failed: {e}", exc_info=True)

@@ -5,6 +5,7 @@ from .user import User
 from .conversation import Conversation, Message
 from .artifact import Artifact
 from .document import Document, DocumentType, DocumentStatus, DocumentScope
+from .document_chunk import DocumentChunk
 from .crawl_job import CrawlJob, CrawlStatus
 from .conversation_document import ConversationDocument
 
@@ -17,6 +18,7 @@ __all__ = [
     "DocumentType",
     "DocumentStatus",
     "DocumentScope",
+    "DocumentChunk",
     "CrawlJob",
     "CrawlStatus",
     "ConversationDocument"

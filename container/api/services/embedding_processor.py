@@ -3,7 +3,7 @@ Embedding processor - Orchestrates document chunking and embedding generation
 """
 import logging
 from sqlalchemy.orm import Session
-from models import Document
+from models import Document, DocumentChunk
 from services.text_chunker import get_text_chunker
 from services.embedding_service import get_embedding_service
 
@@ -12,11 +12,13 @@ logger = logging.getLogger(__name__)
 
 def process_document_embedding(document_id: int, db: Session) -> bool:
     """
-    Process a document: generate embedding and store in database
+    Process a document: chunk it, generate embeddings for each chunk, and store in database
     
-    This is a simplified version that embeds the entire document content
-    (or first 6000 words if longer). For production with very large documents,
-    consider implementing chunking into a separate document_chunks table.
+    This implementation:
+    1. Splits large documents into overlapping chunks
+    2. Generates embeddings for each chunk separately (no truncation)
+    3. Stores chunks in document_chunks table
+    4. Updates document with chunk count
     
     Args:
         document_id: Database ID of the document
@@ -39,44 +41,75 @@ def process_document_embedding(document_id: int, db: Session) -> bool:
             db.commit()
             return False
         
-        # Skip if already has embedding
-        if document.embedding is not None:
-            logger.info(f"Document {document_id} already has embedding, skipping")
+        # Skip if already has chunks
+        existing_chunks = db.query(DocumentChunk).filter(
+            DocumentChunk.document_id == document_id
+        ).count()
+        
+        if existing_chunks > 0:
+            logger.info(f"Document {document_id} already has {existing_chunks} chunks, skipping")
             return True
         
         logger.info(f"Processing embedding for document {document_id}: {document.title}")
         
-        # Get embedding service
+        # Get services
+        text_chunker = get_text_chunker()
         embedding_service = get_embedding_service()
         
-        # For simplicity, we'll embed the full document content
-        # (truncated to ~6000 words / 8000 tokens in embedding service)
-        # 
-        # Alternative approach for large documents:
-        # 1. Chunk the document into smaller pieces
-        # 2. Embed each chunk separately
-        # 3. Store chunks in a document_chunks table with their embeddings
-        # 4. Search chunks, then retrieve full document
+        # Chunk the document
+        chunks = text_chunker.chunk_text(document.content)
         
-        text_to_embed = document.content
-        
-        # Generate embedding
-        embedding = embedding_service.generate_embedding(text_to_embed)
-        
-        if embedding is None:
-            logger.error(f"Failed to generate embedding for document {document_id}")
+        if not chunks:
+            logger.warning(f"No chunks generated for document {document_id}")
             document.embedding_generated = False
             db.commit()
             return False
         
-        # Store embedding
-        document.embedding = embedding
+        logger.info(f"Generated {len(chunks)} chunks for document {document_id}")
+        
+        # Process each chunk
+        successful_chunks = 0
+        for chunk_text, chunk_meta in chunks:
+            try:
+                # Generate embedding for this chunk
+                embedding = embedding_service.generate_embedding(chunk_text)
+                
+                if embedding is None:
+                    logger.error(f"Failed to generate embedding for chunk {chunk_meta['chunk_index']} of document {document_id}")
+                    continue
+                
+                # Create DocumentChunk record
+                doc_chunk = DocumentChunk(
+                    document_id=document_id,
+                    chunk_index=chunk_meta['chunk_index'],
+                    content=chunk_text,
+                    word_count=chunk_meta['word_count'],
+                    char_start=chunk_meta['char_start'],
+                    char_end=chunk_meta['char_end'],
+                    embedding=embedding,
+                    embedding_generated=True
+                )
+                
+                db.add(doc_chunk)
+                successful_chunks += 1
+                
+            except Exception as e:
+                logger.error(f"Failed to process chunk {chunk_meta['chunk_index']} of document {document_id}: {e}")
+                continue
+        
+        if successful_chunks == 0:
+            logger.error(f"Failed to generate any embeddings for document {document_id}")
+            document.embedding_generated = False
+            db.commit()
+            return False
+        
+        # Update document
+        document.chunk_count = successful_chunks
         document.embedding_generated = True
-        document.chunk_count = 1  # We're treating the whole document as one chunk
         
         db.commit()
         
-        logger.info(f"Successfully generated embedding for document {document_id}")
+        logger.info(f"Successfully generated embeddings for {successful_chunks}/{len(chunks)} chunks of document {document_id}")
         return True
         
     except Exception as e:

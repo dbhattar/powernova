@@ -101,6 +101,7 @@ class Document(Base, TimestampMixin):
     
     # Relationships
     uploader = relationship("User", foreign_keys=[uploaded_by])
+    chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")
     
     def __repr__(self):
         return f"<Document(id={self.id}, title='{self.title}', scope={self.document_scope.value})>"

@@ -6,14 +6,19 @@ from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Header
 from pydantic import BaseModel, Field, HttpUrl, EmailStr
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
+from sqlalchemy import text, func
 from database.session import get_db
-from models import CrawlJob, CrawlStatus, Document, DocumentStatus, User
+from models import CrawlJob, CrawlStatus, Document, DocumentStatus, DocumentChunk, User
 from services.crawler import run_crawler
 from services.azure_storage import get_storage_service
 from services.auth import get_password_hash, generate_random_password
+from services.embedding_processor import process_document_embedding
 from datetime import datetime
 import os
 import secrets
+import logging
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/admin", tags=["admin"])
 
@@ -297,6 +302,22 @@ async def get_admin_stats(
     total_users = db.query(User).count()
     active_users = db.query(User).filter(User.is_active == True).count()
     
+    # Embedding/chunk statistics
+    docs_with_chunks = db.query(Document).filter(
+        Document.id.in_(
+            db.query(DocumentChunk.document_id).distinct()
+        )
+    ).count()
+    
+    docs_with_old_embeddings = db.query(Document).filter(
+        Document.embedding != None,
+        ~Document.id.in_(
+            db.query(DocumentChunk.document_id).distinct()
+        )
+    ).count()
+    
+    total_chunks = db.query(DocumentChunk).count()
+    
     return {
         "crawl_jobs": {
             "total": total_jobs,
@@ -313,10 +334,334 @@ async def get_admin_stats(
             "completed": db.query(Document).filter(Document.status == DocumentStatus.COMPLETED).count(),
             "failed": db.query(Document).filter(Document.status == DocumentStatus.FAILED).count()
         },
+        "embeddings": {
+            "documents_with_chunks": docs_with_chunks,
+            "documents_with_old_embeddings": docs_with_old_embeddings,
+            "total_chunks": total_chunks,
+            "migration_progress": round((docs_with_chunks / total_documents * 100) if total_documents > 0 else 0, 2)
+        },
         "users": {
             "total": total_users,
             "active": active_users
         }
+    }
+
+
+
+
+# ============================================================================
+# DOCUMENT & EMBEDDING MANAGEMENT ENDPOINTS
+# ============================================================================
+
+@router.get("/embeddings/stats")
+async def get_embedding_stats(
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    Get detailed statistics about documents and embeddings
+    
+    Returns:
+    - Total documents
+    - Documents with old embeddings (needs reprocessing)
+    - Documents with chunks (new system)
+    - Documents pending processing
+    - Chunk statistics
+    """
+    # Get total documents
+    total_documents = db.query(Document).count()
+    
+    # Documents with old embeddings (has embedding but no chunks)
+    docs_with_old_embeddings_query = db.query(Document).filter(
+        Document.embedding != None,
+        ~Document.id.in_(
+            db.query(DocumentChunk.document_id).distinct()
+        )
+    )
+    docs_with_old_embeddings = docs_with_old_embeddings_query.count()
+    
+    # Documents with chunks (new system)
+    docs_with_chunks_query = db.query(Document).filter(
+        Document.id.in_(
+            db.query(DocumentChunk.document_id).distinct()
+        )
+    )
+    docs_with_chunks = docs_with_chunks_query.count()
+    
+    # Documents with no embeddings at all
+    docs_no_embedding = db.query(Document).filter(
+        Document.embedding == None,
+        ~Document.id.in_(
+            db.query(DocumentChunk.document_id).distinct()
+        )
+    ).count()
+    
+    # Total chunks
+    total_chunks = db.query(DocumentChunk).count()
+    
+    # Average chunks per document (using subquery)
+    avg_chunks_subquery = db.query(
+        func.count(DocumentChunk.id).label('chunk_count')
+    ).group_by(DocumentChunk.document_id).subquery()
+    
+    avg_chunks_result = db.query(func.avg(avg_chunks_subquery.c.chunk_count)).scalar()
+    avg_chunks = float(avg_chunks_result) if avg_chunks_result else 0
+    
+    # Breakdown by document scope
+    scope_stats = {}
+    for scope in ['platform', 'user', 'conversation']:
+        scope_total = db.query(Document).filter(Document.document_scope == scope).count()
+        scope_with_chunks = db.query(Document).filter(
+            Document.document_scope == scope,
+            Document.id.in_(
+                db.query(DocumentChunk.document_id).distinct()
+            )
+        ).count()
+        scope_with_old = db.query(Document).filter(
+            Document.document_scope == scope,
+            Document.embedding != None,
+            ~Document.id.in_(
+                db.query(DocumentChunk.document_id).distinct()
+            )
+        ).count()
+        
+        scope_stats[scope] = {
+            "total": scope_total,
+            "with_chunks": scope_with_chunks,
+            "with_old_embeddings": scope_with_old,
+            "no_embedding": scope_total - scope_with_chunks - scope_with_old
+        }
+    
+    return {
+        "summary": {
+            "total_documents": total_documents,
+            "documents_with_chunks": docs_with_chunks,
+            "documents_with_old_embeddings": docs_with_old_embeddings,
+            "documents_no_embedding": docs_no_embedding,
+            "total_chunks": total_chunks,
+            "avg_chunks_per_document": round(avg_chunks, 2)
+        },
+        "by_scope": scope_stats,
+        "migration_status": {
+            "migrated_to_chunks": docs_with_chunks,
+            "pending_migration": docs_with_old_embeddings,
+            "migration_percentage": round((docs_with_chunks / total_documents * 100) if total_documents > 0 else 0, 2)
+        }
+    }
+
+
+@router.get("/embeddings/documents-needing-reprocessing")
+async def list_documents_needing_reprocessing(
+    skip: int = 0,
+    limit: int = 50,
+    scope: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    List documents that have old embeddings and need reprocessing
+    
+    These are documents with `embedding IS NOT NULL` but no chunks in document_chunks table
+    """
+    query = db.query(Document).filter(
+        Document.embedding != None,
+        ~Document.id.in_(
+            db.query(DocumentChunk.document_id).distinct()
+        )
+    )
+    
+    if scope:
+        query = query.filter(Document.document_scope == scope)
+    
+    documents = query.order_by(Document.created_at.desc()).offset(skip).limit(limit).all()
+    
+    return {
+        "total": query.count(),
+        "skip": skip,
+        "limit": limit,
+        "documents": [{
+            "id": doc.id,
+            "title": doc.title,
+            "url": doc.url,
+            "document_type": doc.document_type,
+            "document_scope": doc.document_scope,
+            "has_old_embedding": doc.embedding is not None,
+            "chunk_count": doc.chunk_count,
+            "created_at": doc.created_at,
+            "content_length": len(doc.content) if doc.content else 0
+        } for doc in documents]
+    }
+
+
+@router.post("/embeddings/reprocess-document/{document_id}")
+async def reprocess_document(
+    document_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    Reprocess a specific document to create chunks
+    
+    This will:
+    1. Clear old embedding from documents table
+    2. Delete any existing chunks
+    3. Re-chunk the document
+    4. Generate embeddings for each chunk
+    """
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    # Clear old embedding
+    document.embedding = None
+    document.embedding_generated = False
+    document.chunk_count = 0
+    
+    # Delete existing chunks (if any)
+    db.query(DocumentChunk).filter(DocumentChunk.document_id == document_id).delete()
+    
+    db.commit()
+    
+    # Reprocess in background
+    background_tasks.add_task(process_document_embedding, document_id, db)
+    
+    logger.info(f"Queued document {document_id} for reprocessing")
+    
+    return {
+        "message": "Document queued for reprocessing",
+        "document_id": document_id,
+        "title": document.title
+    }
+
+
+@router.post("/embeddings/reprocess-all")
+async def reprocess_all_documents(
+    background_tasks: BackgroundTasks,
+    scope: Optional[str] = None,
+    limit: Optional[int] = None,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    Reprocess all documents with old embeddings
+    
+    This will queue all documents with old embeddings for reprocessing.
+    Use `limit` to process in batches.
+    
+    WARNING: This can be resource-intensive for large document collections
+    """
+    query = db.query(Document).filter(
+        Document.embedding != None,
+        ~Document.id.in_(
+            db.query(DocumentChunk.document_id).distinct()
+        )
+    )
+    
+    if scope:
+        query = query.filter(Document.document_scope == scope)
+    
+    if limit:
+        query = query.limit(limit)
+    
+    documents = query.all()
+    
+    if not documents:
+        return {
+            "message": "No documents need reprocessing",
+            "count": 0
+        }
+    
+    # Clear old embeddings and chunks
+    document_ids = [doc.id for doc in documents]
+    
+    for doc in documents:
+        doc.embedding = None
+        doc.embedding_generated = False
+        doc.chunk_count = 0
+    
+    # Delete existing chunks
+    db.query(DocumentChunk).filter(DocumentChunk.document_id.in_(document_ids)).delete(synchronize_session=False)
+    
+    db.commit()
+    
+    # Queue for reprocessing
+    for doc_id in document_ids:
+        background_tasks.add_task(process_document_embedding, doc_id, db)
+    
+    logger.info(f"Queued {len(document_ids)} documents for reprocessing")
+    
+    return {
+        "message": f"Queued {len(document_ids)} documents for reprocessing",
+        "count": len(document_ids),
+        "document_ids": document_ids[:20],  # Return first 20 IDs
+        "total_queued": len(document_ids)
+    }
+
+
+@router.get("/embeddings/chunks/{document_id}")
+async def get_document_chunks(
+    document_id: int,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    Get all chunks for a specific document
+    """
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if not document:
+        raise HTTPException(status_code=404, detail="Document not found")
+    
+    chunks = db.query(DocumentChunk).filter(
+        DocumentChunk.document_id == document_id
+    ).order_by(DocumentChunk.chunk_index).all()
+    
+    return {
+        "document_id": document_id,
+        "title": document.title,
+        "total_chunks": len(chunks),
+        "chunks": [{
+            "chunk_id": chunk.id,
+            "chunk_index": chunk.chunk_index,
+            "content_preview": chunk.content[:200] + "..." if len(chunk.content) > 200 else chunk.content,
+            "word_count": chunk.word_count,
+            "char_start": chunk.char_start,
+            "char_end": chunk.char_end,
+            "has_embedding": chunk.embedding is not None,
+            "embedding_generated": chunk.embedding_generated,
+            "created_at": chunk.created_at
+        } for chunk in chunks]
+    }
+
+
+@router.delete("/embeddings/chunks/{document_id}")
+async def delete_document_chunks(
+    document_id: int,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    Delete all chunks for a specific document
+    
+    This will NOT delete the document itself, only its chunks.
+    Useful for forcing a re-chunking without deleting the original document.
+    """
+    deleted_count = db.query(DocumentChunk).filter(
+        DocumentChunk.document_id == document_id
+    ).delete()
+    
+    # Update document
+    document = db.query(Document).filter(Document.id == document_id).first()
+    if document:
+        document.chunk_count = 0
+        document.embedding_generated = False
+    
+    db.commit()
+    
+    return {
+        "message": f"Deleted {deleted_count} chunks for document {document_id}",
+        "deleted_count": deleted_count,
+        "document_id": document_id
     }
 
 
