@@ -59,6 +59,8 @@ class TextChunker:
                 'start_word': 0,
                 'end_word': len(words),
                 'word_count': len(words),
+                'char_start': 0,
+                'char_end': len(text),
                 'is_complete_document': True,
                 **(metadata or {})
             })]

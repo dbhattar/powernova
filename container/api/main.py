@@ -6,11 +6,15 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 import os
+import logging
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
 from routes import chat, admin
 from database.session import check_db_connection
+
+# Setup logging
+logger = logging.getLogger(__name__)
 
 # Load environment variables
 load_dotenv()
@@ -29,6 +33,40 @@ async def lifespan(app: FastAPI):
     print("Checking database connection...")
     if check_db_connection():
         print("✓ Database connection successful")
+        
+        # Auto-resume interrupted crawl jobs
+        try:
+            from database.session import SessionLocal
+            from models import CrawlJob, CrawlStatus
+            from services.crawler import run_crawler
+            import threading
+            
+            db = SessionLocal()
+            try:
+                # Find jobs that were running or failed (can be restarted)
+                interrupted_jobs = db.query(CrawlJob).filter(
+                    CrawlJob.status.in_([CrawlStatus.RUNNING, CrawlStatus.FAILED])
+                ).all()
+                
+                if interrupted_jobs:
+                    print(f"Found {len(interrupted_jobs)} interrupted crawl job(s), auto-resuming...")
+                    for job in interrupted_jobs:
+                        print(f"  → Resuming crawl job #{job.id}: {job.start_url} (was {job.status.value})")
+                        # Reset status to RUNNING (will be updated by crawler)
+                        job.status = CrawlStatus.RUNNING
+                        job.error_message = None
+                        db.commit()
+                        
+                        # Start crawler in background thread
+                        thread = threading.Thread(target=run_crawler, args=(job.id,), daemon=True)
+                        thread.start()
+                    print("✓ Auto-resume initiated for interrupted crawl jobs")
+                else:
+                    print("✓ No interrupted crawl jobs to resume")
+            finally:
+                db.close()
+        except Exception as e:
+            print(f"✗ Warning: Failed to auto-resume crawl jobs: {e}")
     else:
         print("✗ WARNING: Database connection failed!")
         print("  API will start but database features will not work.")

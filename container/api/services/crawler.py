@@ -14,6 +14,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 
 from models import CrawlJob, CrawlStatus, Document, DocumentType, DocumentStatus
+from models.crawl_state import CrawlVisitedUrl, CrawlQueuedUrl
 from services.azure_storage import get_storage_service
 from services.document_processor import get_document_processor
 
@@ -53,12 +54,19 @@ class WebCrawler:
         self.include_patterns = [re.compile(p) for p in self.job.url_patterns.get('include', [])]
         self.exclude_patterns = [re.compile(p) for p in self.job.url_patterns.get('exclude', [])]
         
-        # Crawl state
+        # Crawl state - Load from database if resuming
         self.visited_urls: Set[str] = set()  # URLs we've already crawled
         self.queued_urls: Set[str] = set()  # URLs we've queued but not yet crawled
-        self.to_visit: List[tuple] = [(self.start_url, 0)]  # (url, depth)
+        self.to_visit: List[tuple] = []  # (url, depth)
         self.documents_found = 0
         self.pages_crawled = 0
+        
+        # Load existing state if job is being resumed
+        self._load_crawl_state()
+        
+        # If no queued URLs (fresh start), add start URL
+        if not self.to_visit:
+            self.to_visit.append((self.start_url, 0))
         
         # robots.txt parsers cache (one per domain)
         self.robots_parsers: Dict[str, RobotFileParser] = {}
@@ -76,6 +84,114 @@ class WebCrawler:
             'Connection': 'keep-alive'
         })
         self.request_delay = 1.0  # Polite crawling delay (1 second between requests)
+    
+    def _load_crawl_state(self):
+        """
+        Load crawl state from database if resuming a job.
+        This allows resuming interrupted crawls without re-visiting pages.
+        """
+        # Load visited URLs
+        visited = self.db.query(CrawlVisitedUrl).filter(
+            CrawlVisitedUrl.crawl_job_id == self.job_id
+        ).all()
+        
+        for v in visited:
+            self.visited_urls.add(v.url)
+        
+        if visited:
+            logger.info(f"Loaded {len(visited)} visited URLs from database")
+        
+        # Load queued URLs
+        queued = self.db.query(CrawlQueuedUrl).filter(
+            CrawlQueuedUrl.crawl_job_id == self.job_id
+        ).order_by(CrawlQueuedUrl.priority.desc(), CrawlQueuedUrl.added_at).all()
+        
+        for q in queued:
+            self.to_visit.append((q.url, q.depth))
+            self.queued_urls.add(q.url)
+        
+        if queued:
+            logger.info(f"Loaded {len(queued)} queued URLs from database")
+        
+        # Set counters from job
+        self.pages_crawled = self.job.pages_crawled
+        self.documents_found = self.job.documents_found
+    
+    def _save_visited_url(self, url: str, status_code: int, depth: int):
+        """
+        Save a visited URL to the database.
+        
+        Args:
+            url: The URL that was visited
+            status_code: HTTP status code received
+            depth: Depth at which this URL was crawled
+        """
+        try:
+            visited = CrawlVisitedUrl(
+                crawl_job_id=self.job_id,
+                url=url,
+                status_code=status_code,
+                depth=depth
+            )
+            self.db.add(visited)
+            self.db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to save visited URL {url}: {e}")
+            self.db.rollback()
+    
+    def _save_queued_url(self, url: str, depth: int, priority: int = 0):
+        """
+        Save a queued URL to the database.
+        
+        Args:
+            url: The URL to queue
+            depth: Depth for this URL
+            priority: Priority (higher = crawled sooner)
+        """
+        try:
+            queued = CrawlQueuedUrl(
+                crawl_job_id=self.job_id,
+                url=url,
+                depth=depth,
+                priority=priority
+            )
+            self.db.add(queued)
+            self.db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to save queued URL {url}: {e}")
+            self.db.rollback()
+    
+    def _remove_queued_url(self, url: str):
+        """
+        Remove a URL from the queue in the database (when it's being crawled).
+        
+        Args:
+            url: The URL to remove from queue
+        """
+        try:
+            self.db.query(CrawlQueuedUrl).filter(
+                CrawlQueuedUrl.crawl_job_id == self.job_id,
+                CrawlQueuedUrl.url == url
+            ).delete()
+            self.db.commit()
+        except Exception as e:
+            logger.warning(f"Failed to remove queued URL {url}: {e}")
+            self.db.rollback()
+    
+    def _clear_queued_urls(self):
+        """
+        Clear all queued URLs for this job from the database.
+        Called when job completes successfully.
+        """
+        try:
+            self.db.query(CrawlQueuedUrl).filter(
+                CrawlQueuedUrl.crawl_job_id == self.job_id
+            ).delete()
+            self.db.commit()
+            logger.info(f"Cleared queued URLs for job {self.job_id}")
+        except Exception as e:
+            logger.warning(f"Failed to clear queued URLs: {e}")
+            self.db.rollback()
     
     def _is_allowed_domain(self, url: str) -> bool:
         """Check if URL domain is allowed"""
@@ -410,6 +526,9 @@ class WebCrawler:
             self.visited_urls.add(url)
             self.pages_crawled += 1
             
+            # Remove from queue in database
+            self._remove_queued_url(url)
+            
             logger.info(f"Crawling page {self.pages_crawled}/{self.max_pages}: {url} (depth: {depth})")
             
             # Polite delay between requests
@@ -419,6 +538,9 @@ class WebCrawler:
             # Fetch the page/document
             response = self.session.get(url, timeout=30)
             response.raise_for_status()
+            
+            # Save visited URL to database with status code
+            self._save_visited_url(url, response.status_code, depth)
             
             content_type = response.headers.get('Content-Type', '').lower()
             
@@ -490,9 +612,10 @@ class WebCrawler:
                     if not self._is_allowed_by_robots(normalized_url):
                         continue
                     
-                    # Add to queue
+                    # Add to queue (both memory and database)
                     self.to_visit.append((normalized_url, depth + 1))
                     self.queued_urls.add(normalized_url)
+                    self._save_queued_url(normalized_url, depth + 1)
                     links_found += 1
                 
                 logger.info(f"Found {links_found} new links on {url}")
@@ -551,12 +674,15 @@ class WebCrawler:
             self.job.documents_found = self.documents_found
             self.db.commit()
             
+            # Clear queued URLs from database (job completed successfully)
+            self._clear_queued_urls()
+            
             logger.info(f"Crawl job {self.job_id} completed: {self.pages_crawled} pages crawled, {self.documents_found} documents found")
             
         except Exception as e:
             logger.error(f"Crawl job {self.job_id} failed: {e}")
             
-            # Mark job as failed
+            # Mark job as failed (keep queue for potential restart)
             self.job.status = CrawlStatus.FAILED
             self.job.error_message = str(e)
             self.job.completed_at = datetime.utcnow()

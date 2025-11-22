@@ -224,6 +224,42 @@ async def cancel_crawl_job(
     return job
 
 
+@router.post("/crawl/{job_id}/restart", response_model=CrawlJobResponse)
+async def restart_crawl_job(
+    job_id: int,
+    background_tasks: BackgroundTasks,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    Restart a failed or running crawl job.
+    Resumes from where it left off using persisted state.
+    """
+    job = db.query(CrawlJob).filter(CrawlJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Crawl job not found")
+    
+    # Allow restarting FAILED, RUNNING, or CANCELLED jobs
+    if job.status not in [CrawlStatus.FAILED, CrawlStatus.RUNNING, CrawlStatus.CANCELLED]:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"Cannot restart job in {job.status} status. Only FAILED, RUNNING, or CANCELLED jobs can be restarted."
+        )
+    
+    # Reset status to PENDING (will be set to RUNNING by crawler)
+    job.status = CrawlStatus.PENDING
+    job.error_message = None
+    job.completed_at = None
+    db.commit()
+    db.refresh(job)
+    
+    # Start crawler in background (it will load persisted state)
+    from services.crawler import run_crawler
+    background_tasks.add_task(run_crawler, job_id)
+    
+    return job
+
+
 @router.get("/documents", response_model=List[DocumentResponse])
 async def list_documents(
     skip: int = 0,

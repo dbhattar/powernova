@@ -210,8 +210,12 @@ async function loadCrawlJobs() {
                             <td>${job.documents_found}</td>
                             <td>${job.started_at ? new Date(job.started_at).toLocaleString() : 'Not started'}</td>
                             <td>
-                                ${job.status === 'RUNNING' ? 
-                                    `<button class="action-btn action-btn-danger" onclick="cancelCrawl(${job.id})">Cancel</button>` : 
+                                ${job.status.toUpperCase() === 'RUNNING' ? 
+                                    `<button class="action-btn action-btn-danger" onclick="cancelCrawl(${job.id})">Cancel</button>
+                                     <button class="action-btn action-btn-warning" onclick="restartCrawl(${job.id})">Restart</button>` : 
+                                job.status.toUpperCase() === 'FAILED' || job.status.toUpperCase() === 'CANCELLED' ?
+                                    `<button class="action-btn action-btn-primary" onclick="restartCrawl(${job.id})">Restart</button>
+                                     <button class="action-btn action-btn-danger" onclick="deleteCrawl(${job.id})">Delete</button>` :
                                     `<button class="action-btn action-btn-danger" onclick="deleteCrawl(${job.id})">Delete</button>`
                                 }
                             </td>
@@ -280,6 +284,18 @@ async function cancelCrawl(id) {
         loadCrawlJobs();
     } catch (error) {
         showAlert('Failed to cancel: ' + error.message, 'error');
+    }
+}
+
+async function restartCrawl(id) {
+    if (!confirm('Restart this crawl job? It will resume from where it left off.')) return;
+
+    try {
+        await apiCall(`/admin/crawl/${id}/restart`, { method: 'POST' });
+        showAlert('Crawl job restarted successfully', 'success');
+        loadCrawlJobs();
+    } catch (error) {
+        showAlert('Failed to restart: ' + error.message, 'error');
     }
 }
 
