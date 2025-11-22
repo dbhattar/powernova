@@ -58,6 +58,7 @@ function switchTab(tab) {
     else if (tab === 'crawl') loadCrawlJobs();
     else if (tab === 'embeddings') loadEmbeddings();
     else if (tab === 'users') loadUsers();
+    else if (tab === 'feedback') loadFeedback();
 }
 
 // API Helper
@@ -562,6 +563,10 @@ async function deleteUser(id, email) {
 }
 
 // Utility Functions
+function openModal(modalId) {
+    document.getElementById(modalId).classList.add('active');
+}
+
 function closeModal(modalId) {
     document.getElementById(modalId).classList.remove('active');
 }
@@ -656,3 +661,185 @@ document.querySelectorAll('.modal').forEach(modal => {
         }
     });
 });
+
+// ==================== FEEDBACK MANAGEMENT ====================
+
+async function loadFeedback() {
+    const container = document.getElementById('feedback-container');
+    const statusFilter = document.getElementById('feedback-status-filter')?.value || '';
+    
+    container.innerHTML = '<div class="loading-spinner"></div>';
+    
+    try {
+        // Load stats
+        const stats = await apiCall('/admin/feedback/stats');
+        document.getElementById('feedback-total').textContent = stats.total || 0;
+        document.getElementById('feedback-new').textContent = stats.new || 0;
+        document.getElementById('feedback-in-progress').textContent = stats.in_progress || 0;
+        document.getElementById('feedback-resolved').textContent = stats.resolved || 0;
+        
+        // Load feedback list
+        let endpoint = '/admin/feedback';
+        if (statusFilter !== 'all' && statusFilter !== '') {
+            endpoint += `?status=${statusFilter}`;
+        }
+        
+        const feedbackList = await apiCall(endpoint);
+        
+        if (!feedbackList || feedbackList.length === 0) {
+            container.innerHTML = '<p style="text-align: center; color: #888; padding: 40px;">No feedback found</p>';
+            return;
+        }
+        
+        // Create table
+        let html = `
+            <table>
+                <thead>
+                    <tr>
+                        <th>ID</th>
+                        <th>Name</th>
+                        <th>Email</th>
+                        <th>Company</th>
+                        <th>Message</th>
+                        <th>Status</th>
+                        <th>Created</th>
+                        <th>Actions</th>
+                    </tr>
+                </thead>
+                <tbody>
+        `;
+        
+        feedbackList.forEach(feedback => {
+            const statusBadges = {
+                'new': '<span class="badge badge-primary">🆕 New</span>',
+                'in_progress': '<span class="badge badge-warning">🔄 In Progress</span>',
+                'resolved': '<span class="badge badge-success">✅ Resolved</span>',
+                'archived': '<span class="badge badge-secondary">📦 Archived</span>'
+            };
+            
+            const messagePrev = feedback.message.length > 50 
+                ? feedback.message.substring(0, 50) + '...' 
+                : feedback.message;
+            
+            const createdDate = new Date(feedback.created_at).toLocaleString();
+            
+            html += `
+                <tr>
+                    <td>${feedback.id}</td>
+                    <td>${escapeHtml(feedback.name)}</td>
+                    <td>${escapeHtml(feedback.email)}</td>
+                    <td>${feedback.company ? escapeHtml(feedback.company) : '-'}</td>
+                    <td>${escapeHtml(messagePrev)}</td>
+                    <td>${statusBadges[feedback.status] || feedback.status}</td>
+                    <td>${createdDate}</td>
+                    <td>
+                        <button class="btn btn-sm btn-primary" onclick="viewFeedbackDetails(${feedback.id})">
+                            View
+                        </button>
+                        <button class="btn btn-sm btn-danger" onclick="deleteFeedback(${feedback.id}, '${escapeHtml(feedback.email)}')">
+                            Delete
+                        </button>
+                    </td>
+                </tr>
+            `;
+        });
+        
+        html += '</tbody></table>';
+        container.innerHTML = html;
+        
+    } catch (error) {
+        console.error('Error loading feedback:', error);
+        container.innerHTML = `<p style="color: #e74c3c;">Error loading feedback: ${error.message}</p>`;
+        showAlert('Failed to load feedback', 'error');
+    }
+}
+
+async function viewFeedbackDetails(id) {
+    try {
+        const feedback = await apiCall(`/admin/feedback/${id}`);
+        
+        if (!feedback) {
+            showAlert('Feedback not found', 'error');
+            return;
+        }
+        
+        // Populate modal
+        document.getElementById('feedback-id').value = feedback.id;
+        document.getElementById('feedback-name').value = feedback.name || '';
+        document.getElementById('feedback-email').value = feedback.email || '';
+        document.getElementById('feedback-company').value = feedback.company || '';
+        document.getElementById('feedback-message').value = feedback.message || '';
+        document.getElementById('feedback-status').value = feedback.status;
+        document.getElementById('feedback-admin-notes').value = feedback.admin_notes || '';
+        document.getElementById('feedback-created').value = new Date(feedback.created_at).toLocaleString();
+        
+        // Show/hide resolved date
+        const resolvedGroup = document.getElementById('feedback-resolved-group');
+        if (feedback.resolved_at) {
+            document.getElementById('feedback-resolved').value = new Date(feedback.resolved_at).toLocaleString();
+            resolvedGroup.style.display = 'block';
+        } else {
+            resolvedGroup.style.display = 'none';
+        }
+        
+        // Show modal
+        openModal('feedback-detail-modal');
+        
+    } catch (error) {
+        console.error('Error loading feedback details:', error);
+        showAlert('Failed to load feedback details', 'error');
+    }
+}
+
+async function updateFeedbackDetails(event) {
+    event.preventDefault();
+    
+    const form = event.target;
+    const id = form.id.value;
+    const status = form.status.value;
+    const adminNotes = form.admin_notes.value;
+    
+    try {
+        await apiCall(`/admin/feedback/${id}`, {
+            method: 'PATCH',
+            body: JSON.stringify({
+                status: status,
+                admin_notes: adminNotes
+            })
+        });
+        
+        showAlert('Feedback updated successfully', 'success');
+        closeModal('feedback-detail-modal');
+        loadFeedback();
+        
+    } catch (error) {
+        console.error('Error updating feedback:', error);
+        showAlert('Failed to update feedback', 'error');
+    }
+}
+
+async function deleteFeedback(id, email) {
+    if (!confirm(`Are you sure you want to delete feedback from ${email}?`)) {
+        return;
+    }
+    
+    try {
+        await apiCall(`/admin/feedback/${id}`, {
+            method: 'DELETE'
+        });
+        
+        showAlert('Feedback deleted successfully', 'success');
+        loadFeedback();
+        
+    } catch (error) {
+        console.error('Error deleting feedback:', error);
+        showAlert('Failed to delete feedback', 'error');
+    }
+}
+
+// Helper function to escape HTML
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}

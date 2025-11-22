@@ -173,8 +173,13 @@ function handleFormSubmission(data) {
     submitButton.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
     submitButton.disabled = true;
 
+    // Get API URL from config (supports both local and production)
+    const apiUrl = window.PowerNOVA && window.PowerNOVA.config 
+        ? window.PowerNOVA.config.apiUrl 
+        : '';
+
     // Send to backend API
-    fetch('/api/contact/contact', {
+    fetch(apiUrl + '/api/feedback', {
         method: 'POST',
         headers: {
             'Content-Type': 'application/json'
@@ -182,17 +187,17 @@ function handleFormSubmission(data) {
         body: JSON.stringify({
             name: data.name,
             email: data.email,
-            company: data.company,
+            company: data.company || '',
             message: data.message
         })
     })
     .then(async response => {
         const result = await response.json();
-        if (response.ok && result.success) {
+        if (response.ok) {
             document.getElementById('contactForm').reset();
-            showNotification('Thank you! Your message has been sent successfully.', 'success');
+            showNotification('Thank you! Your message has been sent successfully. We\'ll get back to you soon.', 'success');
         } else {
-            showNotification(result.error || 'Failed to send message. Please try again.', 'error');
+            showNotification(result.detail || 'Failed to send message. Please try again.', 'error');
         }
     })
     .catch(() => {

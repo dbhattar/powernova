@@ -112,6 +112,10 @@ app.include_router(auth.router, prefix="/api", tags=["Authentication"])
 from routes import conversations
 app.include_router(conversations.router, prefix="/api", tags=["Conversations"])
 
+# Import and include feedback router
+from routes import feedback
+app.include_router(feedback.router, prefix="/api", tags=["Feedback"])
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():

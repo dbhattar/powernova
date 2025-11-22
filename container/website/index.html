@@ -417,45 +417,6 @@
                             <i class="fas fa-paper-plane"></i>
                             Send Message
                         </button>
-                        <script>
-                        document.addEventListener('DOMContentLoaded', function() {
-                          var contactForm = document.getElementById('contactForm');
-                          if (contactForm) {
-                            contactForm.addEventListener('submit', function(e) {
-                              e.preventDefault();
-                              var name = document.getElementById('name').value;
-                              var email = document.getElementById('email').value;
-                              var company = document.getElementById('company').value;
-                              var message = document.getElementById('message').value;
-                              var submitBtn = contactForm.querySelector('button[type="submit"]');
-                              var originalText = submitBtn.innerHTML;
-                              submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
-                              submitBtn.disabled = true;
-                              fetch('/api/contact/contact', {
-                                method: 'POST',
-                                headers: { 'Content-Type': 'application/json' },
-                                body: JSON.stringify({ name, email, company, message })
-                              })
-                              .then(async function(response) {
-                                var result = await response.json();
-                                if (response.ok && result.success) {
-                                  contactForm.reset();
-                                  alert('Thank you! Your message has been sent successfully.');
-                                } else {
-                                  alert(result.error || 'Failed to send message. Please try again.');
-                                }
-                              })
-                              .catch(function() {
-                                alert('Failed to send message. Please try again.');
-                              })
-                              .finally(function() {
-                                submitBtn.innerHTML = originalText;
-                                submitBtn.disabled = false;
-                              });
-                            });
-                          }
-                        });
-                        </script>
                     </form>
                 </div>
                 <div class="contact-info">
@@ -463,21 +424,7 @@
                         <i class="fas fa-envelope"></i>
                         <div>
                             <h4>Email</h4>
-                            <p>info@powernova.com</p>
-                        </div>
-                    </div>
-                    <div class="contact-item">
-                        <i class="fas fa-phone"></i>
-                        <div>
-                            <h4>Phone</h4>
-                            <p>+1 (555) 123-4567</p>
-                        </div>
-                    </div>
-                    <div class="contact-item">
-                        <i class="fas fa-map-marker-alt"></i>
-                        <div>
-                            <h4>Location</h4>
-                            <p>Austin, TX<br>Energy Innovation Hub</p>
+                            <p>info@powernova.ai</p>
                         </div>
                     </div>
                 </div>
