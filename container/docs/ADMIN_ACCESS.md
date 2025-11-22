@@ -1,11 +1,5 @@
 # Admin Panel Access Guide
 
-## 🔑 Your Admin Key
-
-```
-wMQj71sVPJ/P7u2IyGRQCdP5kA+HXlfklFxvoUBk5k0=
-```
-
 ## 🌐 Access URLs
 
 ### Local Development
@@ -34,10 +28,6 @@ wMQj71sVPJ/P7u2IyGRQCdP5kA+HXlfklFxvoUBk5k0=
    http://localhost:8081/admin.html
    ```
 
-3. Login with the admin key:
-   ```
-   wMQj71sVPJ/P7u2IyGRQCdP5kA+HXlfklFxvoUBk5k0=
-   ```
 
 4. The admin panel will:
    - Show dashboard statistics
@@ -55,7 +45,7 @@ curl http://localhost:8000/api/admin/stats
 
 ### With Authentication (should work)
 ```bash
-curl -H "X-Admin-Key: wMQj71sVPJ/P7u2IyGRQCdP5kA+HXlfklFxvoUBk5k0=" \
+curl -H "X-Admin-Key: ******" \
      http://localhost:8000/api/admin/stats
 # Response: JSON with stats
 ```
@@ -65,7 +55,7 @@ curl -H "X-Admin-Key: wMQj71sVPJ/P7u2IyGRQCdP5kA+HXlfklFxvoUBk5k0=" \
 ```bash
 curl -X POST http://localhost:8000/api/admin/crawl \
   -H "Content-Type: application/json" \
-  -H "X-Admin-Key: wMQj71sVPJ/P7u2IyGRQCdP5kA+HXlfklFxvoUBk5k0=" \
+  -H "X-Admin-Key: ********" \
   -d '{
     "start_url": "https://docs.python.org",
     "max_depth": 2,

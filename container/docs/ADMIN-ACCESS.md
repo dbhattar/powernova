@@ -30,12 +30,6 @@ All admin endpoints require the `X-Admin-Key` header.
 - `GET /api/admin/embeddings/chunks/{id}` - View document chunks
 - `DELETE /api/admin/embeddings/chunks/{id}` - Delete chunks
 
-### Example API Call
-```bash
-curl -H "X-Admin-Key: wMQj71sVPJ/P7u2IyGRQCdP5kA+HXlfklFxvoUBk5k0=" \
-  http://localhost:8000/api/admin/embeddings/stats
-```
-
 ## Current State
 
 - **Total Documents**: 308
