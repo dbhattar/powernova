@@ -579,12 +579,61 @@ WHERE crawl_job_id IN (
 
 **Fix**: Ensure `_clear_queued_urls()` is called in `run()` on success
 
+## Duplicate Document Prevention
+
+**Date**: November 23, 2024  
+**Status**: ✅ Fully Implemented
+
+### Cross-Job Duplicate Prevention
+
+While `crawl_visited_urls` prevents re-crawling within a job and on resume, documents can still be saved multiple times when:
+- The same site is crawled by different crawl jobs
+- Different jobs discover the same URLs through different paths
+
+**Solution**: Added database check in `_save_fetched_document()` before saving:
+
+```python
+# Check if document with this URL already exists
+existing_doc = self.db.query(Document).filter(Document.url == url).first()
+if existing_doc:
+    logger.info(f"Document already exists (ID: {existing_doc.id}), skipping: {url}")
+    if existing_doc.crawl_job_id != self.job_id:
+        self.documents_found += 1
+    return True
+```
+
+**Result**:
+- No duplicate documents across different crawl jobs
+- Storage savings in PostgreSQL and Azure Blob Storage
+- Better RAG accuracy (no duplicate chunks in vector database)
+
+### Duplicate Removal Endpoint
+
+Admin endpoint to clean up existing duplicates:
+
+```bash
+curl -X POST http://localhost:8000/api/admin/documents/remove-duplicates \
+  -H "X-Admin-Key: YOUR_ADMIN_KEY"
+```
+
+Response:
+```json
+{
+  "duplicates_removed": 13,
+  "urls_affected": 6,
+  "message": "Removed 13 duplicate documents across 6 URLs"
+}
+```
+
+**See**: [DUPLICATE-PREVENTION.md](./DUPLICATE-PREVENTION.md) for complete documentation
+
 ## Summary
 
 ✅ **State Persistence**: All crawl progress saved to database  
 ✅ **Auto-Resume**: Interrupted jobs restart automatically  
 ✅ **Manual Restart**: Admin can restart failed/cancelled jobs  
-✅ **No Duplicates**: Visited URLs tracked, skipped on resume  
+✅ **No Duplicate Visits**: Visited URLs tracked, skipped on resume  
+✅ **No Duplicate Documents**: URLs checked globally, duplicates prevented  
 ✅ **Queue Maintained**: Queued URLs persisted across restarts  
 ✅ **Clean Completion**: Queue cleared when job succeeds  
 
@@ -593,5 +642,6 @@ The crawler is now production-ready with full resilience against:
 - Container crashes
 - Network failures
 - Manual cancellations
+- Duplicate document creation
 
-Jobs can be safely interrupted and resumed without losing progress!
+Jobs can be safely interrupted and resumed without losing progress or creating duplicates!

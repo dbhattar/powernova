@@ -429,6 +429,15 @@ class WebCrawler:
             True if successful, False otherwise
         """
         try:
+            # Check if document with this URL already exists
+            existing_doc = self.db.query(Document).filter(Document.url == url).first()
+            if existing_doc:
+                logger.info(f"Document already exists (ID: {existing_doc.id}), skipping: {url}")
+                # Still count it as found if it wasn't from this crawl job
+                if existing_doc.crawl_job_id != self.job_id:
+                    self.documents_found += 1
+                return True
+            
             logger.info(f"Saving {file_ext} document: {url}")
             
             # Determine document type

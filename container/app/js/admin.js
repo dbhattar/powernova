@@ -859,3 +859,146 @@ function escapeHtml(text) {
     div.textContent = text;
     return div.innerHTML;
 }
+
+// ==================== Duplicate Document Management ====================
+
+/**
+ * Check for duplicate documents in the database
+ */
+async function checkForDuplicates() {
+    const statsDiv = document.getElementById('duplicate-stats');
+    const resultsDiv = document.getElementById('duplicate-results');
+    const removeBtn = document.getElementById('remove-dup-btn');
+    
+    // Hide previous results
+    resultsDiv.style.display = 'none';
+    statsDiv.style.display = 'none';
+    removeBtn.disabled = true;
+    
+    showAlert('Checking for duplicates...', 'info');
+    
+    try {
+        // Query database for duplicate URLs
+        const response = await fetch(`${API_BASE}/admin/documents?limit=10000`, {
+            headers: {
+                'X-Admin-Key': adminKey
+            }
+        });
+        
+        if (!response.ok) {
+            throw new Error(`HTTP ${response.status}: ${response.statusText}`);
+        }
+        
+        const data = await response.json();
+        const documents = data.documents || [];
+        
+        // Group by URL to find duplicates
+        const urlMap = new Map();
+        documents.forEach(doc => {
+            if (!urlMap.has(doc.url)) {
+                urlMap.set(doc.url, []);
+            }
+            urlMap.get(doc.url).push(doc);
+        });
+        
+        // Find URLs with duplicates
+        const duplicateUrls = Array.from(urlMap.entries())
+            .filter(([url, docs]) => docs.length > 1);
+        
+        if (duplicateUrls.length === 0) {
+            showAlert('No duplicates found! ✅', 'success');
+            return;
+        }
+        
+        // Calculate stats
+        let totalDuplicates = 0;
+        let totalChunks = 0;
+        let totalBlobs = 0;
+        
+        duplicateUrls.forEach(([url, docs]) => {
+            // Keep oldest, count the rest as duplicates
+            totalDuplicates += docs.length - 1;
+            docs.slice(1).forEach(doc => {
+                totalChunks += doc.chunk_count || 0;
+                if (doc.file_path) totalBlobs++;
+            });
+        });
+        
+        // Display stats
+        document.getElementById('dup-count').textContent = totalDuplicates;
+        document.getElementById('dup-urls').textContent = duplicateUrls.length;
+        document.getElementById('dup-chunks').textContent = totalChunks;
+        document.getElementById('dup-blobs').textContent = totalBlobs;
+        
+        statsDiv.style.display = 'block';
+        removeBtn.disabled = false;
+        
+        showAlert(`Found ${totalDuplicates} duplicate documents across ${duplicateUrls.length} URLs`, 'warning');
+        
+    } catch (error) {
+        console.error('Error checking duplicates:', error);
+        showAlert('Failed to check for duplicates: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Remove all duplicate documents
+ */
+async function removeDuplicates() {
+    const dupCount = document.getElementById('dup-count').textContent;
+    const urlCount = document.getElementById('dup-urls').textContent;
+    
+    const confirmed = confirm(
+        `Are you sure you want to remove ${dupCount} duplicate documents?\n\n` +
+        `This will:\n` +
+        `• Delete duplicate database records\n` +
+        `• Remove associated vector chunks\n` +
+        `• Delete files from Azure Blob Storage\n\n` +
+        `This action cannot be undone!`
+    );
+    
+    if (!confirmed) return;
+    
+    const statsDiv = document.getElementById('duplicate-stats');
+    const resultsDiv = document.getElementById('duplicate-results');
+    const removeBtn = document.getElementById('remove-dup-btn');
+    
+    removeBtn.disabled = true;
+    showAlert('Removing duplicates... This may take a moment.', 'info');
+    
+    try {
+        const response = await apiCall('/admin/documents/remove-duplicates', {
+            method: 'POST'
+        });
+        
+        // Display results
+        const summary = `
+            <div style="margin-bottom: 10px;">
+                <strong>Cleanup Summary:</strong>
+            </div>
+            <ul style="margin: 0; padding-left: 20px;">
+                <li><strong>${response.duplicates_removed}</strong> duplicate documents removed</li>
+                <li><strong>${response.urls_affected}</strong> URLs cleaned up</li>
+                <li><strong>${response.chunks_deleted}</strong> vector chunks deleted</li>
+                <li><strong>${response.blobs_deleted}</strong> blob files removed from Azure Storage</li>
+                ${response.blobs_failed > 0 ? `<li style="color: #856404;"><strong>${response.blobs_failed}</strong> blob deletions failed (check logs)</li>` : ''}
+            </ul>
+        `;
+        
+        document.getElementById('cleanup-summary').innerHTML = summary;
+        statsDiv.style.display = 'none';
+        resultsDiv.style.display = 'block';
+        
+        showAlert('Duplicates removed successfully! ✅', 'success');
+        
+        // Refresh stats
+        if (currentTab === 'overview') {
+            loadOverview();
+        }
+        
+    } catch (error) {
+        console.error('Error removing duplicates:', error);
+        showAlert('Failed to remove duplicates: ' + error.message, 'error');
+        removeBtn.disabled = false;
+    }
+}

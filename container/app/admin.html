@@ -190,6 +190,48 @@
                 </div>
             </div>
 
+            <div style="margin-bottom: 20px; padding: 20px; background: #fce8e8; border-radius: 8px; border-left: 4px solid #dc3545;">
+                <h4 style="margin-bottom: 10px;">🗑️ Duplicate Document Management</h4>
+                <p style="margin-bottom: 15px; color: #721c24;">
+                    Remove duplicate documents that have been crawled multiple times. This will delete duplicates from the database, vector storage, and Azure Blob Storage.
+                </p>
+                
+                <div id="duplicate-stats" style="display: none; margin-bottom: 15px; padding: 15px; background: white; border-radius: 6px;">
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px;">
+                        <div>
+                            <div style="font-size: 24px; font-weight: bold; color: #dc3545;" id="dup-count">-</div>
+                            <div style="font-size: 12px; color: #666;">Duplicate Documents</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 24px; font-weight: bold; color: #6c757d;" id="dup-urls">-</div>
+                            <div style="font-size: 12px; color: #666;">URLs Affected</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 24px; font-weight: bold; color: #17a2b8;" id="dup-chunks">-</div>
+                            <div style="font-size: 12px; color: #666;">Chunks to Remove</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 24px; font-weight: bold; color: #ffc107;" id="dup-blobs">-</div>
+                            <div style="font-size: 12px; color: #666;">Blobs to Delete</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="duplicate-results" style="display: none; margin-bottom: 15px; padding: 15px; background: #d4edda; border-radius: 6px; border-left: 4px solid #28a745;">
+                    <h5 style="margin-bottom: 10px; color: #155724;">✅ Cleanup Complete!</h5>
+                    <div style="font-size: 14px; color: #155724;" id="cleanup-summary"></div>
+                </div>
+
+                <div style="display: flex; gap: 10px; flex-wrap: wrap;">
+                    <button class="btn btn-secondary" onclick="checkForDuplicates()">
+                        🔍 Check for Duplicates
+                    </button>
+                    <button class="btn btn-danger" onclick="removeDuplicates()" id="remove-dup-btn" disabled>
+                        🗑️ Remove All Duplicates
+                    </button>
+                </div>
+            </div>
+
             <h3 style="margin-bottom: 15px;">Documents Needing Reprocessing</h3>
             <div class="filter-controls">
                 <select id="emb-scope-filter" onchange="loadEmbeddingDocuments()">

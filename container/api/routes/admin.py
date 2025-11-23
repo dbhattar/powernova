@@ -323,6 +323,86 @@ async def delete_document(
     return None
 
 
+@router.post("/documents/remove-duplicates")
+async def remove_duplicate_documents(
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    Remove duplicate documents (same URL). Keeps the oldest document (lowest ID) for each URL.
+    Also removes associated chunks and blob storage files for deleted duplicates.
+    """
+    
+    # Find all URLs that have duplicates
+    duplicates_query = db.query(
+        Document.url, 
+        func.count(Document.id).label('count')
+    ).group_by(Document.url).having(func.count(Document.id) > 1).all()
+    
+    if not duplicates_query:
+        return {
+            "duplicates_removed": 0,
+            "urls_affected": 0,
+            "message": "No duplicate documents found"
+        }
+    
+    total_removed = 0
+    urls_affected = len(duplicates_query)
+    storage_service = get_storage_service()
+    blobs_deleted = 0
+    blobs_failed = 0
+    chunks_deleted = 0
+    
+    for url, count in duplicates_query:
+        # Get all documents with this URL, ordered by ID (oldest first)
+        docs = db.query(Document).filter(Document.url == url).order_by(Document.id).all()
+        
+        # Keep the first (oldest) document, delete the rest
+        keep_doc = docs[0]
+        duplicates_to_remove = docs[1:]
+        
+        logger.info(f"Found {len(duplicates_to_remove)} duplicates for URL: {url}")
+        logger.info(f"  Keeping document ID: {keep_doc.id}, created: {keep_doc.created_at}")
+        
+        for duplicate_doc in duplicates_to_remove:
+            logger.info(f"  Removing duplicate ID: {duplicate_doc.id}, created: {duplicate_doc.created_at}")
+            
+            # Delete associated chunks
+            chunk_count = db.query(DocumentChunk).filter(DocumentChunk.document_id == duplicate_doc.id).count()
+            if chunk_count > 0:
+                db.query(DocumentChunk).filter(DocumentChunk.document_id == duplicate_doc.id).delete()
+                chunks_deleted += chunk_count
+                logger.info(f"    Deleted {chunk_count} chunks")
+            
+            # Delete from Azure Blob Storage if exists
+            if duplicate_doc.file_path:
+                try:
+                    logger.info(f"    Deleting blob: {duplicate_doc.file_path}")
+                    storage_service.delete_document(duplicate_doc.file_path)
+                    blobs_deleted += 1
+                    logger.info(f"    ✓ Blob deleted successfully")
+                except Exception as e:
+                    blobs_failed += 1
+                    logger.error(f"    ✗ Failed to delete blob for document {duplicate_doc.id}: {str(e)}")
+            
+            # Delete the document
+            db.delete(duplicate_doc)
+            total_removed += 1
+    
+    db.commit()
+    
+    logger.info(f"Duplicate removal complete: {total_removed} documents, {chunks_deleted} chunks, {blobs_deleted} blobs deleted")
+    
+    return {
+        "duplicates_removed": total_removed,
+        "urls_affected": urls_affected,
+        "chunks_deleted": chunks_deleted,
+        "blobs_deleted": blobs_deleted,
+        "blobs_failed": blobs_failed,
+        "message": f"Removed {total_removed} duplicate documents across {urls_affected} URLs"
+    }
+
+
 @router.get("/stats")
 async def get_admin_stats(
     db: Session = Depends(get_db),
