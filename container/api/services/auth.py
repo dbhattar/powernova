@@ -28,6 +28,9 @@ if SECRET_KEY == "your-secret-key-change-in-production-min-32-chars":
 # OAuth2 scheme for token authentication
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login")
 
+# Optional OAuth2 scheme (doesn't raise 401 if token is missing)
+oauth2_scheme_optional = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+
 
 def verify_password(plain_password: str, hashed_password: str) -> bool:
     """
@@ -157,6 +160,52 @@ def get_current_user(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="User account is inactive"
         )
+    
+    return user
+
+
+def get_current_user_optional(
+    token: Optional[str] = Depends(oauth2_scheme_optional),
+    db: Session = Depends(get_db)
+) -> Optional[User]:
+    """
+    Get the current authenticated user from JWT token (optional)
+    
+    This version doesn't raise 401 if no token is provided.
+    Returns None if no token or invalid token.
+    
+    Args:
+        token: Optional JWT token from Authorization header
+        db: Database session
+        
+    Returns:
+        Current user if authenticated, None otherwise
+    """
+    if not token:
+        return None
+    
+    try:
+        payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        user_id_raw = payload.get("sub")
+        
+        if user_id_raw is None:
+            return None
+        
+        # Handle both string and integer formats (for backward compatibility)
+        try:
+            if isinstance(user_id_raw, int):
+                user_id = user_id_raw
+            else:
+                user_id = int(user_id_raw)
+        except (ValueError, TypeError):
+            return None
+            
+    except JWTError:
+        return None
+    
+    user = db.query(User).filter(User.id == user_id).first()
+    if user is None or not user.is_active:
+        return None
     
     return user
 

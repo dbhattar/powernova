@@ -14,7 +14,7 @@ from sqlalchemy.orm import Session
 from database import get_db
 from services.rag_service import get_rag_service
 from services.conversation_service import get_conversation_service
-from services.auth import get_current_user
+from services.auth import get_current_user_optional
 from models import User
 
 router = APIRouter()
@@ -54,13 +54,15 @@ class ChatResponse(BaseModel):
 async def chat_stream(
     request: ChatRequest, 
     db: Session = Depends(get_db),
-    current_user: Optional[User] = Depends(get_current_user)
+    current_user: Optional[User] = Depends(get_current_user_optional)
 ):
     """
     Stream chat completion from OpenAI with optional RAG
     
     This endpoint proxies requests to OpenAI's chat completion API
     and streams the response back to the client using Server-Sent Events (SSE).
+    
+    Authentication is OPTIONAL - the endpoint works for both authenticated and anonymous users.
     
     If use_rag=True, retrieves relevant documents from the vector database
     and includes them as context in the system message.
