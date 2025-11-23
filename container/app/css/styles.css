@@ -112,13 +112,15 @@ body {
 
 .header-actions {
     display: flex;
-    gap: 0.5rem;
+    align-items: center;
+    gap: 0.75rem;
 }
 
 .btn-icon {
-    width: 40px;
+    min-width: 40px;
     height: 40px;
-    border: none;
+    padding: 0 0.75rem;
+    border: 1px solid transparent;
     background: transparent;
     color: var(--text-secondary);
     cursor: pointer;
@@ -126,13 +128,94 @@ body {
     display: flex;
     align-items: center;
     justify-content: center;
-    transition: var(--transition);
+    gap: 0.5rem;
+    transition: all 0.2s ease;
+    font-size: 1rem;
+    font-weight: 500;
+    white-space: nowrap;
+}
+
+.btn-icon i {
     font-size: 1.125rem;
 }
 
 .btn-icon:hover {
     background: var(--bg-tertiary);
     color: var(--primary-color);
+    border-color: var(--border-color);
+    transform: translateY(-1px);
+}
+
+.btn-icon:active {
+    transform: translateY(0);
+}
+
+/* Special styling for user menu button */
+.btn-icon#userMenuBtn {
+    background: var(--bg-tertiary);
+    border-color: var(--border-color);
+    padding: 0.5rem 1rem;
+}
+
+.btn-icon#userMenuBtn:hover {
+    background: linear-gradient(135deg, rgba(102, 126, 234, 0.1), rgba(118, 75, 162, 0.1));
+    border-color: var(--primary-color);
+}
+
+/* Tooltip styling for header buttons */
+.btn-icon[title] {
+    position: relative;
+}
+
+.btn-icon[title]:hover::after {
+    content: attr(title);
+    position: absolute;
+    bottom: -35px;
+    left: 50%;
+    transform: translateX(-50%);
+    padding: 0.5rem 0.75rem;
+    background: var(--text-primary);
+    color: white;
+    font-size: 0.75rem;
+    font-weight: 500;
+    white-space: nowrap;
+    border-radius: var(--radius-md);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    z-index: 1000;
+    pointer-events: none;
+    animation: tooltipFadeIn 0.2s ease-out;
+}
+
+.btn-icon[title]:hover::before {
+    content: '';
+    position: absolute;
+    bottom: -8px;
+    left: 50%;
+    transform: translateX(-50%);
+    border: 5px solid transparent;
+    border-bottom-color: var(--text-primary);
+    z-index: 1000;
+    pointer-events: none;
+    animation: tooltipFadeIn 0.2s ease-out;
+}
+
+@keyframes tooltipFadeIn {
+    from {
+        opacity: 0;
+        transform: translateX(-50%) translateY(-5px);
+    }
+    to {
+        opacity: 1;
+        transform: translateX(-50%) translateY(0);
+    }
+}
+
+/* Hide tooltips on mobile */
+@media (max-width: 640px) {
+    .btn-icon[title]:hover::after,
+    .btn-icon[title]:hover::before {
+        display: none;
+    }
 }
 
 /* ==================== */
@@ -1102,14 +1185,51 @@ body {
 /* Username in header */
 .username-text {
     display: none;
-    margin-left: 0.5rem;
     font-size: 0.9rem;
-    color: var(--text-secondary);
+    font-weight: 500;
+    color: var(--text-primary);
+    max-width: 150px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
 }
 
 @media (min-width: 768px) {
     .username-text {
-        display: inline;
+        display: inline-block;
+    }
+}
+
+/* Header button separator for better visual grouping */
+.header-actions::before {
+    content: '';
+    width: 1px;
+    height: 24px;
+    background: var(--border-color);
+    margin: 0 0.25rem;
+    display: none;
+}
+
+@media (min-width: 640px) {
+    .header-actions::before {
+        display: block;
+    }
+}
+
+/* Mobile header adjustments */
+@media (max-width: 640px) {
+    .header-actions {
+        gap: 0.5rem;
+    }
+    
+    .btn-icon {
+        min-width: 36px;
+        height: 36px;
+        padding: 0 0.5rem;
+    }
+    
+    .btn-icon i {
+        font-size: 1rem;
     }
 }
 
@@ -1234,39 +1354,55 @@ body {
 }
 
 .conversations-sidebar .sidebar-header {
-    padding: 1.5rem;
+    padding: 1.25rem 1.5rem;
     border-bottom: 1px solid var(--border-color);
+    background: linear-gradient(to bottom, var(--bg-primary), var(--bg-secondary));
     display: flex;
-    justify-content: space-between;
-    align-items: center;
+    flex-direction: column;
+    gap: 0;
 }
 
 .conversations-sidebar .sidebar-header h2 {
-    font-size: 1.125rem;
+    font-size: 1rem;
     font-weight: 600;
     color: var(--text-primary);
+    margin: 0 0 1rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.conversations-sidebar .sidebar-header h2 i {
+    font-size: 1.125rem;
+    color: var(--primary-color);
 }
 
 .btn-new-conversation {
     background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
     color: white;
     border: none;
-    padding: 0.625rem 1rem;
+    padding: 0.75rem 1.25rem;
     border-radius: var(--radius-md);
     cursor: pointer;
-    font-size: 0.875rem;
+    font-size: 0.9rem;
     font-weight: 600;
     display: flex;
     align-items: center;
-    gap: 0.5rem;
-    transition: var(--transition);
-    width: 100%;
+    gap: 0.625rem;
     justify-content: center;
+    transition: all 0.3s ease;
+    width: 100%;
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.25);
 }
 
 .btn-new-conversation:hover {
     transform: translateY(-2px);
-    box-shadow: var(--shadow-md);
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.35);
+}
+
+.btn-new-conversation:active {
+    transform: translateY(0);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.25);
 }
 
 .btn-new-conversation i {
@@ -1276,34 +1412,52 @@ body {
 .conversations-list {
     flex: 1;
     overflow-y: auto;
-    padding: 0.5rem;
+    padding: 0.75rem;
 }
 
 .conversations-empty {
-    padding: 2rem 1rem;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    padding: 3rem 1.5rem;
     text-align: center;
     color: var(--text-secondary);
+    gap: 0;
+    min-height: 200px;
 }
 
 .conversations-empty i {
-    font-size: 2.5rem;
+    font-size: 3.5rem;
     color: var(--text-tertiary);
-    margin-bottom: 1rem;
+    margin-bottom: 1.25rem;
     display: block;
+    opacity: 0.5;
 }
 
 .conversations-empty p {
+    font-size: 1rem;
+    font-weight: 600;
+    margin: 0 0 0.75rem 0;
+    color: var(--text-primary);
+}
+
+.conversations-empty small {
     font-size: 0.875rem;
-    line-height: 1.5;
+    color: var(--text-secondary);
+    display: block;
+    line-height: 1.6;
+    max-width: 220px;
+    margin: 0;
 }
 
 /* Conversation Item */
 .conversation-item {
-    padding: 0.875rem;
+    padding: 1rem;
     border-radius: var(--radius-md);
     cursor: pointer;
-    transition: var(--transition);
-    margin-bottom: 0.5rem;
+    transition: all 0.2s ease;
+    margin-bottom: 0.625rem;
     border: 1px solid transparent;
     background: var(--bg-secondary);
     position: relative;
@@ -1312,12 +1466,16 @@ body {
 .conversation-item:hover {
     background: var(--bg-tertiary);
     border-color: var(--border-color);
+    transform: translateX(2px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 
 .conversation-item.active {
     background: linear-gradient(135deg, var(--primary-color), var(--secondary-color));
     color: white;
     border-color: var(--primary-color);
+    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.3);
+    transform: translateX(2px);
 }
 
 .conversation-item.active .conversation-title,
@@ -1329,18 +1487,22 @@ body {
     display: flex;
     justify-content: space-between;
     align-items: flex-start;
-    margin-bottom: 0.5rem;
+    margin-bottom: 0.625rem;
+    gap: 0.5rem;
 }
 
 .conversation-title {
     font-weight: 600;
     font-size: 0.9375rem;
     color: var(--text-primary);
-    margin-bottom: 0.25rem;
+    margin: 0;
     line-height: 1.4;
     word-break: break-word;
     flex: 1;
-    padding-right: 0.5rem;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
 }
 
 .conversation-actions {
@@ -1348,6 +1510,7 @@ body {
     gap: 0.25rem;
     opacity: 0;
     transition: opacity 0.2s;
+    flex-shrink: 0;
 }
 
 .conversation-item:hover .conversation-actions,
@@ -1363,9 +1526,9 @@ body {
     padding: 0.25rem;
     border-radius: var(--radius-sm);
     font-size: 0.875rem;
-    transition: var(--transition);
-    width: 24px;
-    height: 24px;
+    transition: all 0.2s ease;
+    width: 26px;
+    height: 26px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -1373,6 +1536,7 @@ body {
 
 .btn-conversation-action:hover {
     background: rgba(0, 0, 0, 0.1);
+    transform: scale(1.1);
 }
 
 .conversation-item.active .btn-conversation-action {
@@ -1391,7 +1555,7 @@ body {
 .conversation-meta {
     display: flex;
     flex-direction: column;
-    gap: 0.25rem;
+    gap: 0.375rem;
     font-size: 0.8125rem;
     color: var(--text-secondary);
 }
@@ -1399,11 +1563,13 @@ body {
 .conversation-timestamp {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.375rem;
+    font-weight: 500;
 }
 
 .conversation-timestamp i {
     font-size: 0.75rem;
+    opacity: 0.7;
 }
 
 .conversation-preview {
@@ -1413,24 +1579,32 @@ body {
     text-overflow: ellipsis;
     white-space: nowrap;
     max-width: 100%;
+    line-height: 1.4;
 }
 
 .conversation-item.active .conversation-preview {
-    color: rgba(255, 255, 255, 0.9);
+    color: rgba(255, 255, 255, 0.85);
 }
 
 .conversation-stats {
     display: flex;
-    gap: 0.75rem;
-    margin-top: 0.5rem;
+    gap: 0.875rem;
+    margin-top: 0.625rem;
+    padding-top: 0.625rem;
+    border-top: 1px solid var(--border-color);
+}
+
+.conversation-item.active .conversation-stats {
+    border-top-color: rgba(255, 255, 255, 0.2);
 }
 
 .stat-badge {
     display: flex;
     align-items: center;
-    gap: 0.25rem;
+    gap: 0.375rem;
     font-size: 0.75rem;
     color: var(--text-secondary);
+    font-weight: 500;
 }
 
 .conversation-item.active .stat-badge {
@@ -1439,6 +1613,7 @@ body {
 
 .stat-badge i {
     font-size: 0.875rem;
+    opacity: 0.8;
 }
 
 /* Sidebar Toggle Button */
