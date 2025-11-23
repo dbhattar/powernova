@@ -145,9 +145,42 @@ class DocumentProcessor:
         """
         try:
             from docx import Document
+            from docx.opc.exceptions import PackageNotFoundError
+            import zipfile
             
             docx_file = BytesIO(docx_content)
-            doc = Document(docx_file)
+            
+            # First, check if it's a valid ZIP file (DOCX files are ZIP archives)
+            try:
+                if not zipfile.is_zipfile(docx_file):
+                    logger.warning(f"File is not a ZIP archive, cannot be a valid DOCX: {url}")
+                    return url, "", {}
+                docx_file.seek(0)  # Reset position after check
+            except Exception as e:
+                logger.warning(f"Cannot verify ZIP format: {url} - {e}")
+                return url, "", {}
+            
+            # Validate it's actually a DOCX file by checking the magic bytes
+            # DOCX files are ZIP archives starting with PK (0x50 0x4B)
+            if len(docx_content) < 4 or docx_content[:2] != b'PK':
+                logger.warning(f"File does not appear to be a valid DOCX (ZIP) file: {url}")
+                return url, "", {}
+            
+            try:
+                doc = Document(docx_file)
+            except PackageNotFoundError as e:
+                # This happens when the file is a valid ZIP but not a Word document
+                # (e.g., theme files, other Office XML components)
+                error_msg = str(e)
+                if 'themeManager' in error_msg or 'theme' in error_msg.lower():
+                    logger.warning(f"File is an Office theme file, not a Word document: {url}")
+                else:
+                    logger.warning(f"File is not a valid Word document: {url} - {error_msg}")
+                return url, "", {}
+            except Exception as e:
+                # Catch other validation errors from python-docx
+                logger.warning(f"Cannot parse as DOCX (may be corrupted or different Office format): {url} - {e}")
+                return url, "", {}
             
             # Extract text from paragraphs
             text_parts = []
@@ -168,16 +201,19 @@ class DocumentProcessor:
             
             # Extract metadata
             metadata = {}
-            core_props = doc.core_properties
-            if core_props.title:
-                title = core_props.title
-                metadata['title'] = core_props.title
-            if core_props.author:
-                metadata['author'] = core_props.author
-            if core_props.subject:
-                metadata['subject'] = core_props.subject
-            if core_props.keywords:
-                metadata['keywords'] = core_props.keywords
+            try:
+                core_props = doc.core_properties
+                if core_props.title:
+                    title = core_props.title
+                    metadata['title'] = core_props.title
+                if core_props.author:
+                    metadata['author'] = core_props.author
+                if core_props.subject:
+                    metadata['subject'] = core_props.subject
+                if core_props.keywords:
+                    metadata['keywords'] = core_props.keywords
+            except Exception as e:
+                logger.debug(f"Could not extract DOCX metadata: {e}")
             
             logger.info(f"Extracted {len(text)} chars from DOCX: {title}")
             return title, text, metadata
@@ -241,7 +277,8 @@ class DocumentProcessor:
         """
         file_type = file_type.lower()
         
-        if file_type in ['html', 'htm']:
+        # HTML and server-side web pages (they typically render as HTML)
+        if file_type in ['html', 'htm', 'aspx', 'asp', 'jsp', 'jspx', 'php', 'ashx', 'asmx', 'cfm', 'xhtml']:
             return DocumentProcessor.extract_text_from_html(content, url)
         elif file_type == 'pdf':
             return DocumentProcessor.extract_text_from_pdf(content, url)

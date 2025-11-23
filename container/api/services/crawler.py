@@ -117,6 +117,29 @@ class WebCrawler:
         self.pages_crawled = self.job.pages_crawled
         self.documents_found = self.job.documents_found
     
+    def _sanitize_text(self, text: Optional[str]) -> Optional[str]:
+        """
+        Sanitize text content to remove NULL bytes and other problematic characters.
+        PostgreSQL TEXT columns cannot contain NULL (0x00) bytes.
+        
+        Args:
+            text: Text to sanitize
+            
+        Returns:
+            Sanitized text or None if input is None
+        """
+        if text is None:
+            return None
+        
+        # Remove NULL bytes (0x00) which PostgreSQL doesn't allow in TEXT columns
+        sanitized = text.replace('\x00', '')
+        
+        # Also remove other control characters that might cause issues (optional)
+        # Keep common ones like \n, \r, \t
+        # sanitized = ''.join(char for char in sanitized if ord(char) >= 32 or char in '\n\r\t')
+        
+        return sanitized
+    
     def _save_visited_url(self, url: str, status_code: int, depth: int):
         """
         Save a visited URL to the database.
@@ -348,10 +371,20 @@ class WebCrawler:
             file_ext = self._get_file_extension(url) or 'html'
             
             # Determine document type
+            # Server-side pages (aspx, jsp, php, etc.) are treated as HTML since they render HTML
             doc_type_map = {
                 'pdf': DocumentType.PDF,
                 'html': DocumentType.HTML,
                 'htm': DocumentType.HTML,
+                'aspx': DocumentType.HTML,
+                'asp': DocumentType.HTML,
+                'jsp': DocumentType.HTML,
+                'jspx': DocumentType.HTML,
+                'php': DocumentType.HTML,
+                'ashx': DocumentType.HTML,
+                'asmx': DocumentType.HTML,
+                'cfm': DocumentType.HTML,
+                'xhtml': DocumentType.HTML,
                 'txt': DocumentType.TEXT,
                 'md': DocumentType.MARKDOWN,
                 'docx': DocumentType.DOCX,
@@ -373,11 +406,15 @@ class WebCrawler:
                 content, file_ext, url
             )
             
+            # Sanitize text content to remove NULL bytes (PostgreSQL doesn't allow them in TEXT columns)
+            sanitized_title = self._sanitize_text(title)
+            sanitized_content = self._sanitize_text(text_content)
+            
             # Create document record
             document = Document(
                 url=url,
-                title=title,
-                content=text_content,
+                title=sanitized_title,
+                content=sanitized_content,
                 document_type=doc_type,
                 file_path=blob_path,
                 blob_url=blob_url,
@@ -400,13 +437,16 @@ class WebCrawler:
         except Exception as e:
             logger.error(f"Failed to download document {url}: {e}")
             
+            # Rollback the failed transaction
+            self.db.rollback()
+            
             # Create failed document record
             document = Document(
                 url=url,
                 title=url,
                 document_type=DocumentType.OTHER,
                 status=DocumentStatus.FAILED,
-                error_message=str(e),
+                error_message=self._sanitize_text(str(e)),
                 crawl_job_id=self.job_id
             )
             self.db.add(document)
@@ -441,10 +481,20 @@ class WebCrawler:
             logger.info(f"Saving {file_ext} document: {url}")
             
             # Determine document type
+            # Server-side pages (aspx, jsp, php, etc.) are treated as HTML since they render HTML
             doc_type_map = {
                 'pdf': DocumentType.PDF,
                 'html': DocumentType.HTML,
                 'htm': DocumentType.HTML,
+                'aspx': DocumentType.HTML,
+                'asp': DocumentType.HTML,
+                'jsp': DocumentType.HTML,
+                'jspx': DocumentType.HTML,
+                'php': DocumentType.HTML,
+                'ashx': DocumentType.HTML,
+                'asmx': DocumentType.HTML,
+                'cfm': DocumentType.HTML,
+                'xhtml': DocumentType.HTML,
                 'txt': DocumentType.TEXT,
                 'md': DocumentType.MARKDOWN,
                 'docx': DocumentType.DOCX,
@@ -466,11 +516,15 @@ class WebCrawler:
                 content, file_ext, url
             )
             
+            # Sanitize text content to remove NULL bytes (PostgreSQL doesn't allow them in TEXT columns)
+            sanitized_title = self._sanitize_text(title)
+            sanitized_content = self._sanitize_text(text_content)
+            
             # Create document record
             document = Document(
                 url=url,
-                title=title,
-                content=text_content,
+                title=sanitized_title,
+                content=sanitized_content,
                 document_type=doc_type,
                 file_path=blob_path,
                 blob_url=blob_url,
@@ -503,13 +557,16 @@ class WebCrawler:
         except Exception as e:
             logger.error(f"Failed to save document {url}: {e}")
             
+            # Rollback the failed transaction
+            self.db.rollback()
+            
             # Create failed document record
             document = Document(
                 url=url,
                 title=url,
                 document_type=DocumentType.OTHER,
                 status=DocumentStatus.FAILED,
-                error_message=str(e),
+                error_message=self._sanitize_text(str(e)),
                 crawl_job_id=self.job_id
             )
             self.db.add(document)
@@ -553,6 +610,19 @@ class WebCrawler:
             
             content_type = response.headers.get('Content-Type', '').lower()
             
+            # Skip Office Open XML component files (themes, relationships, etc.)
+            # These have .docx extensions but aren't Word documents
+            office_component_types = [
+                'thememanager+xml',
+                'theme+xml', 
+                'relationships+xml',
+                'slideshow+xml',
+                'presentation+xml'
+            ]
+            if any(comp in content_type for comp in office_component_types):
+                logger.debug(f"Skipping Office XML component file: {content_type} for {url}")
+                return
+            
             # Determine if this is a document we should save based on content type
             should_save = False
             file_ext = self._get_file_extension(url)
@@ -561,6 +631,10 @@ class WebCrawler:
             if 'text/html' in content_type:
                 should_save = 'html' in self.file_types
                 file_ext = file_ext or 'html'
+            # Server-side pages often have text/html content type even with different extensions
+            elif file_ext in ['aspx', 'asp', 'jsp', 'jspx', 'php', 'ashx', 'asmx', 'cfm'] and 'html' in self.file_types:
+                should_save = True
+                # Keep the original extension for proper storage, but will be processed as HTML
             elif 'application/pdf' in content_type:
                 should_save = 'pdf' in self.file_types
                 file_ext = file_ext or 'pdf'
@@ -578,7 +652,26 @@ class WebCrawler:
                 file_ext = file_ext or 'md'
             else:
                 # Check if URL has a file extension we care about
+                # But be careful: don't process based on extension alone if content type is mismatched
                 if file_ext and file_ext in self.file_types:
+                    # For DOCX files, verify the content type matches or at least isn't contradictory
+                    if file_ext in ['docx', 'doc']:
+                        # If content type is set and doesn't look like a Word document, skip it
+                        if content_type and not any(word_type in content_type for word_type in [
+                            'application/vnd.openxmlformats-officedocument.wordprocessingml',
+                            'application/msword',
+                            'application/octet-stream',  # Generic binary, might be valid
+                            'application/zip'  # DOCX is a ZIP file
+                        ]):
+                            logger.warning(f"Skipping .docx file with mismatched content type: {content_type} for {url}")
+                            return
+                    
+                    # For PDF files, verify content type
+                    if file_ext == 'pdf':
+                        if content_type and 'pdf' not in content_type and 'octet-stream' not in content_type:
+                            logger.warning(f"Skipping .pdf file with mismatched content type: {content_type} for {url}")
+                            return
+                    
                     should_save = True
                 else:
                     logger.debug(f"Skipping unsupported content type: {content_type} for {url}")
@@ -691,9 +784,12 @@ class WebCrawler:
         except Exception as e:
             logger.error(f"Crawl job {self.job_id} failed: {e}")
             
+            # Rollback any failed transaction
+            self.db.rollback()
+            
             # Mark job as failed (keep queue for potential restart)
             self.job.status = CrawlStatus.FAILED
-            self.job.error_message = str(e)
+            self.job.error_message = self._sanitize_text(str(e))
             self.job.completed_at = datetime.utcnow()
             self.db.commit()
 
@@ -718,10 +814,15 @@ def run_crawler(job_id: int):
         
         # Try to mark job as failed
         try:
+            # Rollback any failed transaction
+            db.rollback()
+            
             job = db.query(CrawlJob).filter(CrawlJob.id == job_id).first()
             if job:
                 job.status = CrawlStatus.FAILED
-                job.error_message = str(e)
+                # Sanitize error message to remove NULL bytes
+                error_msg = str(e).replace('\x00', '')
+                job.error_message = error_msg
                 job.completed_at = datetime.utcnow()
                 db.commit()
         except:
