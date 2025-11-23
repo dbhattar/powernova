@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Profile - PowerNOVA</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/profile.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Environment Configuration -->
+    <script src="js/config.js"></script>
+    <script src="js/analytics.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="chat-header">
+        <div class="header-content">
+            <div class="logo-section">
+                <i class="fas fa-bolt logo-icon"></i>
+                <h1 class="logo-text">PowerNOVA <span class="chat-badge">Profile</span></h1>
+            </div>
+            <div class="header-actions">
+                <button class="btn-icon" id="backToChatBtn" title="Back to Chat">
+                    <i class="fas fa-comments"></i>
+                </button>
+                <button class="btn-icon" id="userMenuBtn" title="Account" style="display: none;">
+                    <i class="fas fa-user-circle"></i>
+                    <span class="username-text" id="usernameText"></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content -->
+    <main class="profile-container">
+        <!-- Profile Card -->
+        <section class="profile-card">
+            <div class="profile-header">
+                <div class="profile-avatar">
+                    <i class="fas fa-user-circle"></i>
+                </div>
+                <div class="profile-info">
+                    <h2 id="profileUsername">Loading...</h2>
+                    <p id="profileEmail">...</p>
+                    <div class="profile-badges">
+                        <span class="badge badge-active" id="activeBadge">
+                            <i class="fas fa-check-circle"></i> Active
+                        </span>
+                        <span class="badge badge-verified" id="verifiedBadge" style="display: none;">
+                            <i class="fas fa-certificate"></i> Verified
+                        </span>
+                    </div>
+                </div>
+            </div>
+
+            <div class="profile-stats">
+                <div class="stat-item">
+                    <div class="stat-value" id="totalConversations">0</div>
+                    <div class="stat-label">Conversations</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalDocuments">0</div>
+                    <div class="stat-label">Documents</div>
+                </div>
+                <div class="stat-item">
+                    <div class="stat-value" id="totalMessages">0</div>
+                    <div class="stat-label">Messages</div>
+                </div>
+            </div>
+
+            <div class="profile-actions">
+                <button class="btn btn-secondary" id="editProfileBtn">
+                    <i class="fas fa-edit"></i> Edit Profile
+                </button>
+                <button class="btn btn-secondary" id="changePasswordBtn">
+                    <i class="fas fa-key"></i> Change Password
+                </button>
+            </div>
+        </section>
+
+        <!-- My Documents Section -->
+        <section class="documents-section">
+            <div class="section-header">
+                <div>
+                    <h3><i class="fas fa-folder"></i> My Documents</h3>
+                    <p class="section-description">Manage your uploaded documents across all conversations</p>
+                </div>
+                <button class="btn btn-primary" id="uploadDocumentBtn">
+                    <i class="fas fa-upload"></i> Upload to Library
+                </button>
+            </div>
+
+            <!-- Filter Tabs -->
+            <div class="document-tabs">
+                <button class="tab-btn active" data-scope="all">
+                    <i class="fas fa-layer-group"></i> All Documents
+                </button>
+                <button class="tab-btn" data-scope="user">
+                    <i class="fas fa-book"></i> My Library
+                </button>
+                <button class="tab-btn" data-scope="conversation">
+                    <i class="fas fa-comments"></i> In Conversations
+                </button>
+            </div>
+
+            <!-- Documents Grid -->
+            <div class="documents-grid" id="documentsGrid">
+                <div class="documents-loading">
+                    <i class="fas fa-spinner fa-spin"></i>
+                    <p>Loading documents...</p>
+                </div>
+            </div>
+
+            <!-- Empty State -->
+            <div class="documents-empty" id="documentsEmpty" style="display: none;">
+                <i class="fas fa-folder-open"></i>
+                <h4>No documents yet</h4>
+                <p>Upload documents to your library to access them across all conversations</p>
+                <button class="btn btn-primary" id="uploadDocumentBtn2">
+                    <i class="fas fa-upload"></i> Upload Document
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Edit Profile Modal -->
+    <div class="modal" id="editProfileModal" style="display: none;">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3>Edit Profile</h3>
+                <button class="modal-close" onclick="closeEditProfileModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="editProfileForm">
+                    <div class="form-group">
+                        <label for="editUsername">Display Name</label>
+                        <input type="text" id="editUsername" required minlength="1" maxlength="100">
+                    </div>
+                    <div class="form-group">
+                        <label>Email (cannot be changed)</label>
+                        <input type="email" id="editEmail" disabled>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeEditProfileModal()">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-save"></i> Save Changes
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Change Password Modal (reuse from index.html) -->
+    <div class="modal" id="changePasswordModal" style="display: none;">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3>Change Password</h3>
+                <button class="modal-close" onclick="closeChangePasswordModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="changePasswordForm">
+                    <div class="form-group">
+                        <label for="currentPassword">Current Password</label>
+                        <input type="password" id="currentPassword" required minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label for="newPassword">New Password</label>
+                        <input type="password" id="newPassword" required minlength="6">
+                    </div>
+                    <div class="form-group">
+                        <label for="confirmPassword">Confirm New Password</label>
+                        <input type="password" id="confirmPassword" required minlength="6">
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeChangePasswordModal()">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary">
+                            <i class="fas fa-check"></i> Change Password
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Document Upload Modal -->
+    <div class="modal" id="uploadDocumentModal" style="display: none;">
+        <div class="modal-content modal-medium">
+            <div class="modal-header">
+                <h3>Upload to Library</h3>
+                <button class="modal-close" onclick="closeUploadModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="upload-info">
+                    <i class="fas fa-info-circle"></i>
+                    <p>Documents uploaded to your library are available across ALL your conversations.</p>
+                </div>
+                <form id="uploadDocumentForm">
+                    <div class="form-group">
+                        <label class="file-upload-label">
+                            <input type="file" id="documentFile" accept=".pdf,.docx,.txt,.md" required>
+                            <div class="file-upload-placeholder">
+                                <i class="fas fa-cloud-upload-alt"></i>
+                                <span>Click to select a file</span>
+                                <small>Supported: PDF, DOCX, TXT, MD (Max 10MB)</small>
+                            </div>
+                        </label>
+                        <div class="file-selected" id="fileSelected" style="display: none;">
+                            <i class="fas fa-file"></i>
+                            <span id="fileName">No file selected</span>
+                            <button type="button" class="btn-remove-file" onclick="clearFileSelection()">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    </div>
+                    <div class="upload-progress" id="uploadProgress" style="display: none;">
+                        <div class="progress-bar">
+                            <div class="progress-fill" id="progressFill"></div>
+                        </div>
+                        <div class="progress-text" id="progressText">Uploading...</div>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn btn-secondary" onclick="closeUploadModal()">
+                            Cancel
+                        </button>
+                        <button type="submit" class="btn btn-primary" id="uploadSubmitBtn">
+                            <i class="fas fa-upload"></i> Upload Document
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Menu Dropdown -->
+    <div class="dropdown-menu" id="userMenu" style="display: none;">
+        <div class="dropdown-item" id="userProfileItem">
+            <i class="fas fa-user"></i>
+            <span id="userEmail2">user@example.com</span>
+        </div>
+        <div class="dropdown-divider"></div>
+        <button class="dropdown-item" id="viewProfileBtn">
+            <i class="fas fa-id-card"></i>
+            <span>My Profile</span>
+        </button>
+        <button class="dropdown-item" id="logoutBtn">
+            <i class="fas fa-sign-out-alt"></i>
+            <span>Logout</span>
+        </button>
+    </div>
+
+    <script src="js/profile.js"></script>
+</body>
+</html>

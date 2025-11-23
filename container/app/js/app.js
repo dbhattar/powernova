@@ -67,6 +67,14 @@ const Auth = {
             });
         }
         
+        // View profile button
+        const viewProfileBtn = document.getElementById('viewProfileBtn');
+        if (viewProfileBtn) {
+            viewProfileBtn.addEventListener('click', () => {
+                window.location.href = 'profile.html';
+            });
+        }
+        
         // Close modal when clicking overlay
         const modals = ['loginModal', 'passwordChangeModal'];
         modals.forEach(modalId => {
