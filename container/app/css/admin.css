@@ -248,6 +248,12 @@ tbody tr:hover {
     background: #f8f9ff;
 }
 
+tbody tr[style*="cursor: pointer"]:hover {
+    background: #e8edff;
+    transform: translateX(2px);
+    transition: all 0.2s;
+}
+
 tbody tr:last-child td {
     border-bottom: none;
 }
@@ -396,6 +402,14 @@ tbody tr:last-child td {
     overflow-y: auto;
     box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
     animation: modalSlideIn 0.3s;
+}
+
+.modal-content.modal-large {
+    max-width: 1000px;
+}
+
+.modal-body {
+    padding: 0;
 }
 
 @keyframes modalSlideIn {

@@ -469,6 +469,83 @@
         </div>
     </div>
 
+    <!-- Crawl Job Documents Modal -->
+    <div id="crawl-documents-modal" class="modal">
+        <div class="modal-content modal-large">
+            <div class="modal-header">
+                <h3>📄 Documents from Crawl Job <span id="crawl-job-title"></span></h3>
+                <button class="modal-close" onclick="closeModal('crawl-documents-modal')">×</button>
+            </div>
+            
+            <div class="modal-body">
+                <!-- Stats Summary -->
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px; padding: 15px; background: #f8f9fa; border-radius: 8px;">
+                    <div>
+                        <div style="font-size: 24px; font-weight: bold; color: #667eea;" id="crawl-doc-total">-</div>
+                        <div style="font-size: 12px; color: #666;">Total Documents</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 24px; font-weight: bold; color: #28a745;" id="crawl-doc-with-chunks">-</div>
+                        <div style="font-size: 12px; color: #666;">With Chunks</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 24px; font-weight: bold; color: #17a2b8;" id="crawl-doc-total-chunks">-</div>
+                        <div style="font-size: 12px; color: #666;">Total Chunks</div>
+                    </div>
+                    <div>
+                        <div style="font-size: 24px; font-weight: bold; color: #ffc107;" id="crawl-doc-avg-chunks">-</div>
+                        <div style="font-size: 12px; color: #666;">Avg Chunks/Doc</div>
+                    </div>
+                </div>
+
+                <!-- Filter and Search -->
+                <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <input 
+                        type="text" 
+                        id="crawl-doc-search" 
+                        placeholder="🔍 Search by URL or title..." 
+                        style="flex: 1; min-width: 250px; padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px;"
+                        onkeyup="filterCrawlDocuments()"
+                    >
+                    <select 
+                        id="crawl-doc-status-filter" 
+                        onchange="filterCrawlDocuments()"
+                        style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; background: white;"
+                    >
+                        <option value="">All Statuses</option>
+                        <option value="PENDING">Pending</option>
+                        <option value="PROCESSING">Processing</option>
+                        <option value="COMPLETED">Completed</option>
+                        <option value="FAILED">Failed</option>
+                    </select>
+                    <select 
+                        id="crawl-doc-chunk-filter" 
+                        onchange="filterCrawlDocuments()"
+                        style="padding: 8px 12px; border: 1px solid #ddd; border-radius: 6px; background: white;"
+                    >
+                        <option value="">All Documents</option>
+                        <option value="with-chunks">With Chunks</option>
+                        <option value="no-chunks">No Chunks</option>
+                    </select>
+                </div>
+
+                <!-- Documents List -->
+                <div id="crawl-documents-list" style="max-height: 500px; overflow-y: auto;">
+                    <div class="spinner"></div>
+                </div>
+
+                <!-- Pagination -->
+                <div class="pagination" id="crawl-doc-pagination" style="margin-top: 20px;"></div>
+            </div>
+
+            <div style="padding: 20px; border-top: 1px solid #e0e0e0; display: flex; justify-content: flex-end;">
+                <button type="button" class="btn btn-secondary" onclick="closeModal('crawl-documents-modal')">
+                    Close
+                </button>
+            </div>
+        </div>
+    </div>
+
     <!-- JavaScript moved to external file -->
     <script src="js/admin.js"></script>
 </body>

@@ -202,14 +202,14 @@ async function loadCrawlJobs() {
                 </thead>
                 <tbody>
                     ${jobs.map(job => `
-                        <tr>
+                        <tr style="cursor: pointer;" onclick="event.target.tagName !== 'BUTTON' && event.target.tagName !== 'A' && viewCrawlDocuments(${job.id})">
                             <td>#${job.id}</td>
-                            <td><a href="${job.start_url}" target="_blank">${job.start_url}</a></td>
+                            <td><a href="${job.start_url}" target="_blank" onclick="event.stopPropagation()">${job.start_url}</a></td>
                             <td><span class="badge badge-${getStatusBadge(job.status)}">${job.status}</span></td>
                             <td>${job.pages_crawled}</td>
                             <td>${job.documents_found}</td>
                             <td>${job.started_at ? new Date(job.started_at).toLocaleString() : 'Not started'}</td>
-                            <td>
+                            <td onclick="event.stopPropagation()">
                                 ${job.status.toUpperCase() === 'RUNNING' ? 
                                     `<button class="action-btn action-btn-danger" onclick="cancelCrawl(${job.id})">Cancel</button>
                                      <button class="action-btn action-btn-warning" onclick="restartCrawl(${job.id})">Restart</button>` : 
@@ -1001,4 +1001,274 @@ async function removeDuplicates() {
         showAlert('Failed to remove duplicates: ' + error.message, 'error');
         removeBtn.disabled = false;
     }
+}
+
+// ==================== Crawl Job Documents Viewer ====================
+
+let crawlDocumentsData = {
+    jobId: null,
+    allDocuments: [],
+    filteredDocuments: [],
+    currentPage: 0,
+    itemsPerPage: 10
+};
+
+/**
+ * View documents from a specific crawl job
+ */
+async function viewCrawlDocuments(jobId) {
+    crawlDocumentsData.jobId = jobId;
+    crawlDocumentsData.currentPage = 0;
+    
+    // Show modal
+    document.getElementById('crawl-documents-modal').classList.add('active');
+    document.getElementById('crawl-job-title').textContent = `#${jobId}`;
+    document.getElementById('crawl-documents-list').innerHTML = '<div class="spinner"></div>';
+    
+    // Reset filters
+    document.getElementById('crawl-doc-search').value = '';
+    document.getElementById('crawl-doc-status-filter').value = '';
+    document.getElementById('crawl-doc-chunk-filter').value = '';
+    
+    try {
+        // Fetch documents for this crawl job
+        const response = await apiCall(`/admin/documents?crawl_job_id=${jobId}&limit=1000`);
+        crawlDocumentsData.allDocuments = response.documents || [];
+        crawlDocumentsData.filteredDocuments = [...crawlDocumentsData.allDocuments];
+        
+        // Update stats
+        updateCrawlDocStats();
+        
+        // Render documents
+        renderCrawlDocuments();
+        
+    } catch (error) {
+        console.error('Error loading crawl documents:', error);
+        document.getElementById('crawl-documents-list').innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">❌</div>
+                <h3>Error Loading Documents</h3>
+                <p>${error.message}</p>
+            </div>
+        `;
+    }
+}
+
+/**
+ * Update statistics for crawl documents
+ */
+function updateCrawlDocStats() {
+    const docs = crawlDocumentsData.filteredDocuments;
+    const total = docs.length;
+    const withChunks = docs.filter(d => d.chunk_count > 0).length;
+    const totalChunks = docs.reduce((sum, d) => sum + (d.chunk_count || 0), 0);
+    const avgChunks = total > 0 ? (totalChunks / total).toFixed(1) : 0;
+    
+    document.getElementById('crawl-doc-total').textContent = total;
+    document.getElementById('crawl-doc-with-chunks').textContent = withChunks;
+    document.getElementById('crawl-doc-total-chunks').textContent = totalChunks;
+    document.getElementById('crawl-doc-avg-chunks').textContent = avgChunks;
+}
+
+/**
+ * Filter crawl documents based on search and filters
+ */
+function filterCrawlDocuments() {
+    const searchTerm = document.getElementById('crawl-doc-search').value.toLowerCase();
+    const statusFilter = document.getElementById('crawl-doc-status-filter').value;
+    const chunkFilter = document.getElementById('crawl-doc-chunk-filter').value;
+    
+    crawlDocumentsData.filteredDocuments = crawlDocumentsData.allDocuments.filter(doc => {
+        // Search filter
+        const matchesSearch = !searchTerm || 
+            doc.url.toLowerCase().includes(searchTerm) ||
+            (doc.title && doc.title.toLowerCase().includes(searchTerm));
+        
+        // Status filter
+        const matchesStatus = !statusFilter || doc.status === statusFilter;
+        
+        // Chunk filter
+        let matchesChunk = true;
+        if (chunkFilter === 'with-chunks') {
+            matchesChunk = doc.chunk_count > 0;
+        } else if (chunkFilter === 'no-chunks') {
+            matchesChunk = doc.chunk_count === 0;
+        }
+        
+        return matchesSearch && matchesStatus && matchesChunk;
+    });
+    
+    // Reset to first page
+    crawlDocumentsData.currentPage = 0;
+    
+    // Update stats and render
+    updateCrawlDocStats();
+    renderCrawlDocuments();
+}
+
+/**
+ * Render crawl documents with pagination
+ */
+function renderCrawlDocuments() {
+    const docs = crawlDocumentsData.filteredDocuments;
+    const { currentPage, itemsPerPage } = crawlDocumentsData;
+    const startIdx = currentPage * itemsPerPage;
+    const endIdx = Math.min(startIdx + itemsPerPage, docs.length);
+    const pageDocuments = docs.slice(startIdx, endIdx);
+    
+    const container = document.getElementById('crawl-documents-list');
+    
+    if (docs.length === 0) {
+        container.innerHTML = `
+            <div class="empty-state">
+                <div class="empty-state-icon">📄</div>
+                <h3>No Documents Found</h3>
+                <p>This crawl job hasn't found any documents yet, or they don't match your filters.</p>
+            </div>
+        `;
+        document.getElementById('crawl-doc-pagination').innerHTML = '';
+        return;
+    }
+    
+    // Render document cards
+    container.innerHTML = pageDocuments.map(doc => `
+        <div style="border: 1px solid #e0e0e0; border-radius: 8px; padding: 15px; margin-bottom: 12px; background: white;">
+            <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 10px;">
+                <div style="flex: 1; min-width: 0;">
+                    <div style="font-weight: 600; color: #333; margin-bottom: 5px; display: flex; align-items: center; gap: 8px;">
+                        <span style="font-size: 12px; color: #999;">#${doc.id}</span>
+                        <span class="badge badge-${getStatusBadge(doc.status)}" style="font-size: 11px;">${doc.status}</span>
+                        ${doc.chunk_count > 0 ? `<span style="font-size: 11px; padding: 2px 8px; background: #28a745; color: white; border-radius: 12px;">${doc.chunk_count} chunks</span>` : ''}
+                    </div>
+                    <div style="font-size: 14px; color: #667eea; margin-bottom: 5px; word-break: break-all;">
+                        <a href="${doc.url}" target="_blank" style="color: #667eea; text-decoration: none;">
+                            ${doc.url}
+                        </a>
+                    </div>
+                    ${doc.title ? `<div style="font-size: 13px; color: #666; margin-bottom: 5px;">${escapeHtml(doc.title)}</div>` : ''}
+                </div>
+            </div>
+            
+            <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; font-size: 12px; color: #666; padding-top: 10px; border-top: 1px solid #f0f0f0;">
+                <div>
+                    <strong>Created:</strong> ${new Date(doc.created_at).toLocaleString()}
+                </div>
+                <div>
+                    <strong>Content Type:</strong> ${doc.content_type || 'N/A'}
+                </div>
+                <div>
+                    <strong>File Path:</strong> ${doc.file_path ? '✅ Stored' : '❌ None'}
+                </div>
+                ${doc.error_message ? `
+                    <div style="grid-column: 1 / -1; color: #dc3545; background: #f8d7da; padding: 8px; border-radius: 4px; margin-top: 5px;">
+                        <strong>Error:</strong> ${escapeHtml(doc.error_message)}
+                    </div>
+                ` : ''}
+            </div>
+        </div>
+    `).join('');
+    
+    // Render pagination
+    renderCrawlDocPagination();
+}
+
+/**
+ * Render pagination controls
+ */
+function renderCrawlDocPagination() {
+    const { filteredDocuments, currentPage, itemsPerPage } = crawlDocumentsData;
+    const totalPages = Math.ceil(filteredDocuments.length / itemsPerPage);
+    
+    if (totalPages <= 1) {
+        document.getElementById('crawl-doc-pagination').innerHTML = '';
+        return;
+    }
+    
+    const maxButtons = 7;
+    let startPage = Math.max(0, currentPage - Math.floor(maxButtons / 2));
+    let endPage = Math.min(totalPages - 1, startPage + maxButtons - 1);
+    
+    if (endPage - startPage < maxButtons - 1) {
+        startPage = Math.max(0, endPage - maxButtons + 1);
+    }
+    
+    let buttons = '';
+    
+    // Previous button
+    buttons += `
+        <button 
+            class="pagination-btn ${currentPage === 0 ? 'disabled' : ''}" 
+            onclick="changeCrawlDocPage(${currentPage - 1})"
+            ${currentPage === 0 ? 'disabled' : ''}
+        >
+            ← Previous
+        </button>
+    `;
+    
+    // First page + ellipsis
+    if (startPage > 0) {
+        buttons += `
+            <button class="pagination-btn" onclick="changeCrawlDocPage(0)">1</button>
+            ${startPage > 1 ? '<span style="padding: 0 10px;">...</span>' : ''}
+        `;
+    }
+    
+    // Page buttons
+    for (let i = startPage; i <= endPage; i++) {
+        buttons += `
+            <button 
+                class="pagination-btn ${i === currentPage ? 'active' : ''}" 
+                onclick="changeCrawlDocPage(${i})"
+            >
+                ${i + 1}
+            </button>
+        `;
+    }
+    
+    // Ellipsis + last page
+    if (endPage < totalPages - 1) {
+        buttons += `
+            ${endPage < totalPages - 2 ? '<span style="padding: 0 10px;">...</span>' : ''}
+            <button class="pagination-btn" onclick="changeCrawlDocPage(${totalPages - 1})">${totalPages}</button>
+        `;
+    }
+    
+    // Next button
+    buttons += `
+        <button 
+            class="pagination-btn ${currentPage === totalPages - 1 ? 'disabled' : ''}" 
+            onclick="changeCrawlDocPage(${currentPage + 1})"
+            ${currentPage === totalPages - 1 ? 'disabled' : ''}
+        >
+            Next →
+        </button>
+    `;
+    
+    const startIdx = currentPage * itemsPerPage + 1;
+    const endIdx = Math.min((currentPage + 1) * itemsPerPage, filteredDocuments.length);
+    
+    document.getElementById('crawl-doc-pagination').innerHTML = `
+        <div style="display: flex; justify-content: space-between; align-items: center; flex-wrap: wrap; gap: 15px;">
+            <div style="font-size: 14px; color: #666;">
+                Showing ${startIdx}-${endIdx} of ${filteredDocuments.length} documents
+            </div>
+            <div style="display: flex; gap: 5px; flex-wrap: wrap;">
+                ${buttons}
+            </div>
+        </div>
+    `;
+}
+
+/**
+ * Change page in crawl documents viewer
+ */
+function changeCrawlDocPage(page) {
+    const totalPages = Math.ceil(crawlDocumentsData.filteredDocuments.length / crawlDocumentsData.itemsPerPage);
+    if (page < 0 || page >= totalPages) return;
+    
+    crawlDocumentsData.currentPage = page;
+    renderCrawlDocuments();
+    
+    // Scroll to top of list
+    document.getElementById('crawl-documents-list').scrollTop = 0;
 }

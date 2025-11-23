@@ -260,7 +260,7 @@ async def restart_crawl_job(
     return job
 
 
-@router.get("/documents", response_model=List[DocumentResponse])
+@router.get("/documents")
 async def list_documents(
     skip: int = 0,
     limit: int = 50,
@@ -280,8 +280,30 @@ async def list_documents(
     if crawl_job_id:
         query = query.filter(Document.crawl_job_id == crawl_job_id)
     
+    total = query.count()
     documents = query.order_by(Document.created_at.desc()).offset(skip).limit(limit).all()
-    return documents
+    
+    return {
+        "documents": [{
+            "id": doc.id,
+            "url": doc.url,
+            "title": doc.title,
+            "document_type": doc.document_type.value if hasattr(doc.document_type, 'value') else str(doc.document_type),
+            "file_path": doc.file_path,
+            "blob_url": doc.blob_url,
+            "file_size": doc.file_size,
+            "status": doc.status.value if hasattr(doc.status, 'value') else str(doc.status),
+            "error_message": doc.error_message,
+            "crawl_job_id": doc.crawl_job_id,
+            "embedding_generated": doc.embedding_generated,
+            "chunk_count": doc.chunk_count,
+            "created_at": doc.created_at,
+            "updated_at": doc.updated_at
+        } for doc in documents],
+        "total": total,
+        "skip": skip,
+        "limit": limit
+    }
 
 
 @router.get("/documents/{document_id}", response_model=DocumentResponse)
