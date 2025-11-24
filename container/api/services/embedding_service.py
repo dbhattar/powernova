@@ -9,6 +9,14 @@ import time
 
 logger = logging.getLogger(__name__)
 
+# Try to import tiktoken for accurate token counting
+try:
+    import tiktoken
+    TIKTOKEN_AVAILABLE = True
+except ImportError:
+    TIKTOKEN_AVAILABLE = False
+    logger.warning("tiktoken not installed - using word-based approximation for token counting")
+
 
 class EmbeddingService:
     """
@@ -18,6 +26,7 @@ class EmbeddingService:
     - 1536 dimensions
     - $0.02 per 1M tokens (5x cheaper than ada-002)
     - Better performance than ada-002
+    - Max context: 8191 tokens
     """
     
     def __init__(self):
@@ -29,8 +38,120 @@ class EmbeddingService:
         self.client = OpenAI(api_key=api_key)
         self.model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
         self.dimensions = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))
+        self.max_tokens = 8191  # Maximum tokens for text-embedding-3-small
         
-        logger.info(f"Initialized EmbeddingService with model={self.model}, dimensions={self.dimensions}")
+        # Initialize tokenizer if available
+        self.tokenizer = None
+        if TIKTOKEN_AVAILABLE:
+            try:
+                self.tokenizer = tiktoken.encoding_for_model(self.model)
+                logger.info(f"Initialized tiktoken encoder for {self.model}")
+            except Exception as e:
+                logger.warning(f"Could not initialize tiktoken for {self.model}: {e}")
+        
+        logger.info(f"Initialized EmbeddingService with model={self.model}, dimensions={self.dimensions}, max_tokens={self.max_tokens}")
+    
+    def _clean_text_for_encoding(self, text: str) -> str:
+        """
+        Clean text to prevent encoding issues with tiktoken
+        
+        This fixes the REPLACEMENT_CHARACTER warning by:
+        1. Ensuring valid UTF-8 encoding
+        2. Removing problematic characters that tiktoken can't handle
+        
+        Args:
+            text: Raw text that may contain encoding issues
+            
+        Returns:
+            Cleaned text safe for tiktoken encoding
+        """
+        if not text:
+            return ""
+        
+        # Step 1: Ensure valid UTF-8 by encoding and decoding with error handling
+        # 'ignore' skips invalid bytes, 'replace' would add � which we want to avoid
+        try:
+            # Try to encode as UTF-8, then decode back
+            # This removes any characters that aren't valid UTF-8
+            text = text.encode('utf-8', errors='ignore').decode('utf-8', errors='ignore')
+        except Exception as e:
+            logger.warning(f"UTF-8 cleaning error: {e}, using original text")
+        
+        # Step 2: Remove NULL bytes (shouldn't exist after UTF-8 cleaning, but be safe)
+        text = text.replace('\x00', '')
+        
+        # Step 3: Remove other problematic control characters
+        # Keep: newlines (\n), carriage returns (\r), tabs (\t)
+        # Remove: other control chars (0x00-0x1F except \n \r \t)
+        cleaned_chars = []
+        for char in text:
+            code = ord(char)
+            # Allow printable chars (>= 32), and common whitespace (\n=10, \r=13, \t=9)
+            if code >= 32 or char in '\n\r\t':
+                cleaned_chars.append(char)
+        
+        cleaned_text = ''.join(cleaned_chars)
+        
+        # Log if we removed significant content
+        if len(cleaned_text) < len(text) * 0.95:
+            logger.warning(f"Cleaned text from {len(text)} to {len(cleaned_text)} chars ({len(text) - len(cleaned_text)} chars removed)")
+        
+        return cleaned_text
+    
+    def count_tokens(self, text: str) -> int:
+        """
+        Count tokens in text accurately
+        
+        Args:
+            text: Text to count tokens for
+            
+        Returns:
+            Number of tokens
+        """
+        if self.tokenizer:
+            return len(self.tokenizer.encode(text))
+        else:
+            # Fallback: conservative word-based estimate
+            # For technical/dense text: 1 token ≈ 0.6 words
+            words = len(text.split())
+            return int(words * 1.67)
+    
+    def truncate_to_token_limit(self, text: str, max_tokens: int = None) -> str:
+        """
+        Truncate text to fit within token limit
+        
+        NOTE: Assumes text is already cleaned. Call _clean_text_for_encoding() first.
+        
+        Args:
+            text: Text to truncate (should already be cleaned)
+            max_tokens: Maximum tokens (defaults to self.max_tokens)
+            
+        Returns:
+            Truncated text
+        """
+        if max_tokens is None:
+            max_tokens = self.max_tokens
+        
+        token_count = self.count_tokens(text)
+        
+        if token_count <= max_tokens:
+            return text
+        
+        logger.warning(f"Text exceeds token limit ({token_count} > {max_tokens}), truncating...")
+        
+        if self.tokenizer:
+            # Accurate truncation using tokenizer
+            tokens = self.tokenizer.encode(text)
+            truncated_tokens = tokens[:max_tokens]
+            return self.tokenizer.decode(truncated_tokens)
+        else:
+            # Fallback: word-based truncation
+            # Estimate: max_tokens / 1.67 ≈ safe word count
+            max_words = int(max_tokens / 1.67)
+            words = text.split()
+            if len(words) > max_words:
+                return ' '.join(words[:max_words])
+            return text
     
     def generate_embedding(self, text: str, retry_count: int = 3) -> Optional[List[float]]:
         """
@@ -47,14 +168,13 @@ class EmbeddingService:
             logger.warning("Empty text provided for embedding")
             return None
         
-        # Truncate if too long (max 8191 tokens for text-embedding-3-small)
-        # Conservative approximation for dense technical text: 1 token ≈ 0.5 words
-        # Using 4000 words to ensure we stay well below 8192 token limit
-        words = text.split()
-        max_words = 4000  # ~6000-7000 tokens (safe margin below 8192 limit)
-        if len(words) > max_words:
-            logger.warning(f"Text too long ({len(words)} words), truncating to {max_words}")
-            text = ' '.join(words[:max_words])
+        # Step 1: Clean text to prevent REPLACEMENT_CHARACTER issues
+        # This fixes encoding problems BEFORE chunking/counting
+        text = self._clean_text_for_encoding(text)
+        
+        # Step 2: Truncate to token limit (with safety margin)
+        safe_limit = self.max_tokens - 100  # Safety margin
+        text = self.truncate_to_token_limit(text, safe_limit)
         
         for attempt in range(retry_count):
             try:
@@ -74,7 +194,14 @@ class EmbeddingService:
                 return embedding
                 
             except Exception as e:
+                error_msg = str(e)
                 logger.error(f"Failed to generate embedding (attempt {attempt + 1}/{retry_count}): {e}")
+                
+                # Check if it's a token limit error
+                if "maximum context length" in error_msg.lower() or "tokens" in error_msg.lower():
+                    # Try more aggressive truncation
+                    logger.warning("Token limit exceeded, trying more aggressive truncation")
+                    text = self.truncate_to_token_limit(text, int(safe_limit * 0.8))
                 
                 if attempt < retry_count - 1:
                     # Exponential backoff

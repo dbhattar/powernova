@@ -12,19 +12,24 @@ class TextChunker:
     Split documents into overlapping chunks for embedding generation
     
     This ensures:
-    1. Chunks fit within embedding model token limits
+    1. Chunks fit within embedding model token limits (8191 tokens)
     2. Overlap prevents information loss at chunk boundaries
     3. Each chunk is meaningful and context-preserving
+    
+    Token limit considerations:
+    - OpenAI text-embedding-3-small: 8191 tokens max
+    - Conservative estimate: 1 token ≈ 0.6 words for technical text
+    - Safe chunk size: ~3000 words ≈ 5000 tokens (safe margin)
     """
     
     def __init__(self, 
-                 chunk_size: int = 800,       # words per chunk (roughly 1000 tokens)
-                 chunk_overlap: int = 200):   # word overlap between chunks
+                 chunk_size: int = 3000,      # words per chunk (~5000 tokens with safety margin)
+                 chunk_overlap: int = 500):   # word overlap between chunks
         """
         Initialize chunker
         
         Args:
-            chunk_size: Target number of words per chunk
+            chunk_size: Target number of words per chunk (default: 3000 words ≈ 5000 tokens)
             chunk_overlap: Number of overlapping words between chunks
         """
         self.chunk_size = chunk_size
@@ -120,5 +125,5 @@ class TextChunker:
 
 
 def get_text_chunker() -> TextChunker:
-    """Get singleton text chunker instance"""
-    return TextChunker(chunk_size=800, chunk_overlap=200)
+    """Get singleton text chunker instance with safe chunk sizes for OpenAI embeddings"""
+    return TextChunker(chunk_size=3000, chunk_overlap=500)

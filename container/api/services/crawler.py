@@ -365,7 +365,11 @@ class WebCrawler:
             
             # Download document
             response = self.session.get(url, timeout=30)
-            response.raise_for_status()
+            
+            # Handle HTTP errors gracefully
+            if response.status_code >= 400:
+                logger.warning(f"HTTP error {response.status_code} downloading {url}")
+                return False
             
             content = response.content
             file_ext = self._get_file_extension(url) or 'html'
@@ -603,10 +607,26 @@ class WebCrawler:
             
             # Fetch the page/document
             response = self.session.get(url, timeout=30)
-            response.raise_for_status()
             
-            # Save visited URL to database with status code
+            # Save visited URL to database with status code (even for errors)
             self._save_visited_url(url, response.status_code, depth)
+            
+            # Handle HTTP error status codes gracefully
+            if response.status_code >= 400:
+                # Client errors (4xx) and server errors (5xx)
+                if response.status_code == 404:
+                    logger.warning(f"Page not found (404): {url}")
+                elif response.status_code == 403:
+                    logger.warning(f"Access forbidden (403): {url}")
+                elif response.status_code == 401:
+                    logger.warning(f"Unauthorized (401): {url}")
+                elif response.status_code >= 500:
+                    logger.warning(f"Server error ({response.status_code}): {url}")
+                else:
+                    logger.warning(f"HTTP error {response.status_code}: {url}")
+                
+                # Skip this URL and continue crawling
+                return
             
             content_type = response.headers.get('Content-Type', '').lower()
             
@@ -722,8 +742,38 @@ class WebCrawler:
                 
                 logger.info(f"Found {links_found} new links on {url}")
             
+        except requests.exceptions.Timeout:
+            logger.warning(f"Request timeout (30s) for {url} - skipping")
+            # Save as visited with a placeholder status code
+            try:
+                self._save_visited_url(url, 408, depth)  # 408 = Request Timeout
+            except:
+                pass
+        except requests.exceptions.ConnectionError as e:
+            logger.warning(f"Connection error for {url}: {e} - skipping")
+            try:
+                self._save_visited_url(url, 0, depth)  # 0 = Connection failed
+            except:
+                pass
+        except requests.exceptions.TooManyRedirects:
+            logger.warning(f"Too many redirects for {url} - skipping")
+            try:
+                self._save_visited_url(url, 310, depth)  # 310 = Too many redirects
+            except:
+                pass
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Request failed for {url}: {e} - skipping")
+            try:
+                self._save_visited_url(url, 0, depth)
+            except:
+                pass
         except Exception as e:
-            logger.error(f"Failed to crawl {url}: {e}")
+            logger.error(f"Unexpected error crawling {url}: {e} - skipping")
+            # Don't let one bad URL stop the entire crawl
+            try:
+                self._save_visited_url(url, 0, depth)
+            except:
+                pass
     
     def run(self):
         """
