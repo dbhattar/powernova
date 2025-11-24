@@ -9,7 +9,7 @@ from typing import Optional, List
 from datetime import datetime
 
 from database.session import get_db
-from models.feedback import Feedback, FeedbackStatus
+from models.feedback import Feedback, FeedbackStatus, FeedbackType
 from routes.admin import verify_admin_key
 
 router = APIRouter()
@@ -23,6 +23,7 @@ class FeedbackSubmit(BaseModel):
     email: EmailStr = Field(..., description="Contact email address")
     company: Optional[str] = Field(None, max_length=255, description="Company name (optional)")
     message: str = Field(..., min_length=10, description="Feedback message content")
+    request_type: Optional[FeedbackType] = Field(FeedbackType.FEEDBACK, description="Type of request: feedback or account_request")
 
 
 class FeedbackUpdate(BaseModel):
@@ -38,6 +39,7 @@ class FeedbackResponse(BaseModel):
     email: str
     company: Optional[str]
     message: str
+    request_type: str
     status: str
     admin_notes: Optional[str]
     created_at: str
@@ -56,8 +58,14 @@ async def submit_feedback(
     db: Session = Depends(get_db)
 ):
     """
-    Submit feedback from the landing page contact form.
+    Submit feedback or account request from the app.
     No authentication required - this is a public endpoint.
+    
+    For account requests, set request_type='account_request' and provide:
+    - name: Full name
+    - email: Valid email address (will be used for login)
+    - company: Company name
+    - message: Justification for account access
     """
     try:
         # Create new feedback
@@ -66,6 +74,7 @@ async def submit_feedback(
             email=feedback_data.email,
             company=feedback_data.company,
             message=feedback_data.message,
+            request_type=feedback_data.request_type,
             status=FeedbackStatus.NEW
         )
         
@@ -73,9 +82,15 @@ async def submit_feedback(
         db.commit()
         db.refresh(feedback)
         
+        # Different messages based on request type
+        if feedback_data.request_type == FeedbackType.ACCOUNT_REQUEST:
+            message = "Thank you for your account request! We'll review it and contact you at the provided email address."
+        else:
+            message = "Thank you for your feedback! We'll get back to you soon."
+        
         return {
             "success": True,
-            "message": "Thank you for your feedback! We'll get back to you soon.",
+            "message": message,
             "feedback_id": feedback.id
         }
     

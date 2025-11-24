@@ -713,6 +713,7 @@ async function loadFeedback() {
                 <thead>
                     <tr>
                         <th>ID</th>
+                        <th>Type</th>
                         <th>Name</th>
                         <th>Email</th>
                         <th>Company</th>
@@ -733,6 +734,11 @@ async function loadFeedback() {
                 'archived': '<span class="badge badge-secondary">📦 Archived</span>'
             };
             
+            const typeBadges = {
+                'feedback': '<span class="badge badge-info">💬 Feedback</span>',
+                'account_request': '<span class="badge badge-highlight">👤 Account Request</span>'
+            };
+            
             const messagePrev = feedback.message.length > 50 
                 ? feedback.message.substring(0, 50) + '...' 
                 : feedback.message;
@@ -742,6 +748,7 @@ async function loadFeedback() {
             html += `
                 <tr>
                     <td>${feedback.id}</td>
+                    <td>${typeBadges[feedback.request_type] || feedback.request_type}</td>
                     <td>${escapeHtml(feedback.name)}</td>
                     <td>${escapeHtml(feedback.email)}</td>
                     <td>${feedback.company ? escapeHtml(feedback.company) : '-'}</td>
@@ -781,6 +788,14 @@ async function viewFeedbackDetails(id) {
         
         // Populate modal
         document.getElementById('feedback-id').value = feedback.id;
+        
+        // Show request type badge
+        const typeBadges = {
+            'feedback': '<span class="badge badge-info">💬 Feedback</span>',
+            'account_request': '<span class="badge badge-highlight">👤 Account Request</span>'
+        };
+        document.getElementById('feedback-type-badge').innerHTML = typeBadges[feedback.request_type] || feedback.request_type;
+        
         document.getElementById('feedback-name').value = feedback.name || '';
         document.getElementById('feedback-email').value = feedback.email || '';
         document.getElementById('feedback-company').value = feedback.company || '';

@@ -361,6 +361,100 @@ function closePasswordChangeModal() {
     Auth.closePasswordChangeModal();
 }
 
+// Account request modal functions
+function openAccountRequestModal() {
+    closeLoginModal(); // Close login modal first
+    document.getElementById('accountRequestModal').style.display = 'flex';
+    document.getElementById('requestName').focus();
+}
+
+function closeAccountRequestModal() {
+    document.getElementById('accountRequestModal').style.display = 'none';
+    // Reset form
+    document.getElementById('accountRequestForm').reset();
+    document.getElementById('accountRequestError').style.display = 'none';
+    document.getElementById('accountRequestSuccess').style.display = 'none';
+}
+
+function openLoginModal() {
+    document.getElementById('loginModal').style.display = 'flex';
+}
+
+// Handle account request form submission
+document.addEventListener('DOMContentLoaded', () => {
+    const accountRequestForm = document.getElementById('accountRequestForm');
+    if (accountRequestForm) {
+        accountRequestForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const submitBtn = document.getElementById('accountRequestSubmitBtn');
+            const errorEl = document.getElementById('accountRequestError');
+            const successEl = document.getElementById('accountRequestSuccess');
+            
+            // Hide previous messages
+            errorEl.style.display = 'none';
+            successEl.style.display = 'none';
+            
+            // Disable submit button
+            submitBtn.disabled = true;
+            submitBtn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Submitting...';
+            
+            try {
+                const formData = {
+                    name: document.getElementById('requestName').value.trim(),
+                    email: document.getElementById('requestEmail').value.trim(),
+                    company: document.getElementById('requestCompany').value.trim(),
+                    message: document.getElementById('requestJustification').value.trim(),
+                    request_type: 'account_request'
+                };
+                
+                const response = await fetch(`${window.PowerNOVA.getApiUrl()}/api/feedback`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(formData)
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    successEl.textContent = data.message || 'Thank you! Your request has been submitted successfully.';
+                    successEl.style.display = 'block';
+                    
+                    // Reset form
+                    accountRequestForm.reset();
+                    
+                    // Close modal after 3 seconds
+                    setTimeout(() => {
+                        closeAccountRequestModal();
+                    }, 3000);
+                } else {
+                    throw new Error(data.detail || 'Failed to submit request');
+                }
+            } catch (error) {
+                console.error('Account request error:', error);
+                errorEl.textContent = error.message || 'Failed to submit request. Please try again.';
+                errorEl.style.display = 'block';
+            } finally {
+                // Re-enable submit button
+                submitBtn.disabled = false;
+                submitBtn.innerHTML = '<i class="fas fa-paper-plane"></i> Submit Request';
+            }
+        });
+    }
+    
+    // Close account request modal when clicking overlay
+    const accountRequestModal = document.getElementById('accountRequestModal');
+    if (accountRequestModal) {
+        accountRequestModal.addEventListener('click', (e) => {
+            if (e.target === accountRequestModal) {
+                closeAccountRequestModal();
+            }
+        });
+    }
+});
+
 // ============================================
 // END AUTHENTICATION MODULE
 // ============================================

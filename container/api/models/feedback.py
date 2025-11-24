@@ -16,6 +16,12 @@ class FeedbackStatus(str, enum.Enum):
     ARCHIVED = "archived"
 
 
+class FeedbackType(str, enum.Enum):
+    """Feedback type enumeration"""
+    FEEDBACK = "feedback"
+    ACCOUNT_REQUEST = "account_request"
+
+
 class Feedback(Base):
     """
     Feedback model for storing customer messages from the landing page
@@ -27,6 +33,13 @@ class Feedback(Base):
     email = Column(String(255), nullable=False, index=True, doc="Contact email address")
     company = Column(String(255), nullable=True, doc="Company name (optional)")
     message = Column(Text, nullable=False, doc="Feedback message content")
+    request_type = Column(
+        SQLEnum(FeedbackType, values_callable=lambda x: [e.value for e in x]),
+        default=FeedbackType.FEEDBACK,
+        nullable=False,
+        index=True,
+        doc="Type of request: feedback or account_request"
+    )
     status = Column(
         SQLEnum(FeedbackStatus, values_callable=lambda x: [e.value for e in x]),
         default=FeedbackStatus.NEW,
@@ -50,6 +63,7 @@ class Feedback(Base):
             "email": self.email,
             "company": self.company,
             "message": self.message,
+            "request_type": self.request_type.value if isinstance(self.request_type, FeedbackType) else self.request_type,
             "status": self.status.value if isinstance(self.status, FeedbackStatus) else self.status,
             "admin_notes": self.admin_notes,
             "created_at": self.created_at.isoformat() if self.created_at else None,

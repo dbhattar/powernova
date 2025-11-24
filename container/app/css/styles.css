@@ -1992,6 +1992,10 @@ body {
     max-width: 450px;
 }
 
+.modal-wide {
+    max-width: 550px;
+}
+
 .rename-form {
     display: flex;
     flex-direction: column;
@@ -2184,4 +2188,142 @@ body {
 
 /* ============================================
    END CONVERSATION MANAGEMENT STYLES
+   ============================================ */
+
+/* ============================================
+   ACCOUNT REQUEST MODAL STYLES
+   ============================================ */
+
+/* Compact modal header for account request */
+.modal-header-compact {
+    padding: 1.5rem 2rem 1rem 2rem;
+}
+
+/* Compact modal body for account request form */
+.modal-body-compact {
+    padding: 1rem 2rem 1.5rem 2rem;
+}
+
+/* Compact description for account request */
+.modal-body-compact .modal-description {
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+}
+
+/* Compact form groups for account request */
+.form-group-compact {
+    margin-bottom: 0.875rem;
+}
+
+.form-group-last {
+    margin-bottom: 1rem;
+}
+
+/* Compact footer text */
+.modal-body-compact .modal-footer-text {
+    margin-top: 0.75rem;
+}
+
+/* Compact error/success messages in account request form */
+.modal-body-compact .error-message,
+.modal-body-compact .success-message {
+    padding: 0.625rem 0.875rem;
+    margin-bottom: 0.875rem;
+    font-size: 0.875rem;
+}
+
+/* Subtle label styling for justification field */
+.label-subtle {
+    color: var(--text-secondary);
+    font-weight: 500;
+    font-size: 0.875rem;
+}
+
+.label-hint {
+    color: var(--text-tertiary);
+    font-weight: 400;
+    font-size: 0.8rem;
+    font-style: italic;
+}
+
+.link-primary {
+    color: var(--accent-primary);
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.2s;
+}
+
+.link-primary:hover {
+    color: var(--accent-secondary);
+    text-decoration: underline;
+}
+
+.link-secondary {
+    color: var(--text-secondary);
+    text-decoration: none;
+    font-size: 0.9rem;
+    transition: color 0.2s;
+}
+
+.link-secondary:hover {
+    color: var(--text-primary);
+    text-decoration: underline;
+}
+
+.success-message {
+    background: #d4edda;
+    color: #155724;
+    border: 1px solid #c3e6cb;
+    border-radius: 8px;
+    padding: 0.625rem 0.875rem;
+    margin-bottom: 0.875rem;
+    font-size: 0.875rem;
+    border-left: 4px solid #28a745;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.success-message::before {
+    content: '✓';
+    font-size: 1.1rem;
+    font-weight: bold;
+}
+
+/* Styled textarea for account request justification */
+#accountRequestForm textarea {
+    width: 100%;
+    padding: 0.625rem 0.875rem;
+    border: 2px solid var(--border-color);
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    line-height: 1.4;
+    resize: vertical;
+    min-height: 70px;
+    max-height: 130px;
+    transition: all 0.2s;
+    color: var(--text-primary);
+}
+
+#accountRequestForm textarea:focus {
+    outline: none;
+    border-color: var(--primary-color);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+#accountRequestForm textarea::placeholder {
+    color: var(--text-tertiary);
+    font-size: 0.9rem;
+}
+
+#accountRequestForm small {
+    display: block;
+    margin-top: 0.25rem;
+    color: var(--text-secondary);
+    font-size: 0.85rem;
+}
+
+/* ============================================
+   END ACCOUNT REQUEST MODAL STYLES
    ============================================ */

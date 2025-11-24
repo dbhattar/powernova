@@ -277,7 +277,49 @@
                     </button>
                 </form>
                 <div class="modal-footer-text">
-                    <p>Don't have an account? Contact your administrator.</p>
+                    <p>Don't have an account? <a href="#" onclick="openAccountRequestModal(); return false;" class="link-primary">Request an account</a></p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Account Request Modal -->
+    <div class="modal-overlay" id="accountRequestModal" style="display: none;">
+        <div class="modal-container modal-wide">
+            <div class="modal-header modal-header-compact">
+                <h2>📝 Request Account Access</h2>
+                <button class="modal-close" onclick="closeAccountRequestModal()">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            <div class="modal-body modal-body-compact">
+                <p class="modal-description">Fill out the form below to request access to PowerNOVA. We'll review your request and contact you via email.</p>
+                <form id="accountRequestForm">
+                    <div class="form-group form-group-compact">
+                        <label for="requestName">Full Name *</label>
+                        <input type="text" id="requestName" required placeholder="Enter your full name" autocomplete="name">
+                    </div>
+                    <div class="form-group form-group-compact">
+                        <label for="requestEmail">Email Address *</label>
+                        <input type="email" id="requestEmail" required placeholder="your@email.com" autocomplete="email">
+                        <small>This email will be used for your account login</small>
+                    </div>
+                    <div class="form-group form-group-compact">
+                        <label for="requestCompany">Company/Organization *</label>
+                        <input type="text" id="requestCompany" required placeholder="Enter your company name" autocomplete="organization">
+                    </div>
+                    <div class="form-group form-group-compact form-group-last">
+                        <label for="requestJustification" class="label-subtle">Why do you need access? <span class="label-hint">(min. 20 characters)</span></label>
+                        <textarea id="requestJustification" required placeholder="Please explain your use case for PowerNOVA..." rows="3" minlength="20"></textarea>
+                    </div>
+                    <div class="error-message" id="accountRequestError" style="display: none;"></div>
+                    <div class="success-message" id="accountRequestSuccess" style="display: none;"></div>
+                    <button type="submit" class="btn-primary" id="accountRequestSubmitBtn">
+                        <i class="fas fa-paper-plane"></i> Submit Request
+                    </button>
+                </form>
+                <div class="modal-footer-text">
+                    <p><a href="#" onclick="closeAccountRequestModal(); openLoginModal(); return false;" class="link-secondary">← Back to Login</a></p>
                 </div>
             </div>
         </div>
