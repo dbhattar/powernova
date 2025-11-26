@@ -1064,6 +1064,16 @@ window.addMessageToUI = function(role, content, isAssistant = false) {
 
 // Initialize app when DOM is loaded
 document.addEventListener('DOMContentLoaded', async () => {
+    // Check maintenance mode first
+    if (window.PowerNOVA?.MaintenanceMode) {
+        const isMaintenanceMode = await window.PowerNOVA.MaintenanceMode.init();
+        
+        if (isMaintenanceMode) {
+            console.log('Application is in maintenance mode, skipping app initialization');
+            return; // Don't initialize the app
+        }
+    }
+    
     // Initialize Google Analytics first (production only)
     if (window.PowerNOVA?.Analytics) {
         await window.PowerNOVA.Analytics.init();

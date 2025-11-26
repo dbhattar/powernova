@@ -34,39 +34,46 @@ async def lifespan(app: FastAPI):
     if check_db_connection():
         print("✓ Database connection successful")
         
-        # Auto-resume interrupted crawl jobs
-        try:
-            from database.session import SessionLocal
-            from models import CrawlJob, CrawlStatus
-            from services.crawler import run_crawler
-            import threading
-            
-            db = SessionLocal()
+        # Check if in maintenance mode
+        maintenance_mode = os.getenv("MAINTENANCE_MODE", "false").lower() in ["true", "1", "yes"]
+        
+        if maintenance_mode:
+            print("⚠ Maintenance mode enabled - skipping background task auto-resume")
+            print("  Background crawl jobs will NOT be started automatically")
+        else:
+            # Auto-resume interrupted crawl jobs
             try:
-                # Find jobs that were running or failed (can be restarted)
-                interrupted_jobs = db.query(CrawlJob).filter(
-                    CrawlJob.status.in_([CrawlStatus.RUNNING, CrawlStatus.FAILED])
-                ).all()
+                from database.session import SessionLocal
+                from models import CrawlJob, CrawlStatus
+                from services.crawler import run_crawler
+                import threading
                 
-                if interrupted_jobs:
-                    print(f"Found {len(interrupted_jobs)} interrupted crawl job(s), auto-resuming...")
-                    for job in interrupted_jobs:
-                        print(f"  → Resuming crawl job #{job.id}: {job.start_url} (was {job.status.value})")
-                        # Reset status to RUNNING (will be updated by crawler)
-                        job.status = CrawlStatus.RUNNING
-                        job.error_message = None
-                        db.commit()
-                        
-                        # Start crawler in background thread
-                        thread = threading.Thread(target=run_crawler, args=(job.id,), daemon=True)
-                        thread.start()
-                    print("✓ Auto-resume initiated for interrupted crawl jobs")
-                else:
-                    print("✓ No interrupted crawl jobs to resume")
-            finally:
-                db.close()
-        except Exception as e:
-            print(f"✗ Warning: Failed to auto-resume crawl jobs: {e}")
+                db = SessionLocal()
+                try:
+                    # Find jobs that were running or failed (can be restarted)
+                    interrupted_jobs = db.query(CrawlJob).filter(
+                        CrawlJob.status.in_([CrawlStatus.RUNNING, CrawlStatus.FAILED])
+                    ).all()
+                    
+                    if interrupted_jobs:
+                        print(f"Found {len(interrupted_jobs)} interrupted crawl job(s), auto-resuming...")
+                        for job in interrupted_jobs:
+                            print(f"  → Resuming crawl job #{job.id}: {job.start_url} (was {job.status.value})")
+                            # Reset status to RUNNING (will be updated by crawler)
+                            job.status = CrawlStatus.RUNNING
+                            job.error_message = None
+                            db.commit()
+                            
+                            # Start crawler in background thread
+                            thread = threading.Thread(target=run_crawler, args=(job.id,), daemon=True)
+                            thread.start()
+                        print("✓ Auto-resume initiated for interrupted crawl jobs")
+                    else:
+                        print("✓ No interrupted crawl jobs to resume")
+                finally:
+                    db.close()
+            except Exception as e:
+                print(f"✗ Warning: Failed to auto-resume crawl jobs: {e}")
     else:
         print("✗ WARNING: Database connection failed!")
         print("  API will start but database features will not work.")
@@ -105,7 +112,34 @@ class OptionsMiddleware(BaseHTTPMiddleware):
             })
         return await call_next(request)
 
+class MaintenanceMiddleware(BaseHTTPMiddleware):
+    """
+    Middleware to block requests during maintenance mode.
+    Checks MAINTENANCE_MODE environment variable.
+    Allows health and maintenance status endpoints to pass through.
+    """
+    async def dispatch(self, request, call_next):
+        # Allow health and maintenance status endpoints
+        if request.url.path in ["/health", "/api/maintenance/status"]:
+            return await call_next(request)
+        
+        # Check maintenance mode
+        maintenance_mode = os.getenv("MAINTENANCE_MODE", "false").lower() in ["true", "1", "yes"]
+        
+        if maintenance_mode:
+            return JSONResponse(
+                status_code=503,
+                content={
+                    "error": "Service Unavailable",
+                    "message": "PowerNOVA is currently undergoing scheduled maintenance. We'll be back shortly!",
+                    "maintenance": True
+                }
+            )
+        
+        return await call_next(request)
+
 app.add_middleware(OptionsMiddleware)
+app.add_middleware(MaintenanceMiddleware)
 
 # CORS Configuration
 # Allow requests from frontend domains
@@ -176,6 +210,32 @@ async def health_check():
         },
         status_code=200 if db_healthy else 503
     )
+
+# Maintenance status endpoint
+@app.get("/api/maintenance/status")
+async def maintenance_status():
+    """
+    Returns the current maintenance mode status.
+    This endpoint is always accessible, even during maintenance mode.
+    """
+    # Read MAINTENANCE_MODE environment variable (defaults to false)
+    maintenance_mode = os.getenv("MAINTENANCE_MODE", "false").lower() in ["true", "1", "yes"]
+    
+    if maintenance_mode:
+        return JSONResponse(
+            content={
+                "maintenance": True,
+                "message": "PowerNOVA is currently undergoing scheduled maintenance. We'll be back shortly!",
+                "estimated_duration": "30-60 minutes"
+            }
+        )
+    else:
+        return JSONResponse(
+            content={
+                "maintenance": False,
+                "message": "Service is operating normally"
+            }
+        )
 
 # Root endpoint
 @app.get("/")
