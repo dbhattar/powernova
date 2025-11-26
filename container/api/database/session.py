@@ -25,11 +25,11 @@ DATABASE_URL = os.getenv(
 )
 
 # Get connection pool settings from environment
-# Supabase Session mode has strict connection limits, so we need conservative settings
-DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "3"))  # Reduced from 5 to 3
-DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "5"))  # Reduced from 10 to 5
+# Azure PostgreSQL can handle more connections than Supabase
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", "10"))  # Increased for Azure
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", "20"))  # Increased for Azure
 DB_POOL_TIMEOUT = int(os.getenv("DB_POOL_TIMEOUT", "30"))
-DB_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "1800"))  # Reduced from 3600 to 1800 (30 min)
+DB_POOL_RECYCLE = int(os.getenv("DB_POOL_RECYCLE", "1800"))  # Recycle after 30 min
 
 # Detect if using Supabase connection pooler (port 6543) or Session mode (port 5432)
 is_supabase_pooler = ":6543/" in DATABASE_URL

@@ -153,8 +153,62 @@ async function loadOverview() {
         const progress = stats.embeddings?.migration_progress || 0;
         document.getElementById('migration-progress').style.width = progress + '%';
         document.getElementById('migration-progress').textContent = progress.toFixed(1) + '%';
+        
+        // Load database pool status
+        loadDatabasePoolStatus();
     } catch (error) {
         showAlert('Failed to load overview: ' + error.message, 'error');
+    }
+}
+
+// Database Pool Status
+async function loadDatabasePoolStatus() {
+    try {
+        const poolStatus = await apiCall('/admin/db-pool-status');
+        
+        // Update pool stats
+        document.getElementById('pool-size').textContent = poolStatus.pool_size || '-';
+        document.getElementById('pool-checked-out').textContent = poolStatus.checked_out || '0';
+        document.getElementById('pool-checked-in').textContent = poolStatus.checked_in || '0';
+        document.getElementById('pool-overflow').textContent = poolStatus.overflow || '0';
+        document.getElementById('pool-total').textContent = poolStatus.total_connections || '0';
+        document.getElementById('pool-max').textContent = poolStatus.max_connections || '-';
+        
+        // Update usage percentage with color coding
+        const usage = poolStatus.usage_percent || 0;
+        const usageElement = document.getElementById('pool-usage-percent');
+        usageElement.textContent = usage.toFixed(1) + '%';
+        
+        // Color code based on usage
+        if (usage < 70) {
+            usageElement.style.color = '#10b981'; // Green
+        } else if (usage < 90) {
+            usageElement.style.color = '#f59e0b'; // Orange
+        } else {
+            usageElement.style.color = '#ef4444'; // Red
+        }
+        
+        // Update health status
+        const healthElement = document.getElementById('pool-health');
+        const healthCard = document.getElementById('pool-health-card');
+        
+        if (poolStatus.status === 'healthy' && usage < 70) {
+            healthElement.textContent = '✓ Healthy';
+            healthElement.style.color = '#10b981';
+            healthCard.style.background = 'linear-gradient(135deg, #d1fae5 0%, #a7f3d0 100%)';
+        } else if (poolStatus.status === 'healthy' && usage < 90) {
+            healthElement.textContent = '⚠ Warning';
+            healthElement.style.color = '#f59e0b';
+            healthCard.style.background = 'linear-gradient(135deg, #fef3c7 0%, #fde68a 100%)';
+        } else {
+            healthElement.textContent = '✗ Critical';
+            healthElement.style.color = '#ef4444';
+            healthCard.style.background = 'linear-gradient(135deg, #fee2e2 0%, #fecaca 100%)';
+        }
+    } catch (error) {
+        console.error('Failed to load database pool status:', error);
+        // Don't show alert for pool status failure - it's not critical
+        document.getElementById('pool-health').textContent = 'Error';
     }
 }
 

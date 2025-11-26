@@ -184,6 +184,10 @@ app.include_router(auth.router, prefix="/api", tags=["Authentication"])
 from routes import conversations
 app.include_router(conversations.router, prefix="/api", tags=["Conversations"])
 
+# Import and include monitoring router
+from monitoring import router as monitoring_router
+app.include_router(monitoring_router, tags=["Monitoring"])
+
 # Import and include feedback router
 from routes import feedback
 app.include_router(feedback.router, prefix="/api", tags=["Feedback"])

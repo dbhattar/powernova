@@ -100,6 +100,56 @@
                 <div class="progress-bar" id="migration-progress" style="width: 0%">0%</div>
             </div>
 
+            <h3 style="margin-top: 30px; margin-bottom: 15px;">Database Connection Pool</h3>
+            <div class="stats-grid" id="pool-stats">
+                <div class="stat-card">
+                    <h3>Pool Size</h3>
+                    <div class="value" id="pool-size">-</div>
+                    <div class="label">Persistent Connections</div>
+                </div>
+                <div class="stat-card">
+                    <h3>In Use</h3>
+                    <div class="value" id="pool-checked-out">-</div>
+                    <div class="label">Active Connections</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Available</h3>
+                    <div class="value" id="pool-checked-in">-</div>
+                    <div class="label">Free Connections</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Overflow</h3>
+                    <div class="value" id="pool-overflow">-</div>
+                    <div class="label">Extra Connections</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Total</h3>
+                    <div class="value" id="pool-total">-</div>
+                    <div class="label">Current Connections</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Max</h3>
+                    <div class="value" id="pool-max">-</div>
+                    <div class="label">Maximum Connections</div>
+                </div>
+                <div class="stat-card">
+                    <h3>Usage</h3>
+                    <div class="value" id="pool-usage-percent">-</div>
+                    <div class="label">Pool Utilization</div>
+                </div>
+                <div class="stat-card" id="pool-health-card">
+                    <h3>Health</h3>
+                    <div class="value" id="pool-health">-</div>
+                    <div class="label">Status</div>
+                </div>
+            </div>
+            <div style="margin-top: 10px; padding: 10px; background: #f0f0f0; border-radius: 5px; font-size: 12px;">
+                <strong>Note:</strong> Pool health is based on usage: 
+                <span style="color: #10b981;">✓ Healthy (&lt;70%)</span>, 
+                <span style="color: #f59e0b;">⚠ Warning (70-90%)</span>, 
+                <span style="color: #ef4444;">✗ Critical (&gt;90%)</span>
+            </div>
+
             <div style="margin-top: 20px; padding: 20px; background: #f8f9ff; border-radius: 8px; border-left: 4px solid #667eea;">
                 <h4 style="margin-bottom: 10px;">🎯 Quick Actions</h4>
                 <div style="display: flex; gap: 10px; flex-wrap: wrap; margin-top: 15px;">

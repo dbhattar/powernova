@@ -35,6 +35,7 @@ COPY api/routes/ ./routes/
 COPY api/models/ ./models/
 COPY api/database/ ./database/
 COPY api/services/ ./services/
+COPY api/monitoring/ ./monitoring/
 COPY api/alembic/ ./alembic/
 COPY api/alembic.ini ./alembic.ini
 COPY api/startup.sh ./startup.sh
