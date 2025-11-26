@@ -1,0 +1,233 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "serverName": {
+      "type": "string",
+      "defaultValue": "powernova-db",
+      "metadata": {
+        "description": "Name of the PostgreSQL server (must be globally unique)"
+      }
+    },
+    "administratorLogin": {
+      "type": "string",
+      "defaultValue": "powernova_admin",
+      "metadata": {
+        "description": "Administrator username for PostgreSQL"
+      }
+    },
+    "administratorLoginPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Administrator password for PostgreSQL (min 8 chars, must include uppercase, lowercase, and numbers)"
+      }
+    },
+    "databaseName": {
+      "type": "string",
+      "defaultValue": "powernova_db",
+      "metadata": {
+        "description": "Name of the database to create"
+      }
+    },
+    "location": {
+      "type": "string",
+      "defaultValue": "[resourceGroup().location]",
+      "metadata": {
+        "description": "Location for all resources"
+      }
+    },
+    "skuName": {
+      "type": "string",
+      "defaultValue": "Standard_B1ms",
+      "allowedValues": [
+        "Standard_B1ms",
+        "Standard_B2s",
+        "Standard_D2s_v3",
+        "Standard_D4s_v3"
+      ],
+      "metadata": {
+        "description": "SKU for PostgreSQL server (B2s=Burstable ~$30/mo, D2s_v3=General Purpose ~$150/mo)"
+      }
+    },
+    "postgresVersion": {
+      "type": "string",
+      "defaultValue": "16",
+      "allowedValues": [
+        "15",
+        "16",
+        "17"
+      ],
+      "metadata": {
+        "description": "PostgreSQL server version"
+      }
+    },
+    "storageSizeGB": {
+      "type": "int",
+      "defaultValue": 32,
+      "minValue": 32,
+      "maxValue": 16384,
+      "metadata": {
+        "description": "Storage size in GB (32 GB minimum)"
+      }
+    },
+    "backupRetentionDays": {
+      "type": "int",
+      "defaultValue": 7,
+      "minValue": 7,
+      "maxValue": 35,
+      "metadata": {
+        "description": "Backup retention period in days"
+      }
+    },
+    "geoRedundantBackup": {
+      "type": "string",
+      "defaultValue": "Disabled",
+      "allowedValues": [
+        "Enabled",
+        "Disabled"
+      ],
+      "metadata": {
+        "description": "Enable geo-redundant backups (adds cost)"
+      }
+    },
+    "highAvailability": {
+      "type": "string",
+      "defaultValue": "Disabled",
+      "allowedValues": [
+        "Enabled",
+        "Disabled"
+      ],
+      "metadata": {
+        "description": "Enable zone-redundant high availability (adds significant cost)"
+      }
+    },
+    "allowAzureServices": {
+      "type": "bool",
+      "defaultValue": true,
+      "metadata": {
+        "description": "Allow Azure services to access the server"
+      }
+    },
+    "allowedClientIP": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Your client IP address for initial access (leave empty to skip)"
+      }
+    }
+  },
+  "variables": {
+    "firewallRuleName": "AllowClientIP",
+    "azureServicesRuleName": "AllowAllAzureServicesAndResourcesWithinAzureIps"
+  },
+  "resources": [
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers",
+      "apiVersion": "2022-12-01",
+      "name": "[parameters('serverName')]",
+      "location": "[parameters('location')]",
+      "sku": {
+        "name": "[parameters('skuName')]",
+        "tier": "[if(startsWith(parameters('skuName'), 'Standard_B'), 'Burstable', 'GeneralPurpose')]"
+      },
+      "properties": {
+        "version": "[parameters('postgresVersion')]",
+        "administratorLogin": "[parameters('administratorLogin')]",
+        "administratorLoginPassword": "[parameters('administratorLoginPassword')]",
+        "storage": {
+          "storageSizeGB": "[parameters('storageSizeGB')]"
+        },
+        "backup": {
+          "backupRetentionDays": "[parameters('backupRetentionDays')]",
+          "geoRedundantBackup": "[parameters('geoRedundantBackup')]"
+        },
+        "highAvailability": {
+          "mode": "[if(equals(parameters('highAvailability'), 'Enabled'), 'ZoneRedundant', 'Disabled')]"
+        },
+        "network": {
+          "publicNetworkAccess": "Enabled"
+        }
+      }
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/databases",
+      "apiVersion": "2022-12-01",
+      "name": "[format('{0}/{1}', parameters('serverName'), parameters('databaseName'))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+      ],
+      "properties": {
+        "charset": "UTF8",
+        "collation": "en_US.utf8"
+      }
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+      "apiVersion": "2022-12-01",
+      "name": "[format('{0}/{1}', parameters('serverName'), variables('azureServicesRuleName'))]",
+      "condition": "[parameters('allowAzureServices')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+      ],
+      "properties": {
+        "startIpAddress": "0.0.0.0",
+        "endIpAddress": "0.0.0.0"
+      }
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/firewallRules",
+      "apiVersion": "2022-12-01",
+      "name": "[format('{0}/{1}', parameters('serverName'), variables('firewallRuleName'))]",
+      "condition": "[not(equals(parameters('allowedClientIP'), ''))]",
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+      ],
+      "properties": {
+        "startIpAddress": "[parameters('allowedClientIP')]",
+        "endIpAddress": "[parameters('allowedClientIP')]"
+      }
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/configurations",
+      "apiVersion": "2022-12-01",
+      "name": "[format('{0}/{1}', parameters('serverName'), 'max_connections')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+      ],
+      "properties": {
+        "value": "100",
+        "source": "user-override"
+      }
+    },
+    {
+      "type": "Microsoft.DBforPostgreSQL/flexibleServers/configurations",
+      "apiVersion": "2022-12-01",
+      "name": "[format('{0}/{1}', parameters('serverName'), 'shared_buffers')]",
+      "dependsOn": [
+        "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+      ],
+      "properties": {
+        "value": "256MB",
+        "source": "user-override"
+      }
+    }
+  ],
+  "outputs": {
+    "serverFQDN": {
+      "type": "string",
+      "value": "[reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))).fullyQualifiedDomainName]"
+    },
+    "databaseName": {
+      "type": "string",
+      "value": "[parameters('databaseName')]"
+    },
+    "connectionStringTemplate": {
+      "type": "string",
+      "value": "[format('postgresql://{0}:<PASSWORD>@{1}:5432/{2}?sslmode=require', parameters('administratorLogin'), reference(resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))).fullyQualifiedDomainName, parameters('databaseName'))]"
+    },
+    "serverResourceId": {
+      "type": "string",
+      "value": "[resourceId('Microsoft.DBforPostgreSQL/flexibleServers', parameters('serverName'))]"
+    }
+  }
+}
