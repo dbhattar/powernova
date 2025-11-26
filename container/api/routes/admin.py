@@ -588,6 +588,99 @@ async def get_embedding_stats(
     }
 
 
+@router.get("/embeddings/token-anomalies")
+async def get_token_anomalies(
+    skip: int = 0,
+    limit: int = 100,
+    scope: Optional[str] = None,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    Get documents with token anomalies (abnormal token-to-character ratios)
+    
+    These documents have encoding issues or corrupted content that causes
+    token inflation, making them unsuitable for embedding generation.
+    
+    Query params:
+    - skip: Pagination offset (default: 0)
+    - limit: Max results (default: 100)
+    - scope: Filter by document_scope ('platform', 'user', 'conversation')
+    
+    Returns:
+    - List of anomalous documents with:
+      - Document metadata (id, title, url, type)
+      - Token/character statistics
+      - Ratio information
+      - Suggestions for fixing
+    """
+    # Query documents with token_anomaly=True
+    query = db.query(Document).filter(Document.token_anomaly == True)
+    
+    if scope:
+        query = query.filter(Document.document_scope == scope)
+    
+    total = query.count()
+    documents = query.order_by(Document.token_to_char_ratio.desc()).offset(skip).limit(limit).all()
+    
+    # Also get stats
+    avg_ratio = db.query(func.avg(Document.token_to_char_ratio)).filter(
+        Document.token_anomaly == True
+    ).scalar() or 0
+    
+    max_ratio = db.query(func.max(Document.token_to_char_ratio)).filter(
+        Document.token_anomaly == True
+    ).scalar() or 0
+    
+    # Count by document type
+    type_breakdown = db.query(
+        Document.document_type,
+        func.count(Document.id).label('count')
+    ).filter(
+        Document.token_anomaly == True
+    ).group_by(Document.document_type).all()
+    
+    return {
+        "summary": {
+            "total_anomalies": total,
+            "avg_ratio": round(float(avg_ratio), 3),
+            "max_ratio": round(float(max_ratio), 3),
+            "threshold": 0.6,
+            "normal_range": "0.3-0.5"
+        },
+        "by_type": {str(dtype): count for dtype, count in type_breakdown},
+        "pagination": {
+            "skip": skip,
+            "limit": limit,
+            "total": total
+        },
+        "documents": [{
+            "id": doc.id,
+            "title": doc.title,
+            "url": doc.url,
+            "document_type": doc.document_type.value if doc.document_type else None,
+            "document_scope": doc.document_scope.value if doc.document_scope else None,
+            "file_size": doc.file_size,
+            "content_length": len(doc.content) if doc.content else 0,
+            "token_to_char_ratio": round(float(doc.token_to_char_ratio), 3) if doc.token_to_char_ratio else None,
+            "created_at": doc.created_at.isoformat() if doc.created_at else None,
+            "crawl_job_id": doc.crawl_job_id,
+            "severity": (
+                "critical" if doc.token_to_char_ratio and doc.token_to_char_ratio > 2.0
+                else "high" if doc.token_to_char_ratio and doc.token_to_char_ratio > 1.0
+                else "medium"
+            ),
+            "suggestion": (
+                "Severely corrupted encoding - likely binary data or malformed UTF-8. Consider excluding this URL pattern."
+                if doc.token_to_char_ratio and doc.token_to_char_ratio > 2.0
+                else "Moderately corrupted - may have special characters or encoding issues. Check source document."
+                if doc.token_to_char_ratio and doc.token_to_char_ratio > 1.0
+                else "Minor encoding issues - may be fixable with better text extraction."
+            )
+        } for doc in documents]
+    }
+
+
 @router.get("/embeddings/documents-needing-reprocessing")
 async def list_documents_needing_reprocessing(
     skip: int = 0,

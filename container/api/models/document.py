@@ -1,7 +1,7 @@
 """
 Document model - Stores crawled documents and their metadata
 """
-from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON, Enum as SQLEnum, ForeignKey
+from sqlalchemy import Column, Integer, String, Text, DateTime, Boolean, JSON, Enum as SQLEnum, ForeignKey, Float
 from sqlalchemy.orm import relationship
 from pgvector.sqlalchemy import Vector
 from datetime import datetime
@@ -98,6 +98,10 @@ class Document(Base, TimestampMixin):
     embedding_generated = Column(Boolean, default=False)
     chunk_count = Column(Integer, default=0)
     embedding = Column(Vector(1536), nullable=True)  # OpenAI text-embedding-3-small (1536 dims)
+    
+    # Token anomaly tracking (for documents with abnormal token-to-character ratios)
+    token_anomaly = Column(Boolean, default=False, nullable=False, index=True)
+    token_to_char_ratio = Column(Float, nullable=True)  # Actual ratio for analysis
     
     # Relationships
     uploader = relationship("User", foreign_keys=[uploaded_by])

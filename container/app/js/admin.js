@@ -476,6 +476,123 @@ async function reprocessAll(limit = null) {
     }
 }
 
+// Token Anomalies
+async function loadTokenAnomalies() {
+    try {
+        const data = await apiCall('/admin/embeddings/token-anomalies?limit=100');
+        
+        // Update stats
+        document.getElementById('anomaly-total').textContent = data.summary.total_anomalies;
+        document.getElementById('anomaly-avg-ratio').textContent = data.summary.avg_ratio.toFixed(2);
+        document.getElementById('anomaly-max-ratio').textContent = data.summary.max_ratio.toFixed(2);
+        
+        // Show/hide anomaly list
+        const listContainer = document.getElementById('anomaly-list');
+        if (data.documents.length === 0) {
+            listContainer.style.display = 'none';
+            showAlert('No token anomalies found! 🎉', 'success');
+            return;
+        }
+        
+        listContainer.style.display = 'block';
+        
+        // Populate table
+        const tbody = document.getElementById('anomaly-table-body');
+        tbody.innerHTML = data.documents.map(doc => {
+            const severityColors = {
+                'critical': '#dc3545',
+                'high': '#ff9800',
+                'medium': '#ffc107'
+            };
+            const severityColor = severityColors[doc.severity] || '#6c757d';
+            
+            return `
+                <tr style="border-bottom: 1px solid #dee2e6;">
+                    <td style="padding: 12px; font-size: 13px;">
+                        <div style="font-weight: 600; margin-bottom: 4px;">${escapeHtml(truncate(doc.title, 40))}</div>
+                        <div style="font-size: 11px; color: #667eea; word-break: break-all;">
+                            <a href="${doc.url}" target="_blank" style="color: #667eea; text-decoration: none;">
+                                ${truncate(doc.url, 60)}
+                            </a>
+                        </div>
+                    </td>
+                    <td style="padding: 12px;">
+                        <span class="badge badge-secondary" style="font-size: 11px;">${doc.document_type}</span>
+                    </td>
+                    <td style="padding: 12px; text-align: center; font-weight: bold; color: ${severityColor};">
+                        ${doc.token_to_char_ratio}
+                    </td>
+                    <td style="padding: 12px; text-align: center; font-size: 12px; color: #666;">
+                        ${formatBytes(doc.content_length)}
+                    </td>
+                    <td style="padding: 12px; text-align: center;">
+                        <span class="badge" style="background: ${severityColor}; color: white; font-size: 11px; padding: 4px 8px; border-radius: 12px;">
+                            ${doc.severity.toUpperCase()}
+                        </span>
+                    </td>
+                    <td style="padding: 12px; font-size: 12px; color: #666;">
+                        ${escapeHtml(doc.suggestion)}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+        showAlert(`Found ${data.summary.total_anomalies} documents with token anomalies`, 'warning');
+    } catch (error) {
+        showAlert('Failed to load token anomalies: ' + error.message, 'error');
+    }
+}
+
+async function exportAnomalies() {
+    try {
+        const data = await apiCall('/admin/embeddings/token-anomalies?limit=1000');
+        
+        if (data.documents.length === 0) {
+            showAlert('No anomalies to export', 'info');
+            return;
+        }
+        
+        // Create CSV
+        const headers = ['ID', 'Title', 'URL', 'Type', 'Ratio', 'Size', 'Severity', 'Suggestion'];
+        const rows = data.documents.map(doc => [
+            doc.id,
+            `"${doc.title.replace(/"/g, '""')}"`,
+            doc.url,
+            doc.document_type,
+            doc.token_to_char_ratio,
+            doc.content_length,
+            doc.severity,
+            `"${doc.suggestion.replace(/"/g, '""')}"`
+        ]);
+        
+        const csv = [
+            headers.join(','),
+            ...rows.map(row => row.join(','))
+        ].join('\n');
+        
+        // Download CSV
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `token-anomalies-${new Date().toISOString().split('T')[0]}.csv`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+        
+        showAlert(`Exported ${data.documents.length} anomalies to CSV`, 'success');
+    } catch (error) {
+        showAlert('Failed to export anomalies: ' + error.message, 'error');
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
 // Users Tab
 async function loadUsers() {
     try {
@@ -920,13 +1037,6 @@ async function deleteFeedback(id, email) {
         console.error('Error deleting feedback:', error);
         showAlert('Failed to delete feedback', 'error');
     }
-}
-
-// Helper function to escape HTML
-function escapeHtml(text) {
-    const div = document.createElement('div');
-    div.textContent = text;
-    return div.innerHTML;
 }
 
 // ==================== Duplicate Document Management ====================

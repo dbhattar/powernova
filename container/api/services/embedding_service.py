@@ -51,7 +51,7 @@ class EmbeddingService:
         
         logger.info(f"Initialized EmbeddingService with model={self.model}, dimensions={self.dimensions}, max_tokens={self.max_tokens}")
     
-    def _clean_text_for_encoding(self, text: str) -> str:
+    def clean_text_for_encoding(self, text: str) -> str:
         """
         Clean text to prevent encoding issues with tiktoken
         
@@ -170,7 +170,7 @@ class EmbeddingService:
         
         # Step 1: Clean text to prevent REPLACEMENT_CHARACTER issues
         # This fixes encoding problems BEFORE chunking/counting
-        text = self._clean_text_for_encoding(text)
+        # text = self._clean_text_for_encoding(text)
         
         # Step 2: Truncate to token limit (with safety margin)
         safe_limit = self.max_tokens - 100  # Safety margin

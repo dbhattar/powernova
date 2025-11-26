@@ -282,6 +282,67 @@
                 </div>
             </div>
 
+            <!-- Token Anomalies Section -->
+            <div style="margin-bottom: 30px; padding: 20px; background: #fff5e6; border-radius: 8px; border-left: 4px solid #ff9800;">
+                <h3 style="margin-bottom: 10px;">⚠️ Token Anomalies</h3>
+                <p style="margin-bottom: 15px; color: #663c00; font-size: 14px;">
+                    Documents with abnormal token-to-character ratios (>0.7) indicating encoding issues or corrupted content.
+                    These documents are automatically skipped during embedding generation.
+                </p>
+                
+                <div id="anomaly-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <div style="padding: 15px; background: white; border-radius: 6px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #ff9800;" id="anomaly-total">-</div>
+                        <div style="font-size: 12px; color: #666;">Total Anomalies</div>
+                    </div>
+                    <div style="padding: 15px; background: white; border-radius: 6px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #dc3545;" id="anomaly-avg-ratio">-</div>
+                        <div style="font-size: 12px; color: #666;">Avg Ratio</div>
+                    </div>
+                    <div style="padding: 15px; background: white; border-radius: 6px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #6c757d;" id="anomaly-max-ratio">-</div>
+                        <div style="font-size: 12px; color: #666;">Max Ratio</div>
+                    </div>
+                    <div style="padding: 15px; background: white; border-radius: 6px;">
+                        <div style="font-size: 16px; font-weight: bold; color: #28a745;">0.3-0.5</div>
+                        <div style="font-size: 12px; color: #666;">Normal Range</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-bottom: 15px;">
+                    <button class="btn btn-secondary" onclick="loadTokenAnomalies()">
+                        🔍 View Anomalies
+                    </button>
+                    <button class="btn btn-secondary" onclick="exportAnomalies()">
+                        📥 Export Data
+                    </button>
+                </div>
+
+                <div id="anomaly-list" style="display: none; margin-top: 20px;">
+                    <h4 style="margin-bottom: 10px;">Anomalous Documents</h4>
+                    <div style="font-size: 12px; color: #666; margin-bottom: 10px;">
+                        Sorted by severity (highest ratio first)
+                    </div>
+                    <div id="anomaly-table-container" style="overflow-x: auto;">
+                        <table style="width: 100%; background: white; border-radius: 6px; overflow: hidden; border-collapse: collapse;">
+                            <thead style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                                <tr>
+                                    <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600;">Title</th>
+                                    <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600;">Type</th>
+                                    <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600;">Ratio</th>
+                                    <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600;">Size</th>
+                                    <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600;">Severity</th>
+                                    <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600;">Suggestion</th>
+                                </tr>
+                            </thead>
+                            <tbody id="anomaly-table-body">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+
             <h3 style="margin-bottom: 15px;">Documents Needing Reprocessing</h3>
             <div class="filter-controls">
                 <select id="emb-scope-filter" onchange="loadEmbeddingDocuments()">

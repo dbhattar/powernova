@@ -15,10 +15,12 @@ def process_document_embedding(document_id: int, db: Session) -> bool:
     Process a document: chunk it, generate embeddings for each chunk, and store in database
     
     This implementation:
-    1. Splits large documents into overlapping chunks
-    2. Generates embeddings for each chunk separately (no truncation)
-    3. Stores chunks in document_chunks table
-    4. Updates document with chunk count
+    1. Detects token anomalies (abnormal token-to-char ratio)
+    2. Skips embedding generation for anomalous documents
+    3. Splits normal documents into overlapping chunks
+    4. Generates embeddings for each chunk separately
+    5. Stores chunks in document_chunks table
+    6. Updates document with chunk count
     
     Args:
         document_id: Database ID of the document
@@ -56,8 +58,45 @@ def process_document_embedding(document_id: int, db: Session) -> bool:
         text_chunker = get_text_chunker()
         embedding_service = get_embedding_service()
         
-        # Chunk the document
-        chunks = text_chunker.chunk_text(document.content)
+        # STEP 1: Detect token anomalies
+        # Sample first 5000 characters to detect token inflation
+        sample_text = document.content[:5000] if len(document.content) > 5000 else document.content
+        token_count = embedding_service.count_tokens(sample_text)
+        char_count = len(sample_text)
+        
+        # Calculate token-to-character ratio
+        token_to_char_ratio = token_count / char_count if char_count > 0 else 0
+        
+        # Store ratio for analysis
+        document.token_to_char_ratio = token_to_char_ratio
+        
+        # Threshold: Normal text is ~0.3-0.5, borderline is 0.5-0.6
+        # Anything above 0.6 indicates encoding issues or dense special characters
+        # For severely corrupted encoding, ratio can be 2.0-6.0+
+        ANOMALY_THRESHOLD = 0.6  # Lowered from 0.7 to catch more problematic documents
+        
+        # if token_to_char_ratio > ANOMALY_THRESHOLD:
+        #     logger.warning(
+        #         f"Token anomaly detected for document {document_id} "
+        #         f"(ratio={token_to_char_ratio:.2f}, tokens={token_count}, chars={char_count}). "
+        #         f"Marking as anomalous and skipping embedding generation."
+        #     )
+        #     document.token_anomaly = True
+        #     document.embedding_generated = False
+        #     document.chunk_count = 0
+        #     db.commit()
+        #     return False  # Skip this document
+        
+        # Normal ratio - proceed with embedding generation
+        logger.info(
+            f"Document {document_id} token ratio is normal "
+            f"(ratio={token_to_char_ratio:.2f}, tokens={token_count}, chars={char_count})"
+        )
+        document.token_anomaly = False
+        
+        # STEP 2: Chunk the document
+        cleaned_text = embedding_service.clean_text_for_encoding(document.content)
+        chunks = text_chunker.chunk_text(cleaned_text)
         
         if not chunks:
             logger.warning(f"No chunks generated for document {document_id}")
@@ -72,6 +111,16 @@ def process_document_embedding(document_id: int, db: Session) -> bool:
         for chunk_text, chunk_meta in chunks:
             try:
                 # Generate embedding for this chunk
+                num_chunk_tokens = embedding_service.count_tokens(chunk_text)
+                if num_chunk_tokens > embedding_service.max_tokens:
+                    logger.error(f"PROBLEMATIC CHUNK: chunk {chunk_meta['chunk_index']} of document {document_id}")
+                    logger.error(f"chunk size {len(chunk_text)}, number of tokens {num_chunk_tokens}")
+                    document.token_anomaly = True
+                    document.embedding_generated = False
+                    document.chunk_count = 0
+                    db.commit()
+                    return False  # Skip this document
+
                 embedding = embedding_service.generate_embedding(chunk_text)
                 
                 if embedding is None:
