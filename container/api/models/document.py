@@ -103,6 +103,9 @@ class Document(Base, TimestampMixin):
     token_anomaly = Column(Boolean, default=False, nullable=False, index=True)
     token_to_char_ratio = Column(Float, nullable=True)  # Actual ratio for analysis
     
+    # Language detection (ISO 639-1 two-letter code: en, es, fr, etc.)
+    language = Column(String(10), nullable=True, index=True)  # Detected language code
+    
     # Relationships
     uploader = relationship("User", foreign_keys=[uploaded_by])
     chunks = relationship("DocumentChunk", back_populates="document", cascade="all, delete-orphan")

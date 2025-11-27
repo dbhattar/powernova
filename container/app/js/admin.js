@@ -477,18 +477,25 @@ async function reprocessAll(limit = null) {
 }
 
 // Token Anomalies
-async function loadTokenAnomalies() {
+let currentAnomalyPage = 1;
+const anomaliesPerPage = 20;
+
+async function loadTokenAnomalies(page = 1) {
     try {
-        const data = await apiCall('/admin/embeddings/token-anomalies?limit=100');
+        currentAnomalyPage = page;
+        const skip = (page - 1) * anomaliesPerPage;
+        const data = await apiCall(`/admin/embeddings/token-anomalies?skip=${skip}&limit=${anomaliesPerPage}`);
         
-        // Update stats
-        document.getElementById('anomaly-total').textContent = data.summary.total_anomalies;
-        document.getElementById('anomaly-avg-ratio').textContent = data.summary.avg_ratio.toFixed(2);
-        document.getElementById('anomaly-max-ratio').textContent = data.summary.max_ratio.toFixed(2);
+        // Update stats (only on first load)
+        if (page === 1) {
+            document.getElementById('anomaly-total').textContent = data.summary.total_anomalies;
+            document.getElementById('anomaly-avg-ratio').textContent = data.summary.avg_ratio.toFixed(2);
+            document.getElementById('anomaly-max-ratio').textContent = data.summary.max_ratio.toFixed(2);
+        }
         
         // Show/hide anomaly list
         const listContainer = document.getElementById('anomaly-list');
-        if (data.documents.length === 0) {
+        if (data.summary.total_anomalies === 0) {
             listContainer.style.display = 'none';
             showAlert('No token anomalies found! 🎉', 'success');
             return;
@@ -531,21 +538,84 @@ async function loadTokenAnomalies() {
                         </span>
                     </td>
                     <td style="padding: 12px; font-size: 12px; color: #666;">
-                        ${escapeHtml(doc.suggestion)}
+                        ${escapeHtml(doc.suggestion || 'Review encoding and content quality')}
                     </td>
                 </tr>
             `;
         }).join('');
         
-        showAlert(`Found ${data.summary.total_anomalies} documents with token anomalies`, 'warning');
+        // Render pagination
+        renderAnomalyPagination(data.summary.total_anomalies, page);
+        
+        if (page === 1) {
+            showAlert(`Found ${data.summary.total_anomalies} documents with token anomalies`, 'warning');
+        }
     } catch (error) {
         showAlert('Failed to load token anomalies: ' + error.message, 'error');
     }
 }
 
+function renderAnomalyPagination(total, currentPage) {
+    const totalPages = Math.ceil(total / anomaliesPerPage);
+    const paginationDiv = document.getElementById('anomaly-pagination');
+    
+    if (totalPages <= 1) {
+        paginationDiv.innerHTML = '';
+        return;
+    }
+    
+    let paginationHTML = '';
+    
+    // Previous button
+    if (currentPage > 1) {
+        paginationHTML += `<button class="btn btn-secondary" onclick="loadTokenAnomalies(${currentPage - 1})">← Previous</button>`;
+    }
+    
+    // Page numbers
+    const maxPagesToShow = 5;
+    let startPage = Math.max(1, currentPage - Math.floor(maxPagesToShow / 2));
+    let endPage = Math.min(totalPages, startPage + maxPagesToShow - 1);
+    
+    // Adjust start if we're near the end
+    if (endPage - startPage < maxPagesToShow - 1) {
+        startPage = Math.max(1, endPage - maxPagesToShow + 1);
+    }
+    
+    // First page
+    if (startPage > 1) {
+        paginationHTML += `<button class="btn ${currentPage === 1 ? 'btn-primary' : 'btn-secondary'}" onclick="loadTokenAnomalies(1)">1</button>`;
+        if (startPage > 2) {
+            paginationHTML += `<span style="padding: 0 5px;">...</span>`;
+        }
+    }
+    
+    // Page numbers
+    for (let i = startPage; i <= endPage; i++) {
+        paginationHTML += `<button class="btn ${i === currentPage ? 'btn-primary' : 'btn-secondary'}" onclick="loadTokenAnomalies(${i})">${i}</button>`;
+    }
+    
+    // Last page
+    if (endPage < totalPages) {
+        if (endPage < totalPages - 1) {
+            paginationHTML += `<span style="padding: 0 5px;">...</span>`;
+        }
+        paginationHTML += `<button class="btn ${currentPage === totalPages ? 'btn-primary' : 'btn-secondary'}" onclick="loadTokenAnomalies(${totalPages})">${totalPages}</button>`;
+    }
+    
+    // Next button
+    if (currentPage < totalPages) {
+        paginationHTML += `<button class="btn btn-secondary" onclick="loadTokenAnomalies(${currentPage + 1})">Next →</button>`;
+    }
+    
+    // Page info
+    paginationHTML += `<span style="margin-left: 15px; color: #666; font-size: 14px;">Page ${currentPage} of ${totalPages} (${total} total)</span>`;
+    
+    paginationDiv.innerHTML = paginationHTML;
+}
+
 async function exportAnomalies() {
     try {
-        const data = await apiCall('/admin/embeddings/token-anomalies?limit=1000');
+        const data = await apiCall('/admin/embeddings/token-anomalies?limit=10000');
         
         if (data.documents.length === 0) {
             showAlert('No anomalies to export', 'info');
@@ -553,7 +623,7 @@ async function exportAnomalies() {
         }
         
         // Create CSV
-        const headers = ['ID', 'Title', 'URL', 'Type', 'Ratio', 'Size', 'Severity', 'Suggestion'];
+        const headers = ['ID', 'Title', 'URL', 'Type', 'Ratio', 'Size', 'Severity'];
         const rows = data.documents.map(doc => [
             doc.id,
             `"${doc.title.replace(/"/g, '""')}"`,
@@ -561,8 +631,7 @@ async function exportAnomalies() {
             doc.document_type,
             doc.token_to_char_ratio,
             doc.content_length,
-            doc.severity,
-            `"${doc.suggestion.replace(/"/g, '""')}"`
+            doc.severity
         ]);
         
         const csv = [

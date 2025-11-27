@@ -33,6 +33,8 @@ logs/
 # Testing
 coverage/
 .nyc_output/
+pdfs/
+notebooks/
 
 # Temporary files
 tmp/

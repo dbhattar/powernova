@@ -12,6 +12,7 @@ import re
 import time
 from datetime import datetime
 from sqlalchemy.orm import Session
+from langdetect import detect, LangDetectException
 
 from models import CrawlJob, CrawlStatus, Document, DocumentType, DocumentStatus
 from models.crawl_state import CrawlVisitedUrl, CrawlQueuedUrl
@@ -136,9 +137,36 @@ class WebCrawler:
         
         # Also remove other control characters that might cause issues (optional)
         # Keep common ones like \n, \r, \t
-        # sanitized = ''.join(char for char in sanitized if ord(char) >= 32 or char in '\n\r\t')
+        sanitized = ''.join(char for char in sanitized if ord(char) >= 32 or char in '\n\r\t')
         
         return sanitized
+    
+    def _detect_language(self, text: str) -> Optional[str]:
+        """
+        Detect the language of text content using langdetect.
+        
+        Args:
+            text: Text content to analyze
+            
+        Returns:
+            ISO 639-1 language code (e.g., 'en', 'es', 'fr') or None if detection fails
+        """
+        if not text or len(text.strip()) < 50:
+            # Need at least 50 characters for reliable detection
+            return None
+        
+        try:
+            # Sample up to 5000 characters for faster detection
+            sample = text[:5000] if len(text) > 5000 else text
+            lang_code = detect(sample)
+            logger.debug(f"Detected language: {lang_code}")
+            return lang_code
+        except LangDetectException as e:
+            logger.warning(f"Language detection failed: {e}")
+            return None
+        except Exception as e:
+            logger.error(f"Unexpected error in language detection: {e}")
+            return None
     
     def _save_visited_url(self, url: str, status_code: int, depth: int):
         """
@@ -524,6 +552,36 @@ class WebCrawler:
             sanitized_title = self._sanitize_text(title)
             sanitized_content = self._sanitize_text(text_content)
             
+            # Detect language
+            detected_language = self._detect_language(sanitized_content)
+            
+            # Skip non-English documents (they often cause token anomalies)
+            if detected_language and detected_language != 'en':
+                logger.warning(
+                    f"Skipping non-English document: {url} "
+                    f"(detected language: {detected_language}). "
+                    f"Non-English content often causes token inflation and embedding issues."
+                )
+                # Save as failed document with explanation
+                document = Document(
+                    url=url,
+                    title=sanitized_title,
+                    content=sanitized_content[:1000],  # Save first 1000 chars for reference
+                    document_type=doc_type,
+                    file_path=blob_path,
+                    blob_url=blob_url,
+                    file_size=file_size,
+                    status=DocumentStatus.FAILED,
+                    error_message=f"Skipped: Non-English content detected (language: {detected_language})",
+                    language=detected_language,
+                    crawl_job_id=self.job_id,
+                    embedding_generated=False,
+                    chunk_count=0
+                )
+                self.db.add(document)
+                self.db.commit()
+                return False
+            
             # Create document record
             document = Document(
                 url=url,
@@ -535,6 +593,7 @@ class WebCrawler:
                 file_size=file_size,
                 status=DocumentStatus.COMPLETED,
                 doc_metadata=metadata,
+                language=detected_language or 'en',  # Default to 'en' if detection failed
                 crawl_job_id=self.job_id,
                 embedding_generated=False,
                 chunk_count=0
