@@ -12,9 +12,9 @@ import re
 import time
 from datetime import datetime
 from sqlalchemy.orm import Session
-from langdetect import detect, LangDetectException
+from langdetect import detect, detect_langs, DetectorFactory, LangDetectException
 
-from models import CrawlJob, CrawlStatus, Document, DocumentType, DocumentStatus
+from models import CrawlJob, CrawlStatus, Document, DocumentType, DocumentStatus, DocumentJob, DocumentJobStatus
 from models.crawl_state import CrawlVisitedUrl, CrawlQueuedUrl
 from services.azure_storage import get_storage_service
 from services.document_processor import get_document_processor
@@ -141,32 +141,65 @@ class WebCrawler:
         
         return sanitized
     
-    def _detect_language(self, text: str) -> Optional[str]:
+    def _detect_language(self, text: str, min_en_prob: float = 0.15) -> tuple:
         """
         Detect the language of text content using langdetect.
         
+        IMPORTANT: Uses deterministic detection (seed=0) to avoid random results.
+        Also checks English probability to avoid false positives.
+        
         Args:
             text: Text content to analyze
+            min_en_prob: Minimum English probability to accept as English (default 0.15 = 15%)
             
         Returns:
-            ISO 639-1 language code (e.g., 'en', 'es', 'fr') or None if detection fails
+            Tuple of (language_code, is_english, confidence)
+            - language_code: ISO 639-1 code (e.g., 'en', 'es', 'fr')
+            - is_english: True if should be treated as English
+            - confidence: Probability of detected language (0.0-1.0)
         """
-        if not text or len(text.strip()) < 50:
-            # Need at least 50 characters for reliable detection
-            return None
+        if not text or len(text.strip()) < 200:
+            # Too short for reliable detection - assume English
+            logger.debug("Text too short for language detection, assuming English")
+            return ('en', True, 1.0)
         
         try:
+            # CRITICAL: Set seed for deterministic results
+            # Without this, langdetect gives different results each time!
+            DetectorFactory.seed = 0
+            
             # Sample up to 5000 characters for faster detection
             sample = text[:5000] if len(text) > 5000 else text
-            lang_code = detect(sample)
-            logger.debug(f"Detected language: {lang_code}")
-            return lang_code
+            
+            # Get probabilities for all detected languages
+            langs = detect_langs(sample)
+            
+            top_lang = langs[0].lang
+            top_prob = langs[0].prob
+            
+            # Check English probability
+            en_prob = next((lp.prob for lp in langs if lp.lang == 'en'), 0.0)
+            
+            # Decision logic:
+            # - If top language is English, it's English
+            # - If English probability >= min_en_prob, treat as English (might be mixed content)
+            # This prevents false positives from skipping English documents
+            is_english = (top_lang == 'en') or (en_prob >= min_en_prob)
+            
+            logger.debug(
+                f"Language detection: {top_lang} ({top_prob:.2f}), "
+                f"English prob: {en_prob:.2f}, "
+                f"is_english: {is_english}"
+            )
+            
+            return (top_lang, is_english, top_prob)
+            
         except LangDetectException as e:
-            logger.warning(f"Language detection failed: {e}")
-            return None
+            logger.warning(f"Language detection failed: {e}, assuming English")
+            return ('en', True, 1.0)
         except Exception as e:
-            logger.error(f"Unexpected error in language detection: {e}")
-            return None
+            logger.error(f"Unexpected error in language detection: {e}, assuming English")
+            return ('en', True, 1.0)
     
     def _save_visited_url(self, url: str, status_code: int, depth: int):
         """
@@ -552,14 +585,19 @@ class WebCrawler:
             sanitized_title = self._sanitize_text(title)
             sanitized_content = self._sanitize_text(text_content)
             
-            # Detect language
-            detected_language = self._detect_language(sanitized_content)
+            # Detect language with improved logic
+            detected_lang, is_english, confidence = self._detect_language(sanitized_content)
             
-            # Skip non-English documents (they often cause token anomalies)
-            if detected_language and detected_language != 'en':
+            # Skip non-English documents with high confidence (they often cause token anomalies)
+            # Only skip if:
+            # 1. Detected as non-English (is_english=False)
+            # 2. High confidence (>70%) to avoid false positives
+            should_skip = not is_english and confidence > 0.7
+            
+            if should_skip:
                 logger.warning(
                     f"Skipping non-English document: {url} "
-                    f"(detected language: {detected_language}). "
+                    f"(detected language: {detected_lang}, confidence: {confidence:.2f}). "
                     f"Non-English content often causes token inflation and embedding issues."
                 )
                 # Save as failed document with explanation
@@ -572,8 +610,8 @@ class WebCrawler:
                     blob_url=blob_url,
                     file_size=file_size,
                     status=DocumentStatus.FAILED,
-                    error_message=f"Skipped: Non-English content detected (language: {detected_language})",
-                    language=detected_language,
+                    error_message=f"Skipped: Non-English content detected (language: {detected_lang}, confidence: {confidence:.2f})",
+                    language=detected_lang,
                     crawl_job_id=self.job_id,
                     embedding_generated=False,
                     chunk_count=0
@@ -581,6 +619,13 @@ class WebCrawler:
                 self.db.add(document)
                 self.db.commit()
                 return False
+            
+            # Log if borderline case (will process, but detected as non-English with low confidence)
+            if not is_english:
+                logger.info(
+                    f"Processing borderline document: {url} "
+                    f"(detected: {detected_lang}, confidence: {confidence:.2f}, English prob likely >15%)"
+                )
             
             # Create document record
             document = Document(
@@ -593,7 +638,7 @@ class WebCrawler:
                 file_size=file_size,
                 status=DocumentStatus.COMPLETED,
                 doc_metadata=metadata,
-                language=detected_language or 'en',  # Default to 'en' if detection failed
+                language=detected_lang,
                 crawl_job_id=self.job_id,
                 embedding_generated=False,
                 chunk_count=0
@@ -606,14 +651,21 @@ class WebCrawler:
             self.documents_found += 1
             logger.info(f"Saved {file_ext} document: {title} ({file_size} bytes)")
             
-            # Generate embedding in background
-            # Note: In production, consider using a queue for this
+            # Create document processing job instead of processing inline
+            # This allows for asynchronous processing and better error handling
             try:
-                from services.embedding_processor import process_document_embedding
-                process_document_embedding(document.id, self.db)
+                document_job = DocumentJob(
+                    document_id=document.id,
+                    status=DocumentJobStatus.PENDING,
+                    retry_count=0
+                )
+                self.db.add(document_job)
+                self.db.commit()
+                logger.info(f"Created document processing job for document {document.id}")
             except Exception as e:
-                logger.warning(f"Failed to generate embedding for document {document.id}: {e}")
-                # Don't fail the whole crawl if embedding generation fails
+                logger.error(f"Failed to create document job for document {document.id}: {e}")
+                # Don't fail the whole crawl if job creation fails
+                # The document is saved, it can be manually reprocessed later
             
             return True
             

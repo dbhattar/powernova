@@ -56,7 +56,10 @@ function switchTab(tab) {
     // Load tab data
     if (tab === 'overview') loadOverview();
     else if (tab === 'crawl') loadCrawlJobs();
-    else if (tab === 'embeddings') loadEmbeddings();
+    else if (tab === 'embeddings') {
+        loadEmbeddings();
+        loadDocumentJobStats();
+    }
     else if (tab === 'users') loadUsers();
     else if (tab === 'feedback') loadFeedback();
 }
@@ -1520,3 +1523,154 @@ function changeCrawlDocPage(page) {
     // Scroll to top of list
     document.getElementById('crawl-documents-list').scrollTop = 0;
 }
+
+// ============================================================================
+// DOCUMENT PROCESSING JOBS
+// ============================================================================
+
+/**
+ * Load document job statistics
+ */
+async function loadDocumentJobStats() {
+    try {
+        const data = await apiCall('/admin/document-jobs/stats');
+        
+        // Update stats
+        document.getElementById('job-pending').textContent = data.summary.pending;
+        document.getElementById('job-processing').textContent = data.summary.processing;
+        document.getElementById('job-completed').textContent = data.summary.completed;
+        document.getElementById('job-failed').textContent = data.summary.failed;
+        document.getElementById('job-total').textContent = data.summary.total;
+        
+        showAlert(`Loaded job stats: ${data.summary.pending} pending, ${data.summary.failed} failed`, 'info');
+    } catch (error) {
+        showAlert('Failed to load document job stats: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Load and display document jobs
+ */
+async function loadDocumentJobs(status = null, limit = 50) {
+    try {
+        let url = `/admin/document-jobs?limit=${limit}`;
+        if (status) {
+            url += `&status=${status}`;
+        }
+        
+        const data = await apiCall(url);
+        
+        const jobListContainer = document.getElementById('job-list');
+        jobListContainer.style.display = 'block';
+        
+        const tbody = document.getElementById('job-table-body');
+        
+        if (data.jobs.length === 0) {
+            tbody.innerHTML = `
+                <tr>
+                    <td colspan="8" style="padding: 20px; text-align: center; color: #666;">
+                        No jobs found
+                    </td>
+                </tr>
+            `;
+            return;
+        }
+        
+        tbody.innerHTML = data.jobs.map(job => {
+            const statusColors = {
+                'PENDING': '#ffc107',
+                'PROCESSING': '#2196f3',
+                'COMPLETED': '#28a745',
+                'FAILED': '#dc3545'
+            };
+            const statusColor = statusColors[job.status] || '#6c757d';
+            
+            const created = job.created_at ? new Date(job.created_at).toLocaleString() : '-';
+            const completed = job.completed_at ? new Date(job.completed_at).toLocaleString() : '-';
+            
+            return `
+                <tr style="border-bottom: 1px solid #dee2e6;">
+                    <td style="padding: 12px; font-size: 13px;">${job.id}</td>
+                    <td style="padding: 12px; font-size: 13px;">
+                        <a href="#" onclick="event.preventDefault(); viewDocument(${job.document_id})" style="color: #667eea;">
+                            ${job.document_id}
+                        </a>
+                    </td>
+                    <td style="padding: 12px; text-align: center;">
+                        <span class="badge" style="background: ${statusColor}; color: white; font-size: 11px; padding: 4px 8px; border-radius: 12px;">
+                            ${job.status}
+                        </span>
+                    </td>
+                    <td style="padding: 12px; text-align: center; font-size: 13px;">${job.retry_count}</td>
+                    <td style="padding: 12px; font-size: 12px; color: #666;">${created}</td>
+                    <td style="padding: 12px; font-size: 12px; color: #666;">${completed}</td>
+                    <td style="padding: 12px; font-size: 12px; color: ${job.error_message ? '#dc3545' : '#666'}; max-width: 300px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;" title="${escapeHtml(job.error_message || 'No error')}">
+                        ${job.error_message ? escapeHtml(job.error_message) : '-'}
+                    </td>
+                    <td style="padding: 12px; text-align: center;">
+                        ${job.status === 'FAILED' ? `
+                            <button class="btn btn-sm btn-secondary" onclick="retryJob(${job.id})" style="font-size: 11px; padding: 4px 8px;">
+                                🔄 Retry
+                            </button>
+                        ` : '-'}
+                    </td>
+                </tr>
+            `;
+        }).join('');
+        
+    } catch (error) {
+        showAlert('Failed to load document jobs: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Trigger document job processing
+ */
+async function processDocumentJobs(batchSize = 10) {
+    try {
+        const data = await apiCall(`/admin/document-jobs/process?batch_size=${batchSize}`, {
+            method: 'POST'
+        });
+        
+        showAlert(data.message, 'success');
+        
+        // Refresh stats after a delay
+        setTimeout(() => {
+            loadDocumentJobStats();
+        }, 2000);
+    } catch (error) {
+        showAlert('Failed to trigger job processing: ' + error.message, 'error');
+    }
+}
+
+/**
+ * Retry a failed job
+ */
+async function retryJob(jobId) {
+    if (!confirm(`Retry job ${jobId}?`)) {
+        return;
+    }
+    
+    try {
+        const data = await apiCall(`/admin/document-jobs/${jobId}/retry`, {
+            method: 'POST'
+        });
+        
+        showAlert(data.message, 'success');
+        
+        // Refresh job list
+        loadDocumentJobs();
+        loadDocumentJobStats();
+    } catch (error) {
+        showAlert('Failed to retry job: ' + error.message, 'error');
+    }
+}
+
+/**
+ * View document details (placeholder - you can implement this)
+ */
+function viewDocument(documentId) {
+    showAlert(`Document ${documentId} viewer not yet implemented`, 'info');
+    // TODO: Implement document viewer modal
+}
+

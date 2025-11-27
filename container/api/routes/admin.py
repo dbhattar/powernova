@@ -8,11 +8,12 @@ from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from sqlalchemy import text, func
 from database.session import get_db
-from models import CrawlJob, CrawlStatus, Document, DocumentStatus, DocumentChunk, User
+from models import CrawlJob, CrawlStatus, Document, DocumentStatus, DocumentChunk, User, DocumentJob, DocumentJobStatus
 from services.crawler import run_crawler
 from services.azure_storage import get_storage_service
 from services.auth import get_password_hash, generate_random_password
 from services.embedding_processor import process_document_embedding
+from services.document_job_processor import process_document_jobs_once, get_document_job_processor
 from datetime import datetime
 import os
 import secrets
@@ -893,6 +894,191 @@ async def delete_document_chunks(
         "message": f"Deleted {deleted_count} chunks for document {document_id}",
         "deleted_count": deleted_count,
         "document_id": document_id
+    }
+
+
+# ============================================================================
+# DOCUMENT JOB PROCESSING ENDPOINTS
+# ============================================================================
+
+@router.get("/document-jobs/stats")
+async def get_document_job_stats(
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    Get document job statistics
+    
+    Returns counts by status and recent job information
+    """
+    # Count by status
+    pending_count = db.query(DocumentJob).filter(DocumentJob.status == DocumentJobStatus.PENDING).count()
+    processing_count = db.query(DocumentJob).filter(DocumentJob.status == DocumentJobStatus.PROCESSING).count()
+    completed_count = db.query(DocumentJob).filter(DocumentJob.status == DocumentJobStatus.COMPLETED).count()
+    failed_count = db.query(DocumentJob).filter(DocumentJob.status == DocumentJobStatus.FAILED).count()
+    
+    # Get recent jobs
+    recent_jobs = db.query(DocumentJob).order_by(DocumentJob.created_at.desc()).limit(10).all()
+    
+    return {
+        "summary": {
+            "pending": pending_count,
+            "processing": processing_count,
+            "completed": completed_count,
+            "failed": failed_count,
+            "total": pending_count + processing_count + completed_count + failed_count
+        },
+        "recent_jobs": [{
+            "id": job.id,
+            "document_id": job.document_id,
+            "status": job.status.value,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+            "started_at": job.started_at.isoformat() if job.started_at else None,
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "retry_count": job.retry_count,
+            "error_message": job.error_message
+        } for job in recent_jobs]
+    }
+
+
+@router.get("/document-jobs")
+async def list_document_jobs(
+    status: Optional[str] = None,
+    skip: int = 0,
+    limit: int = 50,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    List document jobs with optional filtering
+    
+    Query Parameters:
+      - status: Filter by job status (pending/processing/completed/failed)
+      - skip: Number of records to skip (pagination)
+      - limit: Maximum number of records to return
+    """
+    query = db.query(DocumentJob)
+    
+    if status:
+        try:
+            status_enum = DocumentJobStatus(status.upper())
+            query = query.filter(DocumentJob.status == status_enum)
+        except ValueError:
+            raise HTTPException(status_code=400, detail=f"Invalid status: {status}")
+    
+    total = query.count()
+    jobs = query.order_by(DocumentJob.created_at.desc()).offset(skip).limit(limit).all()
+    
+    return {
+        "total": total,
+        "skip": skip,
+        "limit": limit,
+        "jobs": [{
+            "id": job.id,
+            "document_id": job.document_id,
+            "status": job.status.value,
+            "created_at": job.created_at.isoformat() if job.created_at else None,
+            "started_at": job.started_at.isoformat() if job.started_at else None,
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+            "retry_count": job.retry_count,
+            "processor_id": job.processor_id,
+            "error_message": job.error_message
+        } for job in jobs]
+    }
+
+
+@router.post("/document-jobs/process")
+async def trigger_document_job_processing(
+    batch_size: int = 10,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    Manually trigger document job processing
+    
+    This will process a batch of pending document jobs immediately.
+    Useful for manual testing or on-demand processing.
+    
+    Query Parameters:
+      - batch_size: Number of jobs to process (default: 10, max: 100)
+    """
+    if batch_size > 100:
+        raise HTTPException(status_code=400, detail="batch_size cannot exceed 100")
+    
+    # Process jobs in background
+    background_tasks.add_task(process_document_jobs_once, batch_size)
+    
+    # Get current pending count
+    pending_count = db.query(DocumentJob).filter(DocumentJob.status == DocumentJobStatus.PENDING).count()
+    
+    return {
+        "message": f"Queued processing of up to {batch_size} document jobs",
+        "batch_size": batch_size,
+        "pending_jobs": pending_count
+    }
+
+
+@router.post("/document-jobs/{job_id}/retry")
+async def retry_failed_job(
+    job_id: int,
+    background_tasks: BackgroundTasks = BackgroundTasks(),
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    Retry a failed document job
+    
+    Resets the job status to PENDING so it will be picked up by the processor
+    """
+    job = db.query(DocumentJob).filter(DocumentJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Document job not found")
+    
+    if job.status != DocumentJobStatus.FAILED:
+        raise HTTPException(status_code=400, detail=f"Job is not in FAILED status (current: {job.status.value})")
+    
+    # Reset job to pending
+    job.status = DocumentJobStatus.PENDING
+    job.started_at = None
+    job.completed_at = None
+    job.error_message = None
+    # Don't reset retry_count - keep it for tracking
+    
+    db.commit()
+    
+    # Trigger processing
+    background_tasks.add_task(process_document_jobs_once, 1)
+    
+    return {
+        "message": f"Reset job {job_id} to PENDING for retry",
+        "job_id": job_id,
+        "retry_count": job.retry_count
+    }
+
+
+@router.delete("/document-jobs/{job_id}")
+async def delete_document_job(
+    job_id: int,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    Delete a document job
+    
+    WARNING: This does not delete the associated document, only the job record.
+    Use this to clean up completed/failed jobs.
+    """
+    job = db.query(DocumentJob).filter(DocumentJob.id == job_id).first()
+    if not job:
+        raise HTTPException(status_code=404, detail="Document job not found")
+    
+    db.delete(job)
+    db.commit()
+    
+    return {
+        "message": f"Deleted document job {job_id}",
+        "job_id": job_id
     }
 
 

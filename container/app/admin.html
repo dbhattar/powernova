@@ -363,6 +363,75 @@
             </div>
 
             <div class="pagination" id="emb-pagination"></div>
+            
+            <!-- Document Processing Jobs Section -->
+            <div style="margin-top: 40px; margin-bottom: 30px; padding: 20px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196f3;">
+                <h3 style="margin-bottom: 10px;">⚙️ Document Processing Jobs</h3>
+                <p style="margin-bottom: 15px; color: #0d47a1; font-size: 14px;">
+                    Asynchronous document processing queue for chunking and embedding generation.
+                </p>
+                
+                <div id="job-stats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                    <div style="padding: 15px; background: white; border-radius: 6px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #ffc107;" id="job-pending">-</div>
+                        <div style="font-size: 12px; color: #666;">Pending</div>
+                    </div>
+                    <div style="padding: 15px; background: white; border-radius: 6px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #2196f3;" id="job-processing">-</div>
+                        <div style="font-size: 12px; color: #666;">Processing</div>
+                    </div>
+                    <div style="padding: 15px; background: white; border-radius: 6px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #28a745;" id="job-completed">-</div>
+                        <div style="font-size: 12px; color: #666;">Completed</div>
+                    </div>
+                    <div style="padding: 15px; background: white; border-radius: 6px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #dc3545;" id="job-failed">-</div>
+                        <div style="font-size: 12px; color: #666;">Failed</div>
+                    </div>
+                    <div style="padding: 15px; background: white; border-radius: 6px;">
+                        <div style="font-size: 24px; font-weight: bold; color: #6c757d;" id="job-total">-</div>
+                        <div style="font-size: 12px; color: #666;">Total</div>
+                    </div>
+                </div>
+
+                <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
+                    <button class="btn btn-primary" onclick="processDocumentJobs(10)">
+                        ▶️ Process 10 Jobs
+                    </button>
+                    <button class="btn btn-primary" onclick="processDocumentJobs(50)">
+                        ▶️ Process 50 Jobs
+                    </button>
+                    <button class="btn btn-secondary" onclick="loadDocumentJobStats()">
+                        🔄 Refresh Stats
+                    </button>
+                    <button class="btn btn-secondary" onclick="loadDocumentJobs()">
+                        📋 View Jobs
+                    </button>
+                </div>
+
+                <div id="job-list" style="display: none; margin-top: 20px;">
+                    <h4 style="margin-bottom: 10px;">Recent Jobs</h4>
+                    <div id="job-table-container" style="overflow-x: auto;">
+                        <table style="width: 100%; background: white; border-radius: 6px; overflow: hidden; border-collapse: collapse;">
+                            <thead style="background: #f8f9fa; border-bottom: 2px solid #dee2e6;">
+                                <tr>
+                                    <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600;">Job ID</th>
+                                    <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600;">Document ID</th>
+                                    <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600;">Status</th>
+                                    <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600;">Retries</th>
+                                    <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600;">Created</th>
+                                    <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600;">Completed</th>
+                                    <th style="padding: 12px; text-align: left; font-size: 12px; font-weight: 600;">Error</th>
+                                    <th style="padding: 12px; text-align: center; font-size: 12px; font-weight: 600;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="job-table-body">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
         </div>
 
         <!-- Users Tab -->

@@ -40,6 +40,7 @@ async def lifespan(app: FastAPI):
         if maintenance_mode:
             print("⚠ Maintenance mode enabled - skipping background task auto-resume")
             print("  Background crawl jobs will NOT be started automatically")
+            print("  Document job processor will NOT be started automatically")
         else:
             # Auto-resume interrupted crawl jobs
             try:
@@ -74,6 +75,39 @@ async def lifespan(app: FastAPI):
                     db.close()
             except Exception as e:
                 print(f"✗ Warning: Failed to auto-resume crawl jobs: {e}")
+            
+            # Start document job processor in background
+            try:
+                from database.session import SessionLocal
+                from services.document_job_processor import get_document_job_processor
+                import threading
+                
+                print("Starting document job processor...")
+                
+                # Get configuration from environment variables
+                poll_interval = int(os.getenv("DOC_PROCESSOR_POLL_INTERVAL", "10"))  # Default: 10 seconds
+                batch_size = int(os.getenv("DOC_PROCESSOR_BATCH_SIZE", "10"))  # Default: 10 jobs per batch
+                
+                # Create processor instance
+                processor = get_document_job_processor()
+                db = SessionLocal()
+                
+                # Start processor in background thread
+                processor_thread = threading.Thread(
+                    target=processor.run_continuous,
+                    args=(db, poll_interval, batch_size),
+                    daemon=True,
+                    name="DocumentJobProcessor"
+                )
+                processor_thread.start()
+                
+                print(f"✓ Document job processor started (poll_interval={poll_interval}s, batch_size={batch_size})")
+                print(f"  Processor ID: {processor.processor_id}")
+                print(f"  Thread: {processor_thread.name}")
+            except Exception as e:
+                print(f"✗ Warning: Failed to start document job processor: {e}")
+                import traceback
+                traceback.print_exc()
     else:
         print("✗ WARNING: Database connection failed!")
         print("  API will start but database features will not work.")
