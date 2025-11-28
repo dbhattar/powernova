@@ -1085,8 +1085,34 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize conversations module
     await Conversations.init();
     
+    // Initialize beta notice dismiss functionality
+    initBetaNoticeDismiss();
+    
     // Then initialize chat app
     const app = new ChatApp();
     window.chatAppInstance = app;  // Store global reference for Conversations module
     console.log('PowerNOVA Chat App initialized');
 });
+
+// ============================================
+// BETA NOTICE DISMISS FUNCTIONALITY
+// ============================================
+function initBetaNoticeDismiss() {
+    const betaNotice = document.getElementById('betaNotice');
+    const dismissBtn = document.getElementById('dismissBetaNotice');
+    
+    if (!betaNotice || !dismissBtn) return;
+    
+    // Check if user has previously dismissed the notice
+    const isDismissed = localStorage.getItem('betaNoticeDismissed') === 'true';
+    if (isDismissed) {
+        betaNotice.classList.add('dismissed');
+    }
+    
+    // Add click handler for dismiss button
+    dismissBtn.addEventListener('click', () => {
+        betaNotice.classList.add('dismissed');
+        localStorage.setItem('betaNoticeDismissed', 'true');
+        console.log('Beta notice dismissed');
+    });
+}

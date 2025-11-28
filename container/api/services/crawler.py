@@ -581,6 +581,73 @@ class WebCrawler:
                 content, file_ext, url
             )
             
+            # Check if extraction failed with error metadata
+            extraction_error = metadata.get('error')
+            error_type = metadata.get('error_type')
+            extraction_warning = metadata.get('extraction_warning')
+            
+            # Handle extraction failures
+            if extraction_error:
+                logger.error(f"Document extraction failed for {url}: {extraction_error}")
+                
+                # Save as failed document with detailed error info
+                document = Document(
+                    url=url,
+                    title=title,
+                    content=text_content[:1000] if text_content else "",  # Save partial content if any
+                    document_type=doc_type,
+                    file_path=blob_path,
+                    blob_url=blob_url,
+                    file_size=file_size,
+                    status=DocumentStatus.FAILED,
+                    error_message=f"Extraction error: {extraction_error}",
+                    doc_metadata=metadata,
+                    language='unknown',
+                    crawl_job_id=self.job_id,
+                    embedding_generated=False,
+                    chunk_count=0
+                )
+                self.db.add(document)
+                self.db.commit()
+                
+                logger.warning(
+                    f"Skipping document due to extraction error ({error_type}): {url}"
+                )
+                return False
+            
+            # Warn about partial extraction (some pages failed)
+            if extraction_warning:
+                logger.warning(f"Partial extraction for {url}: {extraction_warning}")
+            
+            # Check if we got any text content at all
+            if not text_content or len(text_content.strip()) < 50:
+                logger.warning(f"Insufficient text content extracted from {url} (length: {len(text_content or '')})")
+                
+                # Determine if this should fail or be marked for manual review
+                error_msg = "No text extracted"
+                if metadata.get('page_count', 0) > 0:
+                    error_msg += f" ({metadata['page_count']} pages - likely image-based PDF or corrupted)"
+                
+                document = Document(
+                    url=url,
+                    title=title,
+                    content=text_content or "",
+                    document_type=doc_type,
+                    file_path=blob_path,
+                    blob_url=blob_url,
+                    file_size=file_size,
+                    status=DocumentStatus.FAILED,
+                    error_message=error_msg,
+                    doc_metadata=metadata,
+                    language='unknown',
+                    crawl_job_id=self.job_id,
+                    embedding_generated=False,
+                    chunk_count=0
+                )
+                self.db.add(document)
+                self.db.commit()
+                return False
+            
             # Sanitize text content to remove NULL bytes (PostgreSQL doesn't allow them in TEXT columns)
             sanitized_title = self._sanitize_text(title)
             sanitized_content = self._sanitize_text(text_content)

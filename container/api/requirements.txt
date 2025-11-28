@@ -43,6 +43,7 @@ azure-identity==1.15.0
 
 # Document parsing
 PyPDF2==3.0.1
+pycryptodome==3.20.0  # Required for AES-encrypted PDFs
 python-docx==1.1.0
 python-magic==0.4.27
 

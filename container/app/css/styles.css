@@ -878,6 +878,7 @@ body {
     font-size: 0.875rem;
     color: var(--text-primary);
     animation: fadeInSlideUp 0.5s ease-out;
+    position: relative;
 }
 
 .beta-notice i {
@@ -889,6 +890,44 @@ body {
 .beta-notice strong {
     color: #FF6B35;
     font-weight: 600;
+}
+
+.beta-notice span {
+    flex: 1;
+}
+
+.btn-dismiss-notice {
+    background: transparent;
+    border: none;
+    color: #FF6B35;
+    cursor: pointer;
+    padding: 0.25rem;
+    border-radius: var(--radius-sm);
+    width: 24px;
+    height: 24px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    flex-shrink: 0;
+    margin-left: auto;
+}
+
+.btn-dismiss-notice:hover {
+    background: rgba(255, 107, 53, 0.2);
+    transform: scale(1.1);
+}
+
+.btn-dismiss-notice:active {
+    transform: scale(0.95);
+}
+
+.btn-dismiss-notice i {
+    font-size: 0.875rem;
+}
+
+.beta-notice.dismissed {
+    display: none;
 }
 
 @keyframes fadeInSlideUp {

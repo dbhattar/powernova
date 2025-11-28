@@ -89,32 +89,67 @@ class DocumentProcessor:
         Returns:
             Tuple of (title, extracted_text, metadata)
         """
+        title = url
+        text = ""
+        metadata = {}
+        
         try:
             pdf_file = BytesIO(pdf_content)
-            pdf_reader = PyPDF2.PdfReader(pdf_file)
             
-            # Extract metadata
-            metadata = {}
-            pdf_info = pdf_reader.metadata
+            # Try with strict=False to handle malformed PDFs
+            try:
+                pdf_reader = PyPDF2.PdfReader(pdf_file, strict=False)
+            except Exception as e:
+                logger.warning(f"Failed to read PDF with lenient mode: {e}")
+                # Try one more time with strict mode
+                pdf_file.seek(0)
+                pdf_reader = PyPDF2.PdfReader(pdf_file, strict=True)
             
-            title = url
-            if pdf_info:
-                if pdf_info.get('/Title'):
-                    title = str(pdf_info['/Title'])
-                if pdf_info.get('/Author'):
-                    metadata['author'] = str(pdf_info['/Author'])
-                if pdf_info.get('/Subject'):
-                    metadata['subject'] = str(pdf_info['/Subject'])
-                if pdf_info.get('/Keywords'):
-                    metadata['keywords'] = str(pdf_info['/Keywords'])
+            # Extract metadata (may fail for corrupted PDFs)
+            try:
+                pdf_info = pdf_reader.metadata
+                if pdf_info:
+                    if pdf_info.get('/Title'):
+                        title = str(pdf_info['/Title'])
+                    if pdf_info.get('/Author'):
+                        metadata['author'] = str(pdf_info['/Author'])
+                    if pdf_info.get('/Subject'):
+                        metadata['subject'] = str(pdf_info['/Subject'])
+                    if pdf_info.get('/Keywords'):
+                        metadata['keywords'] = str(pdf_info['/Keywords'])
+            except Exception as e:
+                logger.debug(f"Could not extract PDF metadata: {e}")
+                metadata['extraction_warning'] = 'Metadata extraction failed'
             
             # Extract text from all pages
             text_parts = []
-            for page_num in range(len(pdf_reader.pages)):
-                page = pdf_reader.pages[page_num]
-                page_text = page.extract_text()
-                if page_text:
-                    text_parts.append(page_text)
+            failed_pages = 0
+            total_pages = 0
+            
+            try:
+                total_pages = len(pdf_reader.pages)
+            except Exception as e:
+                logger.warning(f"Cannot determine page count: {e}")
+                # Try to extract what we can
+                total_pages = 0
+            
+            for page_num in range(total_pages):
+                try:
+                    page = pdf_reader.pages[page_num]
+                    page_text = page.extract_text()
+                    if page_text and page_text.strip():
+                        text_parts.append(page_text)
+                except Exception as e:
+                    failed_pages += 1
+                    logger.debug(f"Failed to extract text from page {page_num + 1}: {e}")
+                    continue
+            
+            # If we couldn't extract any pages, try alternative method
+            if not text_parts and total_pages > 0:
+                logger.warning(f"Standard extraction failed for all pages, trying alternative method")
+                # Note: Could add alternative extraction methods here (e.g., pdfminer, pdfplumber)
+                # For now, we'll just return empty text with warning
+                metadata['extraction_warning'] = 'Text extraction failed for all pages'
             
             text = ' '.join(text_parts)
             
@@ -122,14 +157,57 @@ class DocumentProcessor:
             text = re.sub(r'\s+', ' ', text)
             text = text.strip()
             
-            metadata['page_count'] = len(pdf_reader.pages)
+            # Add extraction statistics to metadata
+            metadata['page_count'] = total_pages
+            if failed_pages > 0:
+                metadata['failed_pages'] = failed_pages
+                metadata['successful_pages'] = total_pages - failed_pages
+                metadata['extraction_warning'] = f'{failed_pages}/{total_pages} pages failed to extract'
             
-            logger.info(f"Extracted {len(text)} chars from PDF ({len(pdf_reader.pages)} pages): {title}")
+            if text:
+                logger.info(f"Extracted {len(text)} chars from PDF ({total_pages} pages, {failed_pages} failed): {title}")
+            else:
+                logger.warning(f"No text extracted from PDF ({total_pages} pages): {title}")
+                if total_pages > 0:
+                    metadata['extraction_warning'] = 'PDF may be image-based (scanned) or corrupted'
+            
+            return title, text, metadata
+            
+        except PyPDF2.errors.PdfReadError as e:
+            # Specific PDF read errors (EOF marker, encryption, etc.)
+            error_msg = str(e)
+            logger.error(f"PDF read error for {url}: {error_msg}")
+            
+            # Categorize the error
+            if 'EOF marker not found' in error_msg:
+                metadata['error'] = 'Incomplete PDF - EOF marker missing'
+                metadata['error_type'] = 'incomplete_pdf'
+            elif 'encrypted' in error_msg.lower():
+                metadata['error'] = 'Encrypted PDF - password required'
+                metadata['error_type'] = 'encrypted_pdf'
+            elif 'xref' in error_msg.lower():
+                metadata['error'] = 'Corrupted PDF - cross-reference table damaged'
+                metadata['error_type'] = 'corrupted_xref'
+            else:
+                metadata['error'] = f'PDF read error: {error_msg}'
+                metadata['error_type'] = 'pdf_read_error'
+            
             return title, text, metadata
             
         except Exception as e:
-            logger.error(f"Failed to extract text from PDF: {e}")
-            return url, "", {}
+            # Other unexpected errors (including PyCryptodome missing)
+            error_msg = str(e)
+            logger.error(f"Failed to extract text from PDF {url}: {error_msg}")
+            
+            # Check for specific error types
+            if 'PyCryptodome is required' in error_msg:
+                metadata['error'] = 'AES-encrypted PDF requires PyCryptodome library'
+                metadata['error_type'] = 'encrypted_aes_pdf'
+            else:
+                metadata['error'] = f'Extraction failed: {error_msg}'
+                metadata['error_type'] = 'unknown_error'
+            
+            return title, text, metadata
     
     @staticmethod
     def extract_text_from_docx(docx_content: bytes, url: str) -> Tuple[str, str, dict]:
