@@ -393,17 +393,103 @@ class WebCrawler:
         return normalized
     
     def _get_file_extension(self, url: str) -> Optional[str]:
-        """Extract file extension from URL"""
+        """
+        Extract file extension from URL.
+        Handles complex URLs like: /path/file.pdf/uuid?query=params
+        
+        Note: This only examines the URL path. If no extension is found in the URL,
+        use _get_extension_from_content_type() as a fallback.
+        
+        Examples:
+            - /document.pdf -> pdf
+            - /file.pdf?v=123 -> pdf
+            - /doc.pdf/82afc884-fdf6-3e41-4729-0047d3c56207?t=123 -> pdf
+            - /report.docx/download -> docx
+            - /api/download/12345 -> None (no extension, check Content-Type)
+        """
         parsed = urlparse(url)
         path = parsed.path
         
-        if '.' in path:
-            ext = path.rsplit('.', 1)[-1].lower()
-            # Remove query params from extension
-            ext = ext.split('?')[0]
-            return ext
+        if '.' not in path:
+            return None
+        
+        # Split path into segments
+        segments = path.split('/')
+        
+        # Look for a segment with a file extension
+        # Start from the end and work backwards to find the first segment with an extension
+        for segment in reversed(segments):
+            if not segment:  # Skip empty segments
+                continue
+            
+            # Check if segment has a dot
+            if '.' in segment:
+                # Extract extension from this segment
+                ext = segment.rsplit('.', 1)[-1].lower()
+                
+                # Clean up extension (remove query params if any slipped through)
+                ext = ext.split('?')[0].split('#')[0]
+                
+                # Validate that extension looks reasonable
+                # Extensions should be alphanumeric and typically 2-5 characters
+                # (pdf, docx, html, aspx, etc.)
+                if ext and ext.isalnum() and len(ext) >= 2 and len(ext) <= 5:
+                    return ext
         
         return None
+    
+    def _get_extension_from_content_type(self, content_type: str) -> Optional[str]:
+        """
+        Extract file extension from Content-Type header.
+        
+        Args:
+            content_type: Content-Type header value (e.g., 'application/pdf', 'text/html; charset=utf-8')
+            
+        Returns:
+            File extension or None
+            
+        Examples:
+            - 'application/pdf' -> 'pdf'
+            - 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' -> 'docx'
+            - 'text/html; charset=utf-8' -> 'html'
+            - 'application/msword' -> 'doc'
+        """
+        if not content_type:
+            return None
+        
+        # Extract just the MIME type, ignoring parameters like charset
+        mime_type = content_type.split(';')[0].strip().lower()
+        
+        # Map common MIME types to file extensions
+        mime_to_ext = {
+            # Documents
+            'application/pdf': 'pdf',
+            'application/vnd.openxmlformats-officedocument.wordprocessingml.document': 'docx',
+            'application/msword': 'doc',
+            'application/vnd.ms-word': 'doc',
+            
+            # Text
+            'text/html': 'html',
+            'application/xhtml+xml': 'html',
+            'text/plain': 'txt',
+            'text/markdown': 'md',
+            
+            # Spreadsheets
+            'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': 'xlsx',
+            'application/vnd.ms-excel': 'xls',
+            
+            # Presentations
+            'application/vnd.openxmlformats-officedocument.presentationml.presentation': 'pptx',
+            'application/vnd.ms-powerpoint': 'ppt',
+            
+            # Other
+            'application/rtf': 'rtf',
+            'application/xml': 'xml',
+            'text/xml': 'xml',
+            'application/json': 'json',
+        }
+        
+        return mime_to_ext.get(mime_type)
     
     def _is_document_url(self, url: str) -> bool:
         """Check if URL points to a downloadable document"""
@@ -433,7 +519,17 @@ class WebCrawler:
                 return False
             
             content = response.content
-            file_ext = self._get_file_extension(url) or 'html'
+            file_ext = self._get_file_extension(url)
+            
+            # If no extension in URL, try to get it from Content-Type header
+            if not file_ext:
+                content_type = response.headers.get('Content-Type', '')
+                file_ext = self._get_extension_from_content_type(content_type)
+                if file_ext:
+                    logger.debug(f"Determined file extension '{file_ext}' from Content-Type: {content_type}")
+            
+            # Final fallback to 'html' if still no extension
+            file_ext = file_ext or 'html'
             
             # Determine document type
             # Server-side pages (aspx, jsp, php, etc.) are treated as HTML since they render HTML
@@ -824,6 +920,12 @@ class WebCrawler:
             # Determine if this is a document we should save based on content type
             should_save = False
             file_ext = self._get_file_extension(url)
+            
+            # If no extension in URL, try to get it from Content-Type header
+            if not file_ext:
+                file_ext = self._get_extension_from_content_type(content_type)
+                if file_ext:
+                    logger.debug(f"Determined file extension '{file_ext}' from Content-Type: {content_type}")
             
             # Check content type to determine document type
             if 'text/html' in content_type:
