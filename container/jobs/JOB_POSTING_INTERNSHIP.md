@@ -1,8 +1,12 @@
 # Full-Stack Software Engineering Internship (2 Positions)
 
+## About PowerNOVA
+
+PowerNOVA transforms how energy professionals access and understand regulatory and operational data. Using advanced AI and Retrieval-Augmented Generation (RAG) technology, we've built a conversational interface that makes thousands of energy documents instantly searchable through natural language. Our platform provides comprehensive operational and regulatory data from ISO/RTO markets (CAISO, ERCOT, PJM, MISO, SPP, NYISO, ISO-NE) and government organizations like FERC, allowing users to ask questions and get instant answers with source citations. Users can also upload their own documents to combine public data with proprietary information in one unified platform.
+
 ## About the Role
 
-We're seeking two motivated software engineering interns to join our team and contribute to the development of an innovative RAG (Retrieval-Augmented Generation) application. This is a hands-on opportunity to work across the entire stack, from document processing and data preparation to frontend design and deployment infrastructure.
+We're seeking two motivated software engineering interns to join our team and contribute to the development of PowerNOVA. This is a hands-on opportunity to work across the entire stack, from document processing and data preparation to frontend design and deployment infrastructure.
 
 This role offers exposure to multi-disciplinary work at the intersection of software engineering and power systems. While the primary focus is on full-stack development, you'll have the opportunity to learn about and work with technical content in the energy domain.
 
