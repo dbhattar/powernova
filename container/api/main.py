@@ -230,6 +230,10 @@ app.include_router(feedback.router, prefix="/api", tags=["Feedback"])
 from routes import users
 app.include_router(users.router, prefix="/api/users", tags=["Users"])
 
+# Import and include search router
+from routes import search
+app.include_router(search.router, prefix="/api", tags=["Search"])
+
 # Health check endpoint
 @app.get("/health")
 async def health_check():

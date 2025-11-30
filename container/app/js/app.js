@@ -1088,6 +1088,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Initialize beta notice dismiss functionality
     initBetaNoticeDismiss();
     
+    // Initialize search modal handlers
+    initSearchModal();
+    
     // Then initialize chat app
     const app = new ChatApp();
     window.chatAppInstance = app;  // Store global reference for Conversations module
@@ -1115,4 +1118,63 @@ function initBetaNoticeDismiss() {
         localStorage.setItem('betaNoticeDismissed', 'true');
         console.log('Beta notice dismissed');
     });
+}
+
+// ============================================
+// SEARCH FUNCTIONALITY
+// ============================================
+function initSearchModal() {
+    const mobileSearchToggle = document.getElementById('mobileSearchToggle');
+    const headerSearch = document.getElementById('headerSearch');
+    const headerSearchForm = document.getElementById('headerSearchForm');
+    const headerSearchInput = document.getElementById('headerSearchInput');
+    
+    if (!headerSearchForm || !headerSearchInput) {
+        console.warn('Search elements not found');
+        return;
+    }
+    
+    // Mobile search toggle
+    if (mobileSearchToggle && headerSearch) {
+        mobileSearchToggle.addEventListener('click', () => {
+            headerSearch.classList.toggle('expanded');
+            if (headerSearch.classList.contains('expanded')) {
+                headerSearchInput.focus();
+            }
+        });
+        
+        // Close search when clicking outside on mobile
+        document.addEventListener('click', (e) => {
+            if (window.innerWidth <= 768) {
+                if (!headerSearch.contains(e.target) && !mobileSearchToggle.contains(e.target)) {
+                    headerSearch.classList.remove('expanded');
+                }
+            }
+        });
+    }
+    
+    // Handle search form submission
+    headerSearchForm.addEventListener('submit', (e) => {
+        e.preventDefault();
+        
+        const query = headerSearchInput.value.trim();
+        if (query) {
+            // Track search analytics
+            if (window.PowerNOVA?.Analytics?.trackSearch) {
+                window.PowerNOVA.Analytics.trackSearch(query);
+            }
+            
+            // Redirect to search page
+            window.location.href = `search.html?q=${encodeURIComponent(query)}`;
+        }
+    });
+    
+    // Close mobile search on Escape key
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && window.innerWidth <= 768) {
+            headerSearch.classList.remove('expanded');
+        }
+    });
+    
+    console.log('Inline search initialized');
 }

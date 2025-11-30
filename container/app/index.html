@@ -8,6 +8,7 @@
     <title>PowerNOVA Chat - AI Energy Data Assistant</title>
     <meta name="description" content="Chat with PowerNOVA's AI assistant to get instant answers from thousands of energy documents and regulatory data.">
     <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/search.css">
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
     
@@ -53,7 +54,28 @@
                 <i class="fas fa-bolt logo-icon"></i>
                 <h1 class="logo-text">PowerNOVA <span class="chat-badge">Chat</span> <span class="beta-badge">Beta</span></h1>
             </div>
+            
+            <!-- Inline Search Bar -->
+            <div class="header-search" id="headerSearch">
+                <form id="headerSearchForm" class="header-search-form">
+                    <i class="fas fa-search search-icon"></i>
+                    <input 
+                        type="text" 
+                        id="headerSearchInput" 
+                        class="header-search-input" 
+                        placeholder="Search documents..."
+                        autocomplete="off"
+                    />
+                    <button type="submit" class="btn-search-go" title="Search">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </form>
+            </div>
+            
             <div class="header-actions">
+                <button class="btn-icon mobile-search-toggle" id="mobileSearchToggle" title="Search Documents">
+                    <i class="fas fa-search"></i>
+                </button>
                 <button class="btn-icon" id="loginBtn" title="Login" style="display: none;">
                     <i class="fas fa-user"></i>
                 </button>

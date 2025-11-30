@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Search Results - PowerNOVA</title>
+    <meta name="description" content="Search across thousands of energy documents from ISO/RTO markets and regulatory agencies.">
+    <link rel="stylesheet" href="css/styles.css">
+    <link rel="stylesheet" href="css/search.css">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    
+    <!-- Environment Configuration -->
+    <script src="js/config.js"></script>
+    
+    <!-- Google Analytics Module -->
+    <script src="js/analytics.js"></script>
+</head>
+<body>
+    <!-- Header -->
+    <header class="chat-header">
+        <div class="header-content">
+            <div class="logo-section">
+                <i class="fas fa-bolt logo-icon"></i>
+                <a href="index.html" style="text-decoration: none; color: inherit;">
+                    <h1 class="logo-text">PowerNOVA <span class="chat-badge">Search</span></h1>
+                </a>
+            </div>
+            <div class="header-actions">
+                <a href="index.html" class="btn-icon" title="Back to Chat">
+                    <i class="fas fa-comments"></i>
+                </a>
+                <button class="btn-icon" id="loginBtn" title="Login" style="display: none;">
+                    <i class="fas fa-user"></i>
+                </button>
+                <button class="btn-icon" id="userMenuBtn" title="Account" style="display: none;">
+                    <i class="fas fa-user-circle"></i>
+                    <span class="username-text" id="usernameText"></span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Container -->
+    <div class="search-page-container">
+        <!-- Search Bar -->
+        <div class="search-bar-container">
+            <form id="searchForm" class="search-bar-form">
+                <div class="search-bar-wrapper">
+                    <i class="fas fa-search search-bar-icon"></i>
+                    <input 
+                        type="text" 
+                        id="searchQueryInput" 
+                        class="search-bar-input" 
+                        placeholder="Search across thousands of energy documents..."
+                        autocomplete="off"
+                    />
+                    <button type="submit" class="btn-search-bar">
+                        <i class="fas fa-arrow-right"></i>
+                    </button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Search Results Container -->
+        <div class="search-results-container">
+            <!-- Search Info -->
+            <div class="search-info" id="searchInfo" style="display: none;">
+                <div class="search-query">
+                    Results for: <strong id="displayQuery"></strong>
+                </div>
+                <div class="search-count">
+                    <span id="resultCount">0</span> documents found
+                    <span id="searchTime"></span>
+                </div>
+            </div>
+
+            <!-- Loading State -->
+            <div class="search-loading" id="searchLoading" style="display: none;">
+                <div class="loading-spinner"></div>
+                <p>Searching across documents...</p>
+            </div>
+
+            <!-- Empty State (No Search Yet) -->
+            <div class="search-empty-initial" id="searchEmptyInitial">
+                <div class="empty-icon">
+                    <i class="fas fa-search"></i>
+                </div>
+                <h2>Search PowerNOVA Documents</h2>
+                <p>Access thousands of energy regulatory and operational documents from ISO/RTO markets</p>
+                <div class="search-suggestions-initial">
+                    <p><strong>Try searching for:</strong></p>
+                    <div class="suggestion-chips">
+                        <button class="suggestion-chip" data-query="CAISO interconnection">CAISO interconnection</button>
+                        <button class="suggestion-chip" data-query="ERCOT market rules">ERCOT market rules</button>
+                        <button class="suggestion-chip" data-query="PJM capacity market">PJM capacity market</button>
+                        <button class="suggestion-chip" data-query="FERC Order 2023">FERC Order 2023</button>
+                        <button class="suggestion-chip" data-query="tariff requirements">tariff requirements</button>
+                    </div>
+                </div>
+                <div class="search-data-sources">
+                    <h3>Data Sources</h3>
+                    <div class="source-badges">
+                        <span class="source-badge">CAISO</span>
+                        <span class="source-badge">ERCOT</span>
+                        <span class="source-badge">PJM</span>
+                        <span class="source-badge">MISO</span>
+                        <span class="source-badge">SPP</span>
+                        <span class="source-badge">NYISO</span>
+                        <span class="source-badge">ISO-NE</span>
+                        <span class="source-badge">FERC</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Empty State (No Results) -->
+            <div class="search-empty-results" id="searchEmptyResults" style="display: none;">
+                <div class="empty-icon">
+                    <i class="fas fa-inbox"></i>
+                </div>
+                <h2>No documents found</h2>
+                <p>Try adjusting your search query or using different keywords</p>
+                <div class="search-tips-results">
+                    <p><strong>Search tips:</strong></p>
+                    <ul>
+                        <li>Use specific terms related to energy markets</li>
+                        <li>Try ISO/RTO names: CAISO, ERCOT, PJM, MISO, etc.</li>
+                        <li>Search for document types: tariff, manual, protocol, order</li>
+                        <li>Be descriptive: "interconnection deposit requirements"</li>
+                    </ul>
+                </div>
+            </div>
+
+            <!-- Results List -->
+            <div class="search-results-list" id="searchResultsList" style="display: none;">
+                <!-- Results will be populated here dynamically -->
+            </div>
+
+            <!-- Pagination -->
+            <div class="search-pagination" id="searchPagination" style="display: none;">
+                <button class="btn-pagination" id="btnPrevPage" disabled>
+                    <i class="fas fa-chevron-left"></i>
+                    Previous
+                </button>
+                <div class="pagination-info">
+                    Page <span id="currentPage">1</span> of <span id="totalPages">1</span>
+                </div>
+                <button class="btn-pagination" id="btnNextPage" disabled>
+                    Next
+                    <i class="fas fa-chevron-right"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- User Menu Dropdown -->
+    <div class="dropdown-menu" id="userMenu" style="display: none;">
+        <div class="dropdown-item" id="userProfileItem">
+            <i class="fas fa-user"></i>
+            <span id="userEmail">user@example.com</span>
+        </div>
+        <div class="dropdown-divider"></div>
+        <button class="dropdown-item" id="viewProfileBtn">
+            <i class="fas fa-id-card"></i>
+            <span>My Profile</span>
+        </button>
+        <button class="dropdown-item" id="changePasswordBtn">
+            <i class="fas fa-key"></i>
+            <span>Change Password</span>
+        </button>
+        <button class="dropdown-item" id="logoutBtn">
+            <i class="fas fa-sign-out-alt"></i>
+            <span>Logout</span>
+        </button>
+    </div>
+
+    <script src="js/search.js"></script>
+</body>
+</html>
