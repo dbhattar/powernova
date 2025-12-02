@@ -29,6 +29,17 @@ async def lifespan(app: FastAPI):
     print("=" * 50)
     print("Starting PowerNOVA API...")
     
+    # Check worker mode
+    worker_mode = os.getenv("WORKER_MODE", "all").lower()
+    print(f"Worker mode: {worker_mode}")
+    
+    # Validate worker mode
+    valid_modes = ["all", "api", "crawler", "doc_processor"]
+    if worker_mode not in valid_modes:
+        print(f"⚠ Invalid WORKER_MODE '{worker_mode}', defaulting to 'all'")
+        print(f"  Valid modes: {', '.join(valid_modes)}")
+        worker_mode = "all"
+    
     # Check database connection
     print("Checking database connection...")
     if check_db_connection():
@@ -41,6 +52,11 @@ async def lifespan(app: FastAPI):
             print("⚠ Maintenance mode enabled - skipping background task auto-resume")
             print("  Background crawl jobs will NOT be started automatically")
             print("  Document job processor will NOT be started automatically")
+        elif worker_mode == "api":
+            print("⚙ API-only mode - skipping background workers")
+            print("  Background crawl jobs will NOT be started")
+            print("  Document job processor will NOT be started")
+            print("  Use separate crawler and doc_processor workers for background tasks")
         else:
             # Auto-resume interrupted crawl jobs
             try:

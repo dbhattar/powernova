@@ -39,6 +39,7 @@ COPY api/monitoring/ ./monitoring/
 COPY api/alembic/ ./alembic/
 COPY api/alembic.ini ./alembic.ini
 COPY api/startup.sh ./startup.sh
+COPY api/workers/ ./workers/
 
 # Make startup script executable
 RUN chmod +x ./startup.sh
@@ -46,7 +47,8 @@ RUN chmod +x ./startup.sh
 # Verify files were copied (for debugging)
 RUN echo "=== Files in /app ===" && ls -la /app && \
     echo "=== Files in /app/routes ===" && ls -la /app/routes && \
-    echo "=== Files in /app/services ===" && ls -la /app/services
+    echo "=== Files in /app/services ===" && ls -la /app/services && \
+    echo "=== Files in /app/workers ===" && ls -la /app/workers
 
 # Create non-root user for security
 RUN useradd -m -u 1000 apiuser && \
@@ -58,9 +60,9 @@ RUN useradd -m -u 1000 apiuser && \
 # Expose ports (8000 for API, 2222 for SSH)
 EXPOSE 8000 2222
 
-# Health check
-HEALTHCHECK --interval=30s --timeout=10s --start-period=5s --retries=3 \
-    CMD python -c "import requests; requests.get('http://localhost:8000/health')" || exit 1
+# Note: Health check removed from Dockerfile
+# For API container, health check is configured in the deployment template
+# Worker containers don't need health checks (no HTTP server)
 
 # Use startup.sh as entrypoint for automatic migrations, then start SSH and API
 ENTRYPOINT ["./startup.sh"]

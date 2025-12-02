@@ -66,6 +66,7 @@ services:
       - PORT=8000
       - ENVIRONMENT=development
       - DATABASE_URL=postgresql://powernova:powernova_dev_2024@powernova-postgres:5432/powernova
+      - WORKER_MODE=api  # API only mode - no background workers
     restart: unless-stopped
     depends_on:
       powernova-postgres:
@@ -81,6 +82,67 @@ services:
       - "com.powernova.version=1.0.0"
       - "com.powernova.subdomain=api"
       - "com.powernova.environment=local"
+    volumes:
+      - ../api:/app  # Mount for hot-reload during development
+    networks:
+      - powernova-network
+
+  # Crawler Worker - Processes crawl jobs in background
+  powernova-crawler-worker:
+    build:
+      context: ../api
+      dockerfile: ../docker/Dockerfile.api.local  # Same image as API
+    container_name: powernova-crawler-worker
+    command: ["python3", "workers/crawler_worker.py"]  # Override to run worker
+    env_file:
+      - ../api/.env
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://powernova:powernova_dev_2024@powernova-postgres:5432/powernova
+      - WORKER_ID=crawler-worker-local
+      - POLL_INTERVAL=30
+    restart: unless-stopped
+    depends_on:
+      powernova-postgres:
+        condition: service_healthy
+      powernova-api:
+        condition: service_healthy
+    labels:
+      - "com.powernova.description=PowerNOVA crawler worker (local)"
+      - "com.powernova.version=1.0.0"
+      - "com.powernova.environment=local"
+      - "com.powernova.type=worker"
+    volumes:
+      - ../api:/app  # Mount for hot-reload during development
+    networks:
+      - powernova-network
+
+  # Document Worker - Generates embeddings in background
+  powernova-doc-worker:
+    build:
+      context: ../api
+      dockerfile: ../docker/Dockerfile.api.local  # Same image as API
+    container_name: powernova-doc-worker
+    command: ["python3", "workers/doc_worker.py"]  # Override to run worker
+    env_file:
+      - ../api/.env
+    environment:
+      - ENVIRONMENT=development
+      - DATABASE_URL=postgresql://powernova:powernova_dev_2024@powernova-postgres:5432/powernova
+      - WORKER_ID=doc-worker-local
+      - DOC_PROCESSOR_POLL_INTERVAL=10
+      - DOC_PROCESSOR_BATCH_SIZE=10
+    restart: unless-stopped
+    depends_on:
+      powernova-postgres:
+        condition: service_healthy
+      powernova-api:
+        condition: service_healthy
+    labels:
+      - "com.powernova.description=PowerNOVA document worker (local)"
+      - "com.powernova.version=1.0.0"
+      - "com.powernova.environment=local"
+      - "com.powernova.type=worker"
     volumes:
       - ../api:/app  # Mount for hot-reload during development
     networks:
@@ -132,21 +194,35 @@ volumes:
 # ================
 # 1. PostgreSQL is NOT exposed to the host machine (no port mapping)
 # 2. Database is only accessible via the internal 'powernova-network'
-# 3. Only the 'powernova-api' service can connect to the database
+# 3. Only the 'powernova-api' and worker services can connect to the database
 # 4. All services are on the same network for inter-service communication
 # 5. External access:
 #    - Website: http://localhost:8080
 #    - Chat App: http://localhost:8081
 #    - API: http://localhost:8000
 #    - Database: NOT accessible from host (internal only)
+#    - Workers: Background processes (no ports exposed)
 #
 # To connect to database for debugging (from within the API container):
 #   docker exec -it powernova-api psql -h powernova-postgres -U powernova -d powernova
 #
 # Or directly in the database container:
 #   docker exec -it powernova-postgres psql -U powernova -d powernova
+#
+# To view worker logs:
+#   docker logs -f powernova-crawler-worker
+#   docker logs -f powernova-doc-worker
 
-# Note: Containers communicate via powernova-network for local development
+# Architecture:
+# =============
+# - powernova-web: Landing page (port 8080)
+# - powernova-chat: Chat interface (port 8081)
+# - powernova-api: REST API (port 8000, WORKER_MODE=api)
+# - powernova-crawler-worker: Background crawl job processor
+# - powernova-doc-worker: Background document/embedding processor
+# - powernova-postgres: PostgreSQL database with pgvector (internal only)
+#
+# All containers communicate via powernova-network for local development
 # Frontend (localhost:8081) calls API (localhost:8000)
-# API connects to PostgreSQL via internal network (powernova-postgres:5432)
-# Production uses separate Azure App Services with managed PostgreSQL
+# API and workers connect to PostgreSQL via internal network (powernova-postgres:5432)
+# Production uses separate Azure App Services with managed PostgreSQL and ACI workers

@@ -1,0 +1,42 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": ""
+    },
+    "containerGroupName": {
+      "value": ""
+    },
+    "environment": {
+      "value": ""
+    },
+    "acrName": {
+      "value": ""
+    },
+    "acrUsername": {
+      "value": ""
+    },
+    "acrPassword": {
+      "value": ""
+    },
+    "imageRepository": {
+      "value": "powernova-workers"
+    },
+    "imageTag": {
+      "value": "latest"
+    },
+    "databaseUrl": {
+      "value": ""
+    },
+    "azureStorageConnectionString": {
+      "value": ""
+    },
+    "azureStorageContainerName": {
+      "value": ""
+    },
+    "openaiApiKey": {
+      "value": ""
+    }
+  }
+}

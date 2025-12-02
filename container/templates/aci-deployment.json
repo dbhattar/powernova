@@ -1,0 +1,206 @@
+{
+  "$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentTemplate.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure region for deployment"
+      }
+    },
+    "containerGroupName": {
+      "type": "string",
+      "metadata": {
+        "description": "Name of the container group"
+      }
+    },
+    "environment": {
+      "type": "string",
+      "metadata": {
+        "description": "Environment name (prod, test, dev)"
+      }
+    },
+    "acrName": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure Container Registry name"
+      }
+    },
+    "acrUsername": {
+      "type": "string",
+      "metadata": {
+        "description": "ACR username"
+      }
+    },
+    "acrPassword": {
+      "type": "securestring",
+      "metadata": {
+        "description": "ACR password"
+      }
+    },
+    "imageRepository": {
+      "type": "string",
+      "defaultValue": "powernova-workers",
+      "metadata": {
+        "description": "Docker image repository name in ACR"
+      }
+    },
+    "imageTag": {
+      "type": "string",
+      "defaultValue": "latest",
+      "metadata": {
+        "description": "Docker image tag"
+      }
+    },
+    "databaseUrl": {
+      "type": "securestring",
+      "metadata": {
+        "description": "PostgreSQL connection string"
+      }
+    },
+    "azureStorageConnectionString": {
+      "type": "securestring",
+      "metadata": {
+        "description": "Azure Storage connection string"
+      }
+    },
+    "azureStorageContainerName": {
+      "type": "string",
+      "metadata": {
+        "description": "Azure Storage container name"
+      }
+    },
+    "openaiApiKey": {
+      "type": "securestring",
+      "metadata": {
+        "description": "OpenAI API key (required for doc worker)"
+      }
+    }
+  },
+  "resources": [
+    {
+      "type": "Microsoft.ContainerInstance/containerGroups",
+      "apiVersion": "2021-09-01",
+      "name": "[parameters('containerGroupName')]",
+      "location": "[parameters('location')]",
+      "tags": {
+        "environment": "[parameters('environment')]",
+        "application": "powernova",
+        "deployment": "workers-only"
+      },
+      "properties": {
+        "containers": [
+          {
+            "name": "crawler-worker",
+            "properties": {
+              "image": "[concat(parameters('acrName'), '.azurecr.io/', parameters('imageRepository'), ':', parameters('imageTag'))]",
+              "command": [
+                "/bin/sh",
+                "-c",
+                "cd /app && python3 workers/crawler_worker.py"
+              ],
+              "resources": {
+                "requests": {
+                  "cpu": 0.5,
+                  "memoryInGb": 1.0
+                }
+              },
+              "environmentVariables": [
+                {
+                  "name": "WORKER_ID",
+                  "value": "[concat('crawler-worker-aci-', parameters('environment'))]"
+                },
+                {
+                  "name": "POLL_INTERVAL",
+                  "value": "30"
+                },
+                {
+                  "name": "DATABASE_URL",
+                  "secureValue": "[parameters('databaseUrl')]"
+                },
+                {
+                  "name": "AZURE_STORAGE_CONNECTION_STRING",
+                  "secureValue": "[parameters('azureStorageConnectionString')]"
+                },
+                {
+                  "name": "AZURE_STORAGE_CONTAINER_NAME",
+                  "value": "[parameters('azureStorageContainerName')]"
+                },
+                {
+                  "name": "LOG_LEVEL",
+                  "value": "INFO"
+                }
+              ]
+            }
+          },
+          {
+            "name": "doc-worker",
+            "properties": {
+              "image": "[concat(parameters('acrName'), '.azurecr.io/', parameters('imageRepository'), ':', parameters('imageTag'))]",
+              "command": [
+                "/bin/sh",
+                "-c",
+                "cd /app && python3 workers/doc_worker.py"
+              ],
+              "resources": {
+                "requests": {
+                  "cpu": 0.5,
+                  "memoryInGb": 1.0
+                }
+              },
+              "environmentVariables": [
+                {
+                  "name": "WORKER_ID",
+                  "value": "[concat('doc-worker-aci-', parameters('environment'))]"
+                },
+                {
+                  "name": "DOC_PROCESSOR_POLL_INTERVAL",
+                  "value": "10"
+                },
+                {
+                  "name": "DOC_PROCESSOR_BATCH_SIZE",
+                  "value": "10"
+                },
+                {
+                  "name": "DATABASE_URL",
+                  "secureValue": "[parameters('databaseUrl')]"
+                },
+                {
+                  "name": "AZURE_STORAGE_CONNECTION_STRING",
+                  "secureValue": "[parameters('azureStorageConnectionString')]"
+                },
+                {
+                  "name": "AZURE_STORAGE_CONTAINER_NAME",
+                  "value": "[parameters('azureStorageContainerName')]"
+                },
+                {
+                  "name": "OPENAI_API_KEY",
+                  "secureValue": "[parameters('openaiApiKey')]"
+                },
+                {
+                  "name": "LOG_LEVEL",
+                  "value": "INFO"
+                }
+              ]
+            }
+          }
+        ],
+        "imageRegistryCredentials": [
+          {
+            "server": "[concat(parameters('acrName'), '.azurecr.io')]",
+            "username": "[parameters('acrUsername')]",
+            "password": "[parameters('acrPassword')]"
+          }
+        ],
+        "osType": "Linux",
+        "restartPolicy": "Always"
+      }
+    }
+  ],
+  "outputs": {
+    "containerGroupName": {
+      "type": "string",
+      "value": "[parameters('containerGroupName')]"
+    }
+  }
+}
