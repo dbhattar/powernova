@@ -29,7 +29,7 @@ function initSearchPage() {
         currentPage = page;
         
         // Set search input value
-        const searchInput = document.getElementById('searchPageInput');
+        const searchInput = document.getElementById('searchQueryInput');
         if (searchInput) {
             searchInput.value = query;
         }
@@ -49,8 +49,28 @@ function initSearchPage() {
  * Setup event listeners
  */
 function setupEventListeners() {
+    // Beta notice dismiss
+    const dismissBetaNotice = document.getElementById('dismissBetaNotice');
+    if (dismissBetaNotice) {
+        dismissBetaNotice.addEventListener('click', () => {
+            const betaNotice = document.getElementById('betaNotice');
+            if (betaNotice) {
+                betaNotice.style.display = 'none';
+                localStorage.setItem('betaNoticeDismissed', 'true');
+            }
+        });
+        
+        // Check if notice was previously dismissed
+        if (localStorage.getItem('betaNoticeDismissed') === 'true') {
+            const betaNotice = document.getElementById('betaNotice');
+            if (betaNotice) {
+                betaNotice.style.display = 'none';
+            }
+        }
+    }
+    
     // Search form submit
-    const searchForm = document.getElementById('searchPageForm');
+    const searchForm = document.getElementById('searchForm');
     if (searchForm) {
         searchForm.addEventListener('submit', handleSearchSubmit);
     }
@@ -65,7 +85,7 @@ function setupEventListeners() {
                 currentPage = 1;
                 
                 // Update input
-                const searchInput = document.getElementById('searchPageInput');
+                const searchInput = document.getElementById('searchQueryInput');
                 if (searchInput) {
                     searchInput.value = query;
                 }
@@ -78,8 +98,8 @@ function setupEventListeners() {
     });
     
     // Pagination buttons
-    const prevBtn = document.getElementById('prevPage');
-    const nextBtn = document.getElementById('nextPage');
+    const prevBtn = document.getElementById('btnPrevPage');
+    const nextBtn = document.getElementById('btnNextPage');
     
     if (prevBtn) {
         prevBtn.addEventListener('click', () => {
@@ -110,7 +130,7 @@ function setupEventListeners() {
 function handleSearchSubmit(event) {
     event.preventDefault();
     
-    const searchInput = document.getElementById('searchPageInput');
+    const searchInput = document.getElementById('searchQueryInput');
     const query = searchInput.value.trim();
     
     if (query) {
@@ -134,6 +154,8 @@ async function performSearch(query, page = 1) {
     showLoading();
     
     try {
+        console.log(`Searching for: "${query}", page: ${page}`);
+        
         const response = await fetch(
             `${API_URL}/api/search?q=${encodeURIComponent(query)}&page=${page}&limit=${RESULTS_PER_PAGE}`,
             {
@@ -145,18 +167,21 @@ async function performSearch(query, page = 1) {
         );
         
         if (!response.ok) {
-            throw new Error(`Search failed: ${response.statusText}`);
+            const errorText = await response.text();
+            console.error('Search API error:', response.status, errorText);
+            throw new Error(`Search failed: ${response.status} ${response.statusText}`);
         }
         
         const data = await response.json();
+        console.log('Search response:', data);
         
         // Update state
-        totalPages = data.pages;
-        currentPage = data.page;
+        totalPages = data.pages || 1;
+        currentPage = data.page || page;
         
         // Track search analytics
-        if (window.trackSearch) {
-            window.trackSearch(query, data.total);
+        if (window.PowerNOVA?.Analytics?.trackSearch) {
+            window.PowerNOVA.Analytics.trackSearch(query, data.total || 0);
         }
         
         // Display results
@@ -174,10 +199,12 @@ async function performSearch(query, page = 1) {
  * Display search results
  */
 function displayResults(data) {
+    console.log('Displaying results:', data);
+    
     // Hide all states
     hideAllStates();
     
-    if (data.results.length === 0) {
+    if (!data.results || data.results.length === 0) {
         showEmptyResults();
         return;
     }
@@ -187,15 +214,14 @@ function displayResults(data) {
     if (searchInfo) {
         searchInfo.style.display = 'flex';
         
-        const queryEl = searchInfo.querySelector('.search-query strong');
-        const countEl = searchInfo.querySelector('.search-count span');
-        const timeEl = searchInfo.querySelector('.search-count');
+        const displayQuery = document.getElementById('displayQuery');
+        const resultCount = document.getElementById('resultCount');
+        const searchTime = document.getElementById('searchTime');
         
-        if (queryEl) queryEl.textContent = `"${data.query}"`;
-        if (countEl) countEl.textContent = data.total.toLocaleString();
-        if (timeEl) {
-            const timeText = timeEl.textContent.split('in')[0];
-            timeEl.innerHTML = `${countEl.outerHTML} documents found in <strong>${data.search_time_ms}ms</strong>`;
+        if (displayQuery) displayQuery.textContent = `"${data.query || currentQuery}"`;
+        if (resultCount) resultCount.textContent = (data.total || 0).toLocaleString();
+        if (searchTime && data.search_time_ms) {
+            searchTime.textContent = ` in ${data.search_time_ms}ms`;
         }
     }
     
@@ -212,7 +238,7 @@ function displayResults(data) {
     }
     
     // Update pagination
-    updatePagination(data.page, data.pages);
+    updatePagination(data.page || currentPage, data.pages || totalPages);
 }
 
 /**
@@ -309,8 +335,8 @@ function updatePagination(currentPage, totalPages) {
     
     pagination.style.display = 'flex';
     
-    const prevBtn = document.getElementById('prevPage');
-    const nextBtn = document.getElementById('nextPage');
+    const prevBtn = document.getElementById('btnPrevPage');
+    const nextBtn = document.getElementById('btnNextPage');
     const currentPageEl = document.getElementById('currentPage');
     const totalPagesEl = document.getElementById('totalPages');
     

@@ -2,6 +2,13 @@
    SEARCH FUNCTIONALITY STYLES
    ============================================ */
 
+/* Override body fixed positioning for search page */
+body:has(.search-page-container) {
+    overflow: auto !important;
+    position: static !important;
+    height: auto !important;
+}
+
 /* ============================================
    INLINE HEADER SEARCH
    ============================================ */

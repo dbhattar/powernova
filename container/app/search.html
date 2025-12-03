@@ -23,7 +23,7 @@
             <div class="logo-section">
                 <i class="fas fa-bolt logo-icon"></i>
                 <a href="index.html" style="text-decoration: none; color: inherit;">
-                    <h1 class="logo-text">PowerNOVA <span class="chat-badge">Search</span></h1>
+                    <h1 class="logo-text">PowerNOVA <span class="chat-badge">Search</span> <span class="beta-badge">Beta</span></h1>
                 </a>
             </div>
             <div class="header-actions">
@@ -64,6 +64,15 @@
 
         <!-- Search Results Container -->
         <div class="search-results-container">
+            <!-- Beta Notice Banner -->
+            <div class="beta-notice" id="betaNotice">
+                <i class="fas fa-flask"></i>
+                <span>You're using the <strong>beta version</strong> of PowerNOVA Search. We're actively improving the experience and welcome your feedback!</span>
+                <button class="btn-dismiss-notice" id="dismissBetaNotice" title="Dismiss">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+            
             <!-- Search Info -->
             <div class="search-info" id="searchInfo" style="display: none;">
                 <div class="search-query">

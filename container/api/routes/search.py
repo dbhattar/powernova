@@ -12,6 +12,7 @@ import re
 
 from database import get_db
 from models.document import Document, DocumentStatus
+from models.document_chunk import DocumentChunk
 from services.embedding_service import get_embedding_service
 
 router = APIRouter(prefix="/search", tags=["search"])
@@ -164,37 +165,63 @@ async def search_documents(
         # Calculate offset for pagination
         offset = (page - 1) * limit
         
-        # Get total count of searchable documents
-        total = db.query(Document).filter(
-            Document.status == DocumentStatus.COMPLETED,
-            Document.embedding_generated == True,
-            Document.embedding.isnot(None)
-        ).count()
+        # Get total count of unique documents with searchable chunks
+        total_docs = db.query(Document.id).join(
+            DocumentChunk, Document.id == DocumentChunk.document_id
+        ).filter(
+            DocumentChunk.embedding_generated == True,
+            DocumentChunk.embedding.isnot(None),
+            Document.status == DocumentStatus.COMPLETED
+        ).distinct().count()
         
-        # Perform vector similarity search
-        # Use cosine distance (1 - cosine_similarity) - lower is better
-        # pgvector operators: <-> for L2 distance, <=> for cosine distance
-        results = db.query(
-            Document.id,
+        # Perform vector similarity search on chunks
+        # Use a subquery to get the best matching chunk per document
+        # Step 1: Get all chunks with their similarity scores
+        chunk_scores = db.query(
+            DocumentChunk.id.label('chunk_id'),
+            DocumentChunk.content,
+            DocumentChunk.document_id,
+            Document.id.label('doc_id'),
             Document.url,
             Document.title,
-            Document.content,
             Document.document_type,
             Document.doc_metadata,
             # Calculate cosine similarity (1 - cosine_distance)
-            (1 - Document.embedding.cosine_distance(query_embedding)).label('similarity')
+            (1 - DocumentChunk.embedding.cosine_distance(query_embedding)).label('similarity'),
+            # Add a row number partitioned by document_id, ordered by similarity
+            func.row_number().over(
+                partition_by=DocumentChunk.document_id,
+                order_by=(1 - DocumentChunk.embedding.cosine_distance(query_embedding)).desc()
+            ).label('rn')
+        ).join(
+            Document, DocumentChunk.document_id == Document.id
         ).filter(
-            Document.status == DocumentStatus.COMPLETED,
-            Document.embedding_generated == True,
-            Document.embedding.isnot(None)
+            DocumentChunk.embedding_generated == True,
+            DocumentChunk.embedding.isnot(None),
+            Document.status == DocumentStatus.COMPLETED
+        ).subquery()
+        
+        # Step 2: Select only the best chunk per document (rn = 1)
+        chunk_results = db.query(
+            chunk_scores.c.chunk_id,
+            chunk_scores.c.content,
+            chunk_scores.c.document_id,
+            chunk_scores.c.doc_id,
+            chunk_scores.c.url,
+            chunk_scores.c.title,
+            chunk_scores.c.document_type,
+            chunk_scores.c.doc_metadata,
+            chunk_scores.c.similarity
+        ).filter(
+            chunk_scores.c.rn == 1
         ).order_by(
             text('similarity DESC')
         ).offset(offset).limit(limit).all()
         
         # Format results
         search_results = []
-        for row in results:
-            # Extract snippet from content
+        for row in chunk_results:
+            # Use the chunk content as the snippet
             snippet = extract_snippet(row.content or "", q, max_length=300)
             
             # Extract source from URL or metadata
@@ -203,7 +230,7 @@ async def search_documents(
                 source = row.doc_metadata.get('source')
             
             search_results.append(SearchResult(
-                id=row.id,
+                id=row.doc_id,  # Use document ID, not chunk ID
                 url=row.url,
                 title=row.title or "Untitled Document",
                 snippet=snippet,
@@ -212,8 +239,8 @@ async def search_documents(
                 source=source
             ))
         
-        # Calculate total pages
-        total_pages = (total + limit - 1) // limit  # Ceiling division
+        # Calculate total pages based on total documents (not chunks)
+        total_pages = (total_docs + limit - 1) // limit  # Ceiling division
         
         # Calculate search time
         search_time_ms = round((time.time() - start_time) * 1000, 2)
@@ -226,7 +253,7 @@ async def search_documents(
         return SearchResponse(
             query=q,
             results=search_results,
-            total=total,
+            total=total_docs,
             page=page,
             pages=total_pages,
             search_time_ms=search_time_ms
