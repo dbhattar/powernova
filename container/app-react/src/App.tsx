@@ -6,6 +6,9 @@ import { ChatPage } from './pages/ChatPage';
 import ProfilePage from './pages/ProfilePage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
 import { UsersPage } from './pages/admin/UsersPage';
+import { CrawlJobsPage } from './pages/admin/CrawlJobsPage';
+import { DocumentsPage } from './pages/admin/DocumentsPage';
+import { EmbeddingsPage } from './pages/admin/EmbeddingsPage';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -29,6 +32,9 @@ function App() {
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/users" element={<UsersPage />} />
+            <Route path="/admin/content/crawl-jobs" element={<CrawlJobsPage />} />
+            <Route path="/admin/content/documents" element={<DocumentsPage />} />
+            <Route path="/admin/content/embeddings" element={<EmbeddingsPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>

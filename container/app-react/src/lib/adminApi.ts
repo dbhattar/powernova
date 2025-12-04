@@ -123,28 +123,28 @@ export const adminService = {
 
   // Crawl Jobs
   async getCrawlJobs(skip = 0, limit = 50): Promise<CrawlJob[]> {
-    return fetchAdminApi<CrawlJob[]>(`/crawl-jobs?skip=${skip}&limit=${limit}`);
+    return fetchAdminApi<CrawlJob[]>(`/crawl?skip=${skip}&limit=${limit}`);
   },
 
   async getCrawlJob(id: number): Promise<CrawlJob> {
-    return fetchAdminApi<CrawlJob>(`/crawl-jobs/${id}`);
+    return fetchAdminApi<CrawlJob>(`/crawl/${id}`);
   },
 
   async createCrawlJob(job: CrawlJobCreate): Promise<CrawlJob> {
-    return fetchAdminApi<CrawlJob>('/crawl-jobs', {
+    return fetchAdminApi<CrawlJob>('/crawl', {
       method: 'POST',
       body: JSON.stringify(job),
     });
   },
 
   async cancelCrawlJob(id: number): Promise<void> {
-    return fetchAdminApi<void>(`/crawl-jobs/${id}/cancel`, {
+    return fetchAdminApi<void>(`/crawl/${id}/cancel`, {
       method: 'POST',
     });
   },
 
   async deleteCrawlJob(id: number): Promise<void> {
-    return fetchAdminApi<void>(`/crawl-jobs/${id}`, {
+    return fetchAdminApi<void>(`/crawl/${id}`, {
       method: 'DELETE',
     });
   },
@@ -166,7 +166,8 @@ export const adminService = {
       });
     }
     const query = queryParams.toString();
-    return fetchAdminApi<AdminDocument[]>(`/documents${query ? `?${query}` : ''}`);
+    const response = await fetchAdminApi<{ documents: AdminDocument[]; total: number; skip: number; limit: number }>(`/documents${query ? `?${query}` : ''}`);
+    return response.documents;
   },
 
   async getDocument(id: number): Promise<AdminDocument> {
