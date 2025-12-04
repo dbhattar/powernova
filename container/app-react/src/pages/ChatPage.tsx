@@ -5,6 +5,7 @@ import { useChat } from '@/hooks/useChat';
 import { useDocuments } from '@/hooks/useDocuments';
 import { Header } from '@/components/Header';
 import { LoginModal } from '@/components/LoginModal';
+import { AccountRequestModal } from '@/components/AccountRequestModal';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatMessages } from '@/components/chat/ChatMessages';
 import { ChatInput } from '@/components/chat/ChatInput';
@@ -14,8 +15,9 @@ export function ChatPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   // Sidebar closed by default on mobile, open on desktop
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
-  const [activeConversationId, setActiveConversationId] = useState<string | undefined>();
+  const [activeConversationId, setActiveConversationId] = useState<number | undefined>();
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
+  const [showAccountRequest, setShowAccountRequest] = useState(false);
 
   // Hooks
   const {
@@ -41,7 +43,11 @@ export function ChatPage() {
   } = useChat({
     conversationId: activeConversationId,
     onConversationCreated: (newConvId) => {
-      setActiveConversationId(newConvId);
+      // Convert string ID from API to number
+      const numericId = parseInt(newConvId, 10);
+      if (!isNaN(numericId)) {
+        setActiveConversationId(numericId);
+      }
     },
     onMessageComplete: () => {
       invalidateConversation();
@@ -75,17 +81,17 @@ export function ChatPage() {
     }
   };
 
-  const handleRenameConversation = async (id: string, title: string) => {
+  const handleRenameConversation = async (id: number, title: string) => {
     try {
-      await updateConversation({ id, data: { title } });
+      await updateConversation({ id: String(id), data: { title } });
     } catch (error) {
       console.error('Failed to rename conversation:', error);
     }
   };
 
-  const handleDeleteConversation = async (id: string) => {
+  const handleDeleteConversation = async (id: number) => {
     try {
-      await deleteConversation(id);
+      await deleteConversation(String(id));
       if (id === activeConversationId) {
         setActiveConversationId(conversations[0]?.id);
       }
@@ -148,7 +154,15 @@ export function ChatPage() {
       {/* Login Prompt Modal */}
       <LoginModal 
         isOpen={showLoginPrompt} 
-        onClose={() => setShowLoginPrompt(false)} 
+        onClose={() => setShowLoginPrompt(false)}
+        onRequestAccount={() => setShowAccountRequest(true)}
+      />
+
+      {/* Account Request Modal */}
+      <AccountRequestModal
+        isOpen={showAccountRequest}
+        onClose={() => setShowAccountRequest(false)}
+        onBackToLogin={() => setShowLoginPrompt(true)}
       />
 
       {/* Main content */}

@@ -1,13 +1,13 @@
 import { memo, useState } from 'react';
-import { MessageSquare, MoreVertical, Pencil, Trash2 } from 'lucide-react';
+import { MessageSquare, Pencil, Trash2 } from 'lucide-react';
 import type { Conversation } from '@/types';
 
 interface ConversationItemProps {
   conversation: Conversation;
   isActive: boolean;
   onClick: () => void;
-  onRename: (id: string, title: string) => void;
-  onDelete: (id: string) => void;
+  onRename: (id: number, title: string) => void;
+  onDelete: (id: number) => void;
 }
 
 export const ConversationItem = memo(({
@@ -17,7 +17,6 @@ export const ConversationItem = memo(({
   onRename,
   onDelete,
 }: ConversationItemProps) => {
-  const [showMenu, setShowMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editTitle, setEditTitle] = useState(conversation.title);
 
@@ -26,14 +25,18 @@ export const ConversationItem = memo(({
       onRename(conversation.id, editTitle.trim());
     }
     setIsEditing(false);
-    setShowMenu(false);
   };
 
-  const handleDelete = () => {
+  const handleDelete = (e: React.MouseEvent) => {
+    e.stopPropagation();
     if (confirm('Are you sure you want to delete this conversation?')) {
       onDelete(conversation.id);
     }
-    setShowMenu(false);
+  };
+
+  const handleEditClick = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    setIsEditing(true);
   };
 
   return (
@@ -77,56 +80,23 @@ export const ConversationItem = memo(({
         </div>
       )}
 
-      {/* Menu */}
+      {/* Action Icons - Always visible on hover */}
       {!isEditing && (
-        <div className="relative flex-shrink-0">
+        <div className="flex items-center gap-1 flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity">
           <button
-            onClick={(e) => {
-              e.stopPropagation();
-              setShowMenu(!showMenu);
-            }}
-            className="p-1 rounded hover:bg-gray-200 opacity-0 group-hover:opacity-100 transition-opacity"
+            onClick={handleEditClick}
+            className="p-1.5 rounded hover:bg-purple-100 transition-colors"
+            title="Rename conversation"
           >
-            <MoreVertical className="w-4 h-4 text-gray-600" />
+            <Pencil className="w-3.5 h-3.5 text-purple-600" />
           </button>
-
-          {showMenu && (
-            <>
-              {/* Backdrop */}
-              <div
-                className="fixed inset-0 z-10"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setShowMenu(false);
-                }}
-              />
-
-              {/* Menu */}
-              <div className="absolute right-0 top-8 z-20 w-40 bg-white rounded-lg shadow-lg border border-gray-200 py-1">
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    setIsEditing(true);
-                    setShowMenu(false);
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-gray-700 hover:bg-gray-50"
-                >
-                  <Pencil className="w-4 h-4" />
-                  Rename
-                </button>
-                <button
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    handleDelete();
-                  }}
-                  className="w-full flex items-center gap-2 px-3 py-2 text-sm text-red-600 hover:bg-red-50"
-                >
-                  <Trash2 className="w-4 h-4" />
-                  Delete
-                </button>
-              </div>
-            </>
-          )}
+          <button
+            onClick={handleDelete}
+            className="p-1.5 rounded hover:bg-red-100 transition-colors"
+            title="Delete conversation"
+          >
+            <Trash2 className="w-3.5 h-3.5 text-red-600" />
+          </button>
         </div>
       )}
     </div>

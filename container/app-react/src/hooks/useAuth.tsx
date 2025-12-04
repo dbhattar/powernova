@@ -1,5 +1,6 @@
 import { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { api } from '@/lib/api';
+import { useAnalytics } from '@/contexts/AnalyticsContext';
 import type { User, AuthResponse } from '@/types';
 
 interface AuthContextType {
@@ -18,6 +19,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<User | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const analytics = useAnalytics();
 
   // Auto-login on mount if token exists
   useEffect(() => {
@@ -51,6 +53,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       localStorage.setItem('auth_token', response.access_token);
       setToken(response.access_token);
       setUser(response.user);
+
+      // Track successful login
+      analytics.trackLogin('email');
+      analytics.setAnalyticsUserId(String(response.user.id));
+      analytics.setAnalyticsUserProperties({
+        user_type: response.user.is_admin ? 'admin' : 'user',
+      });
     } catch (error) {
       console.error('Login failed:', error);
       throw error;

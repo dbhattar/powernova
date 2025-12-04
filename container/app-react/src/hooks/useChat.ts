@@ -4,7 +4,7 @@ import { API_URL } from '@/lib/config';
 import type { Message, ChatStreamEvent } from '@/types';
 
 interface UseChatOptions {
-  conversationId?: string;
+  conversationId?: number | string;
   onConversationCreated?: (conversationId: string) => void;
   onMessageComplete?: (message: Message) => void;
   onError?: (error: Error) => void;
@@ -111,8 +111,8 @@ export function useChat(options: UseChatOptions = {}) {
                         id: currentMessageId,
                         role: 'assistant',
                         content: accumulatedContent,
-                        timestamp: new Date().toISOString(),
-                        conversation_id: currentConversationId,
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
                       };
                       
                       onMessageComplete?.(completedMessage);

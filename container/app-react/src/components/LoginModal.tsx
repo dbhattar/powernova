@@ -4,9 +4,10 @@ import { useAuth } from '@/hooks/useAuth';
 interface LoginModalProps {
   isOpen: boolean;
   onClose: () => void;
+  onRequestAccount?: () => void;
 }
 
-export function LoginModal({ isOpen, onClose }: LoginModalProps) {
+export function LoginModal({ isOpen, onClose, onRequestAccount }: LoginModalProps) {
   const { login } = useAuth();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -153,9 +154,16 @@ export function LoginModal({ isOpen, onClose }: LoginModalProps) {
         <div className="px-6 py-4 bg-gray-50 border-t border-gray-200 rounded-b-lg">
           <p className="text-xs text-gray-600 text-center">
             Don't have an account?{' '}
-            <a href="mailto:support@powernova.com" className="text-purple-600 hover:text-purple-700 font-medium">
-              Contact Support
-            </a>
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onRequestAccount?.();
+              }}
+              className="text-purple-600 hover:text-purple-700 font-medium"
+            >
+              Request an account
+            </button>
           </p>
         </div>
       </div>

@@ -2,6 +2,7 @@ import { useState, FormEvent } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate, Link } from 'react-router-dom';
 import { LoginModal } from './LoginModal';
+import { AccountRequestModal } from './AccountRequestModal';
 
 interface HeaderProps {
   variant: 'chat' | 'search' | 'profile';
@@ -12,6 +13,7 @@ export function Header({ variant }: HeaderProps) {
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const [showLoginModal, setShowLoginModal] = useState(false);
+  const [showAccountRequestModal, setShowAccountRequestModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const navigate = useNavigate();
 
@@ -222,7 +224,18 @@ export function Header({ variant }: HeaderProps) {
       </div>
 
       {/* Login Modal */}
-      <LoginModal isOpen={showLoginModal} onClose={() => setShowLoginModal(false)} />
+      <LoginModal 
+        isOpen={showLoginModal} 
+        onClose={() => setShowLoginModal(false)}
+        onRequestAccount={() => setShowAccountRequestModal(true)}
+      />
+      
+      {/* Account Request Modal */}
+      <AccountRequestModal
+        isOpen={showAccountRequestModal}
+        onClose={() => setShowAccountRequestModal(false)}
+        onBackToLogin={() => setShowLoginModal(true)}
+      />
     </header>
   );
 }

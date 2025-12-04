@@ -35,16 +35,21 @@ export interface Message {
   id: string;
   role: 'user' | 'assistant' | 'system';
   content: string;
-  timestamp: string;
-  conversation_id: string;
+  model?: string;
+  token_count?: number;
+  created_at: string;
+  updated_at: string;
 }
 
 export interface Conversation {
-  id: string;
+  id: number;
   title: string;
   created_at: string;
   updated_at: string;
   message_count: number;
+  document_count: number;
+  last_message_preview: string | null;
+  last_message_role: string | null;
 }
 
 export interface ConversationDocument {
@@ -80,13 +85,16 @@ export interface UpdateConversationRequest {
   title: string;
 }
 
-export interface ConversationsListResponse {
-  conversations: Conversation[];
-}
+// API returns a flat array of conversations, not a nested object
+export type ConversationsListResponse = Conversation[];
 
 export interface ConversationMessagesResponse {
+  id: number;
+  title: string;
+  created_at: string;
+  updated_at: string;
   messages: Message[];
-  conversation: Conversation;
+  documents: ConversationDocument[];
 }
 
 // User Profile Types

@@ -4,11 +4,11 @@ import type { Conversation } from '@/types';
 
 interface ConversationListProps {
   conversations: Conversation[];
-  activeConversationId?: string;
-  onSelectConversation: (id: string) => void;
+  activeConversationId?: number;
+  onSelectConversation: (id: number) => void;
   onCreateConversation: () => void;
-  onRenameConversation: (id: string, title: string) => void;
-  onDeleteConversation: (id: string) => void;
+  onRenameConversation: (id: number, title: string) => void;
+  onDeleteConversation: (id: number) => void;
   isLoading?: boolean;
   isCreating?: boolean;
 }

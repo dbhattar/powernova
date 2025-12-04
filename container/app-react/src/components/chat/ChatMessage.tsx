@@ -32,7 +32,7 @@ export const ChatMessage = memo(({ message }: ChatMessageProps) => {
             {isUser ? 'You' : 'PowerNOVA'}
           </span>
           <span className="text-xs text-gray-500">
-            {new Date(message.timestamp).toLocaleTimeString([], {
+            {new Date(message.created_at).toLocaleTimeString([], {
               hour: '2-digit',
               minute: '2-digit',
             })}

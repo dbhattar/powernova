@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { api } from '@/lib/api';
 import type { ConversationDocument } from '@/types';
 
-export function useDocuments(conversationId?: string) {
+export function useDocuments(conversationId?: number | string) {
   const queryClient = useQueryClient();
 
   // Fetch documents for a conversation
@@ -13,7 +13,7 @@ export function useDocuments(conversationId?: string) {
     refetch,
   } = useQuery({
     queryKey: ['documents', conversationId],
-    queryFn: () => api.conversations.documents.list(conversationId!),
+    queryFn: () => api.conversations.documents.list(String(conversationId)),
     enabled: !!conversationId,
     staleTime: 1000 * 60 * 5, // 5 minutes
   });
@@ -24,9 +24,9 @@ export function useDocuments(conversationId?: string) {
       if (!conversationId) {
         throw new Error('No conversation selected');
       }
-      return api.conversations.documents.upload(conversationId, file);
+      return api.conversations.documents.upload(String(conversationId), file);
     },
-    onSuccess: (newDocument) => {
+    onSuccess: (newDocument: ConversationDocument) => {
       // Add to cache
       queryClient.setQueryData(['documents', conversationId], (old: ConversationDocument[] = []) => [
         ...old,
@@ -41,9 +41,9 @@ export function useDocuments(conversationId?: string) {
       if (!conversationId) {
         throw new Error('No conversation selected');
       }
-      return api.conversations.documents.delete(conversationId, documentId);
+      return api.conversations.documents.delete(String(conversationId), documentId);
     },
-    onSuccess: (_, deletedId) => {
+    onSuccess: (_: void, deletedId: string) => {
       // Remove from cache
       queryClient.setQueryData(['documents', conversationId], (old: ConversationDocument[] = []) =>
         old.filter((doc) => doc.id !== deletedId)

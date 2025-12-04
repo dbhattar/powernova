@@ -2,6 +2,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { AuthProvider } from './hooks/useAuth';
 import { MaintenanceProvider, useMaintenance } from './contexts/MaintenanceContext';
+import { AnalyticsProvider } from './contexts/AnalyticsContext';
 import { MaintenanceScreen } from './components/MaintenanceScreen';
 import { SearchPage } from './pages/SearchPage';
 import { ChatPage } from './pages/ChatPage';
@@ -71,9 +72,11 @@ function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <MaintenanceProvider>
-        <AuthProvider>
-          <AppContent />
-        </AuthProvider>
+        <AnalyticsProvider>
+          <AuthProvider>
+            <AppContent />
+          </AuthProvider>
+        </AnalyticsProvider>
       </MaintenanceProvider>
     </QueryClientProvider>
   );
