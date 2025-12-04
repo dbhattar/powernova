@@ -13,6 +13,7 @@ import { CrawlJobsPage } from './pages/admin/CrawlJobsPage';
 import { DocumentsPage } from './pages/admin/DocumentsPage';
 import { EmbeddingsPage } from './pages/admin/EmbeddingsPage';
 import { ProcessingJobsPage } from './pages/admin/ProcessingJobsPage';
+import { config } from './lib/config';
 import { DataQualityPage } from './pages/admin/DataQualityPage';
 import { FeedbackPage } from './pages/admin/FeedbackPage';
 
@@ -48,7 +49,7 @@ function AppContent() {
 
   // Normal app routes
   return (
-    <BrowserRouter basename="/react">
+    <BrowserRouter basename={config.routerBasename}>
       <Routes>
         <Route path="/" element={<ChatPage />} />
         <Route path="/chat" element={<ChatPage />} />

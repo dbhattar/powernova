@@ -5,7 +5,7 @@ import path from 'path'
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
-  base: '/react/',  // Serve from /react/ path
+  base: process.env.VITE_BASE_PATH || '/react/',  // Default to /react/ for dual-app setup, override with VITE_BASE_PATH=/ for production
   resolve: {
     alias: {
       '@': path.resolve(__dirname, './src'),

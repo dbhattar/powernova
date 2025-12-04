@@ -1,0 +1,47 @@
+# Node modules - will be installed fresh in container
+app-react/node_modules
+app-react/dist
+app-react/.vite
+
+# Git files
+.git
+.gitignore
+
+# Documentation  
+*.md
+docs/
+
+# IDE and editor files
+.vscode
+.idea
+*.swp
+*.swo
+*~
+.DS_Store
+
+# CI/CD
+.github
+
+# Logs
+*.log
+logs/
+
+# Local environment files (not .env.production - we need that!)
+.env.local
+.env.*.local
+app-react/.env.local
+
+# Build artifacts
+api/__pycache__
+api/*.pyc
+api/.pytest_cache
+
+# Other apps/services not needed for this build
+website/
+app/
+scripts/
+notebooks/
+jobs/
+pdfs/
+templates/
+deployment-info-*.txt
