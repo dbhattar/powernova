@@ -198,7 +198,8 @@ ALLOWED_ORIGINS = [
     "https://www.powernova.ai",                      # Production landing page
     "http://localhost:8081",                          # Local chat app
     "http://localhost:8080",                          # Local landing page
-]
+    "http://localhost:3000",                          # Local landing page
+] 
 
 app.add_middleware(
     CORSMiddleware,

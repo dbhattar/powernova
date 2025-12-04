@@ -1,0 +1,23 @@
+# Docker Compose for Local Development - Dual App (React + Vanilla JS)
+# Run: docker-compose -f docker-compose.dual-app.local.yml up --build
+
+version: '3.8'
+
+services:
+  powernova-chat-dual:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.app.dual.local
+    container_name: powernova-chat-dual
+    ports:
+      - "3000:80"
+    networks:
+      - powernova-network
+    restart: unless-stopped
+    labels:
+      - "com.powernova.service=chat-dual"
+      - "com.powernova.environment=local"
+
+networks:
+  powernova-network:
+    driver: bridge

@@ -70,3 +70,7 @@ Thumbs.db
 
 # Certs
 certs/
+
+# Exception: Un-ignore React source lib folder (parent .gitignore ignores lib/)
+!app-react/src/lib/
+!app-react/src/lib/**
