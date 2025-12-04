@@ -10,7 +10,10 @@ import type {
   UpdateConversationRequest,
   ConversationDocument,
   FollowUpQuestionsResponse,
-  ChatRequest
+  UserProfile,
+  UserProfileUpdate,
+  ChangePasswordRequest,
+  UserDocument,
 } from '@/types';
 
 export class ApiError extends Error {
@@ -21,6 +24,12 @@ export class ApiError extends Error {
   ) {
     super(message);
     this.name = 'ApiError';
+    // Ensure the message is always a string
+    Object.setPrototypeOf(this, ApiError.prototype);
+  }
+
+  toString() {
+    return this.message;
   }
 }
 
@@ -45,12 +54,31 @@ async function fetchApi<T>(
   });
 
   if (!response.ok) {
-    const errorData = await response.json().catch(() => ({}));
-    throw new ApiError(
-      errorData.detail || `HTTP ${response.status}: ${response.statusText}`,
-      response.status,
-      errorData
-    );
+    let errorMessage = `HTTP ${response.status}: ${response.statusText}`;
+    let errorData: any = {};
+
+    try {
+      errorData = await response.json();
+      
+      // Extract error message from various possible formats
+      if (typeof errorData.detail === 'string') {
+        errorMessage = errorData.detail;
+      } else if (Array.isArray(errorData.detail)) {
+        // FastAPI validation errors
+        errorMessage = errorData.detail.map((err: any) => 
+          `${err.loc ? err.loc.join('.') + ': ' : ''}${err.msg}`
+        ).join(', ');
+      } else if (errorData.message) {
+        errorMessage = errorData.message;
+      } else if (errorData.error) {
+        errorMessage = errorData.error;
+      }
+    } catch (e) {
+      // If JSON parsing fails, use the default error message
+      console.error('Failed to parse error response:', e);
+    }
+
+    throw new ApiError(errorMessage, response.status, errorData);
   }
 
   return response.json();
@@ -71,9 +99,17 @@ export const api = {
   
   auth: {
     login: async (email: string, password: string): Promise<AuthResponse> => {
+      // OAuth2 format requires username field and form-urlencoded
+      const formData = new URLSearchParams();
+      formData.append('username', email); // OAuth2 uses 'username' field
+      formData.append('password', password);
+      
       return fetchApi<AuthResponse>('/api/auth/login', {
         method: 'POST',
-        body: JSON.stringify({ email, password }),
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+        },
+        body: formData.toString(),
       });
     },
     
@@ -169,6 +205,62 @@ export const api = {
         method: 'POST',
         body: JSON.stringify({ conversation_id: conversationId, message }),
       });
+    },
+  },
+
+  users: {
+    getProfile: async (): Promise<UserProfile> => {
+      return fetchApi<UserProfile>('/api/users/profile');
+    },
+
+    updateProfile: async (data: UserProfileUpdate): Promise<UserProfile> => {
+      return fetchApi<UserProfile>('/api/users/profile', {
+        method: 'PUT',
+        body: JSON.stringify(data),
+      });
+    },
+
+    changePassword: async (data: ChangePasswordRequest): Promise<{ message: string }> => {
+      return fetchApi<{ message: string }>('/api/users/profile/change-password', {
+        method: 'POST',
+        body: JSON.stringify(data),
+      });
+    },
+
+    getDocuments: async (scope?: string): Promise<UserDocument[]> => {
+      const queryParams = scope ? `?scope=${scope}` : '';
+      return fetchApi<UserDocument[]>(`/api/users/documents${queryParams}`);
+    },
+
+    uploadDocument: async (file: File): Promise<UserDocument> => {
+      const token = localStorage.getItem('auth_token');
+      const formData = new FormData();
+      formData.append('file', file);
+      
+      const headers: Record<string, string> = {};
+      if (token) {
+        headers['Authorization'] = `Bearer ${token}`;
+      }
+      
+      const response = await fetch(
+        `${API_URL}/api/users/documents`,
+        {
+          method: 'POST',
+          headers,
+          body: formData,
+        }
+      );
+      
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        throw new ApiError(
+          errorData.detail || `HTTP ${response.status}: ${response.statusText}`,
+          response.status,
+          errorData
+        );
+      }
+      
+      return response.json();
     },
   },
 };

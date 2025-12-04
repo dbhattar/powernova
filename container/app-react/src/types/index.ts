@@ -88,3 +88,41 @@ export interface ConversationMessagesResponse {
   messages: Message[];
   conversation: Conversation;
 }
+
+// User Profile Types
+export interface UserProfile {
+  id: number;
+  email: string;
+  username: string;
+  is_active: boolean;
+  is_verified: boolean;
+  created_at: string;
+  total_conversations: number;
+  total_documents: number;
+  total_messages: number;
+}
+
+export interface UserProfileUpdate {
+  username?: string;
+}
+
+export interface ChangePasswordRequest {
+  current_password: string;
+  new_password: string;
+}
+
+export interface UserDocument {
+  id: number;
+  title: string;
+  url: string;
+  document_type: string;
+  document_scope: string;
+  file_size?: number;
+  blob_url?: string;
+  status: string;
+  chunk_count?: number;
+  embedding_generated: boolean;
+  created_at: string;
+  conversation_id?: number;
+  conversation_title?: string;
+}

@@ -1,4 +1,5 @@
-import { Zap, Search as SearchIcon } from 'lucide-react';
+import { Search as SearchIcon } from 'lucide-react';
+import { Header } from '@/components/Header';
 import { SearchBar } from '@/components/search/SearchBar';
 import { SearchResults } from '@/components/search/SearchResults';
 import { useSearch } from '@/hooks/useSearch';
@@ -23,39 +24,7 @@ export function SearchPage() {
   return (
     <div className="min-h-screen bg-gray-50">
       {/* Header */}
-      <header className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <div className="flex items-center gap-3">
-              <Zap className="w-7 h-7 text-primary-500" />
-              <div className="flex items-center gap-2">
-                <h1 className="text-xl font-bold text-gray-900">PowerNOVA</h1>
-                <span className="px-2 py-0.5 text-xs font-semibold bg-gradient-to-r from-primary-500 to-secondary-500 text-white rounded">
-                  Search
-                </span>
-                <span className="px-2 py-0.5 text-xs font-semibold bg-yellow-100 text-yellow-800 rounded">
-                  Beta
-                </span>
-              </div>
-            </div>
-
-            <div className="flex items-center gap-4">
-              <a
-                href="/"
-                className="text-sm text-gray-600 hover:text-gray-900 transition-colors flex items-center gap-1"
-              >
-                💬 Chat
-              </a>
-              <a
-                href="/search.html"
-                className="text-xs text-gray-500 hover:text-gray-700 transition-colors"
-              >
-                ← Classic Version
-              </a>
-            </div>
-          </div>
-        </div>
-      </header>
+      <Header variant="search" />
 
       {/* Search Bar */}
       <SearchBar

@@ -18,7 +18,7 @@ export function SearchBar({
   placeholder = 'Search across thousands of energy documents...',
 }: SearchBarProps) {
   return (
-    <div className="sticky top-16 z-40 bg-white border-b border-gray-200 shadow-sm">
+    <div className="sticky top-16 bg-white border-b border-gray-200 shadow-sm">
       <div className="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         <form onSubmit={onSubmit} className="relative">
           <div className="flex items-center gap-4 bg-gray-50 border-2 border-gray-200 rounded-xl px-5 py-3.5 transition-all focus-within:border-primary-500 focus-within:shadow-md">
