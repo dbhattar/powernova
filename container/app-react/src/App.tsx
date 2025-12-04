@@ -5,6 +5,7 @@ import { SearchPage } from './pages/SearchPage';
 import { ChatPage } from './pages/ChatPage';
 import ProfilePage from './pages/ProfilePage';
 import { AdminDashboard } from './pages/admin/AdminDashboard';
+import { UsersPage } from './pages/admin/UsersPage';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -27,6 +28,7 @@ function App() {
             <Route path="/search" element={<SearchPage />} />
             <Route path="/profile" element={<ProfilePage />} />
             <Route path="/admin" element={<AdminDashboard />} />
+            <Route path="/admin/users" element={<UsersPage />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
