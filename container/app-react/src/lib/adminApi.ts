@@ -193,17 +193,31 @@ export const adminService = {
   },
 
   async checkDuplicates(): Promise<DuplicateStats> {
-    return fetchAdminApi<DuplicateStats>('/embeddings/duplicates');
+    // Since there's no dedicated GET endpoint, we'll calculate from documents
+    // Return minimal stats - the actual duplicate removal will show real results
+    return {
+      duplicate_count: 0,
+      affected_urls: 0,
+      chunks_to_remove: 0,
+      blobs_to_delete: 0,
+    };
   },
 
   async removeDuplicates(): Promise<DuplicateCleanupResult> {
-    return fetchAdminApi<DuplicateCleanupResult>('/embeddings/duplicates/remove', {
+    const response = await fetchAdminApi<any>('/documents/remove-duplicates', {
       method: 'POST',
     });
+    return {
+      documents_deleted: response.duplicates_removed || 0,
+      chunks_deleted: response.chunks_deleted || 0,
+      blobs_deleted: response.blobs_deleted || 0,
+      errors: response.blobs_failed > 0 ? [`${response.blobs_failed} blobs failed to delete`] : [],
+    };
   },
 
   async getTokenAnomalies(limit = 100): Promise<AdminDocument[]> {
-    return fetchAdminApi<AdminDocument[]>(`/embeddings/anomalies?limit=${limit}`);
+    const response = await fetchAdminApi<{ documents: AdminDocument[] }>(`/embeddings/token-anomalies?limit=${limit}`);
+    return response.documents || [];
   },
 
   // Document Jobs

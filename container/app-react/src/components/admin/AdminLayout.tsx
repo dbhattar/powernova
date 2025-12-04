@@ -4,7 +4,6 @@ import {
   LayoutDashboard, 
   FileText, 
   Database, 
-  Settings as SettingsIcon, 
   Users, 
   MessageSquare,
   Menu,
@@ -62,11 +61,6 @@ const navigationItems: NavItem[] = [
     label: 'Feedback',
     path: '/admin/feedback',
     icon: <MessageSquare className="w-5 h-5" />,
-  },
-  {
-    label: 'Settings',
-    path: '/admin/settings',
-    icon: <SettingsIcon className="w-5 h-5" />,
   },
 ];
 
