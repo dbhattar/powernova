@@ -5,13 +5,14 @@ import type { Message, ChatStreamEvent } from '@/types';
 
 interface UseChatOptions {
   conversationId?: number | string;
+  messages?: Message[];
   onConversationCreated?: (conversationId: string) => void;
   onMessageComplete?: (message: Message) => void;
   onError?: (error: Error) => void;
 }
 
 export function useChat(options: UseChatOptions = {}) {
-  const { conversationId, onConversationCreated, onMessageComplete, onError } = options;
+  const { conversationId, messages = [], onConversationCreated, onMessageComplete, onError } = options;
   
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState('');
@@ -45,16 +46,53 @@ export function useChat(options: UseChatOptions = {}) {
       let currentMessageId = '';
 
       try {
+        // Prepare messages array (include conversation history + new message)
+        const allMessages = [
+          ...messages
+            .filter(msg => msg.role === 'user' || msg.role === 'assistant')
+            .map(msg => ({
+              role: msg.role,
+              content: msg.content,
+            })),
+          {
+            role: 'user' as const,
+            content: message,
+          },
+        ];
+
+        const requestBody: {
+          messages: Array<{ role: string; content: string }>;
+          conversation_id?: number | string;
+          model: string;
+          temperature: number;
+          max_tokens: number;
+          stream: boolean;
+          use_rag: boolean;
+          top_k: number;
+          similarity_threshold: number;
+        } = {
+          messages: allMessages,
+          model: 'gpt-4o-mini',
+          temperature: 0.7,
+          max_tokens: 2000,
+          stream: true,
+          use_rag: true,
+          top_k: 5,
+          similarity_threshold: 0.5,
+        };
+
+        // Add conversation_id if available
+        if (conversationId) {
+          requestBody.conversation_id = conversationId;
+        }
+
         const response = await fetch(`${API_URL}/api/chat/stream`, {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            message,
-            conversation_id: conversationId,
-          }),
+          body: JSON.stringify(requestBody),
           signal: abortControllerRef.current.signal,
         });
 

@@ -42,6 +42,7 @@ export function ChatPage() {
     error: chatError,
   } = useChat({
     conversationId: activeConversationId,
+    messages: messages || [],
     onConversationCreated: (newConvId) => {
       // Convert string ID from API to number
       const numericId = parseInt(newConvId, 10);
