@@ -4,6 +4,7 @@ import { AuthProvider } from './hooks/useAuth';
 import { SearchPage } from './pages/SearchPage';
 import { ChatPage } from './pages/ChatPage';
 import ProfilePage from './pages/ProfilePage';
+import { AdminDashboard } from './pages/admin/AdminDashboard';
 
 // Create a client
 const queryClient = new QueryClient({
@@ -25,6 +26,7 @@ function App() {
             <Route path="/chat" element={<ChatPage />} />
             <Route path="/search" element={<SearchPage />} />
             <Route path="/profile" element={<ProfilePage />} />
+            <Route path="/admin" element={<AdminDashboard />} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </BrowserRouter>
