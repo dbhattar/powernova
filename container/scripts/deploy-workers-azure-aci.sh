@@ -86,13 +86,46 @@ fi
 echo -e "${GREEN}✓ Resource group exists${NC}" >&2
 echo "" >&2
 
-# Step 4: Get Azure credentials from environment or Azure Key Vault
+# Step 4: Get Azure credentials from environment or .env file
 echo -e "${BLUE}[4/8] Getting configuration...${NC}" >&2
+
+# Try to load from .env file first
+ENV_FILE="$(dirname "$0")/.env"
+if [ -f "$ENV_FILE" ]; then
+    echo "Loading configuration from $ENV_FILE file..." >&2
+    
+    # Load environment variables from .env file (only if not already set)
+    while IFS='=' read -r key value; do
+        # Skip comments and empty lines
+        [[ "$key" =~ ^#.*$ ]] && continue
+        [[ -z "$key" ]] && continue
+        
+        # Remove quotes from value
+        value=$(echo "$value" | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//")
+        
+        # Only set if not already in environment
+        if [ -z "${!key}" ]; then
+            export "$key=$value"
+            echo "  Loaded: $key" >&2
+        else
+            echo "  Using existing env: $key" >&2
+        fi
+    done < <(grep -v '^#' "$ENV_FILE" | grep -v '^$')
+    
+    echo -e "${GREEN}✓ Configuration loaded from .env file${NC}" >&2
+else
+    echo -e "${YELLOW}No .env file found at $ENV_FILE${NC}" >&2
+    echo "Using environment variables directly..." >&2
+fi
+echo "" >&2
+
+# Validate required environment variables
+echo "Validating required environment variables..." >&2
 
 # Database URL
 if [ -z "$DATABASE_URL" ]; then
     echo -e "${RED}✗ DATABASE_URL not set${NC}" >&2
-    echo "Please set DATABASE_URL environment variable" >&2
+    echo "Please set DATABASE_URL environment variable or add to .env" >&2
     echo "Example: export DATABASE_URL='postgresql://user:pass@host:5432/db'" >&2
     exit 1
 fi
@@ -100,18 +133,74 @@ fi
 # Azure Storage
 if [ -z "$AZURE_STORAGE_CONNECTION_STRING" ]; then
     echo -e "${RED}✗ AZURE_STORAGE_CONNECTION_STRING not set${NC}" >&2
+    echo "Please set environment variable or add to .env" >&2
     exit 1
 fi
 
 if [ -z "$AZURE_STORAGE_CONTAINER_NAME" ]; then
     echo -e "${RED}✗ AZURE_STORAGE_CONTAINER_NAME not set${NC}" >&2
+    echo "Please set environment variable or add to .env" >&2
     exit 1
 fi
 
-# OpenAI (required for doc worker)
-if [ -z "$OPENAI_API_KEY" ]; then
-    echo -e "${RED}✗ OPENAI_API_KEY not set${NC}" >&2
-    exit 1
+# Azure OpenAI configuration (required for doc worker and crawler)
+# Check if using Azure OpenAI or standard OpenAI
+USE_AZURE_OPENAI="${USE_AZURE_OPENAI:-true}"
+
+if [ "$USE_AZURE_OPENAI" == "true" ]; then
+    echo "Using Azure OpenAI configuration..." >&2
+    
+    if [ -z "$AZURE_OPENAI_ENDPOINT" ]; then
+        echo -e "${RED}✗ AZURE_OPENAI_ENDPOINT not set${NC}" >&2
+        echo "Please set environment variable or add to .env" >&2
+        exit 1
+    fi
+    
+    if [ -z "$AZURE_OPENAI_API_KEY" ]; then
+        echo -e "${RED}✗ AZURE_OPENAI_API_KEY not set${NC}" >&2
+        echo "Please set environment variable or add to .env" >&2
+        exit 1
+    fi
+    
+    if [ -z "$AZURE_OPENAI_CHAT_DEPLOYMENT" ]; then
+        echo -e "${RED}✗ AZURE_OPENAI_CHAT_DEPLOYMENT not set${NC}" >&2
+        echo "Please set environment variable or add to .env" >&2
+        exit 1
+    fi
+    
+    if [ -z "$AZURE_OPENAI_EMBEDDING_DEPLOYMENT" ]; then
+        echo -e "${RED}✗ AZURE_OPENAI_EMBEDDING_DEPLOYMENT not set${NC}" >&2
+        echo "Please set environment variable or add to .env" >&2
+        exit 1
+    fi
+    
+    # API version is optional with default
+    AZURE_OPENAI_API_VERSION="${AZURE_OPENAI_API_VERSION:-2024-02-15-preview}"
+else
+    echo "Using OpenAI configuration..." >&2
+    
+    if [ -z "$OPENAI_API_KEY" ]; then
+        echo -e "${RED}✗ OPENAI_API_KEY not set${NC}" >&2
+        echo "Please set environment variable or add to .env" >&2
+        exit 1
+    fi
+fi
+
+# Print configuration summary (without sensitive values)
+echo "" >&2
+echo -e "${GREEN}✓ Configuration validated${NC}" >&2
+echo "" >&2
+echo "Configuration Summary:" >&2
+echo "  Database: ${DATABASE_URL%%@*}@***" >&2
+echo "  Storage Container: $AZURE_STORAGE_CONTAINER_NAME" >&2
+if [ "$USE_AZURE_OPENAI" == "true" ]; then
+    echo "  OpenAI Provider: Azure OpenAI" >&2
+    echo "  Endpoint: $AZURE_OPENAI_ENDPOINT" >&2
+    echo "  Chat Deployment: $AZURE_OPENAI_CHAT_DEPLOYMENT" >&2
+    echo "  Embedding Deployment: $AZURE_OPENAI_EMBEDDING_DEPLOYMENT" >&2
+    echo "  API Version: $AZURE_OPENAI_API_VERSION" >&2
+else
+    echo "  OpenAI Provider: Standard OpenAI" >&2
 fi
 
 echo -e "${GREEN}✓ Configuration loaded${NC}" >&2
@@ -190,7 +279,10 @@ fi
 
 # Create parameters JSON for deployment
 echo "Generating deployment parameters..." >&2
-cat > /tmp/powernova-workers-params.json <<EOF
+
+# Build the parameters JSON with conditional OpenAI/Azure OpenAI settings
+if [ "$USE_AZURE_OPENAI" == "true" ]; then
+    cat > /tmp/powernova-workers-params.json <<EOF
 {
   "\$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
   "contentVersion": "1.0.0.0",
@@ -228,12 +320,76 @@ cat > /tmp/powernova-workers-params.json <<EOF
     "azureStorageContainerName": {
       "value": "$AZURE_STORAGE_CONTAINER_NAME"
     },
+    "useAzureOpenAI": {
+      "value": "true"
+    },
+    "azureOpenAIEndpoint": {
+      "value": "$AZURE_OPENAI_ENDPOINT"
+    },
+    "azureOpenAIApiKey": {
+      "value": "$AZURE_OPENAI_API_KEY"
+    },
+    "azureOpenAIApiVersion": {
+      "value": "$AZURE_OPENAI_API_VERSION"
+    },
+    "azureOpenAIChatDeployment": {
+      "value": "$AZURE_OPENAI_CHAT_DEPLOYMENT"
+    },
+    "azureOpenAIEmbeddingDeployment": {
+      "value": "$AZURE_OPENAI_EMBEDDING_DEPLOYMENT"
+    }
+  }
+}
+EOF
+else
+    cat > /tmp/powernova-workers-params.json <<EOF
+{
+  "\$schema": "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+  "contentVersion": "1.0.0.0",
+  "parameters": {
+    "location": {
+      "value": "$LOCATION"
+    },
+    "containerGroupName": {
+      "value": "$CONTAINER_GROUP"
+    },
+    "environment": {
+      "value": "$ENVIRONMENT"
+    },
+    "acrName": {
+      "value": "$ACR_NAME"
+    },
+    "acrUsername": {
+      "value": "$ACR_USERNAME"
+    },
+    "acrPassword": {
+      "value": "$ACR_PASSWORD"
+    },
+    "imageRepository": {
+      "value": "$IMAGE_REPOSITORY"
+    },
+    "imageTag": {
+      "value": "$IMAGE_TAG"
+    },
+    "databaseUrl": {
+      "value": "$DATABASE_URL"
+    },
+    "azureStorageConnectionString": {
+      "value": "$AZURE_STORAGE_CONNECTION_STRING"
+    },
+    "azureStorageContainerName": {
+      "value": "$AZURE_STORAGE_CONTAINER_NAME"
+    },
+    "useAzureOpenAI": {
+      "value": "false"
+    },
     "openaiApiKey": {
       "value": "$OPENAI_API_KEY"
     }
   }
 }
 EOF
+fi
 
 # Deploy using ARM template
 echo "Deploying container group using ARM template..." >&2

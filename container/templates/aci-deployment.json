@@ -70,10 +70,53 @@
         "description": "Azure Storage container name"
       }
     },
+    "useAzureOpenAI": {
+      "type": "string",
+      "defaultValue": "true",
+      "metadata": {
+        "description": "Set to 'true' to use Azure OpenAI, 'false' for standard OpenAI"
+      }
+    },
+    "azureOpenAIEndpoint": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Azure OpenAI endpoint (required if useAzureOpenAI is true)"
+      }
+    },
+    "azureOpenAIApiKey": {
+      "type": "securestring",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Azure OpenAI API key (required if useAzureOpenAI is true)"
+      }
+    },
+    "azureOpenAIApiVersion": {
+      "type": "string",
+      "defaultValue": "2024-02-15-preview",
+      "metadata": {
+        "description": "Azure OpenAI API version"
+      }
+    },
+    "azureOpenAIChatDeployment": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Azure OpenAI chat model deployment name (e.g., gpt-4o-mini)"
+      }
+    },
+    "azureOpenAIEmbeddingDeployment": {
+      "type": "string",
+      "defaultValue": "",
+      "metadata": {
+        "description": "Azure OpenAI embedding model deployment name (e.g., text-embedding-3-small-powernova)"
+      }
+    },
     "openaiApiKey": {
       "type": "securestring",
+      "defaultValue": "",
       "metadata": {
-        "description": "OpenAI API key (required for doc worker)"
+        "description": "OpenAI API key (required if useAzureOpenAI is false)"
       }
     }
   },
@@ -127,6 +170,34 @@
                   "value": "[parameters('azureStorageContainerName')]"
                 },
                 {
+                  "name": "USE_AZURE_OPENAI",
+                  "value": "[parameters('useAzureOpenAI')]"
+                },
+                {
+                  "name": "AZURE_OPENAI_ENDPOINT",
+                  "value": "[parameters('azureOpenAIEndpoint')]"
+                },
+                {
+                  "name": "AZURE_OPENAI_API_KEY",
+                  "secureValue": "[parameters('azureOpenAIApiKey')]"
+                },
+                {
+                  "name": "AZURE_OPENAI_API_VERSION",
+                  "value": "[parameters('azureOpenAIApiVersion')]"
+                },
+                {
+                  "name": "AZURE_OPENAI_CHAT_DEPLOYMENT",
+                  "value": "[parameters('azureOpenAIChatDeployment')]"
+                },
+                {
+                  "name": "AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
+                  "value": "[parameters('azureOpenAIEmbeddingDeployment')]"
+                },
+                {
+                  "name": "OPENAI_API_KEY",
+                  "secureValue": "[parameters('openaiApiKey')]"
+                },
+                {
                   "name": "LOG_LEVEL",
                   "value": "INFO"
                 }
@@ -172,6 +243,30 @@
                 {
                   "name": "AZURE_STORAGE_CONTAINER_NAME",
                   "value": "[parameters('azureStorageContainerName')]"
+                },
+                {
+                  "name": "USE_AZURE_OPENAI",
+                  "value": "[parameters('useAzureOpenAI')]"
+                },
+                {
+                  "name": "AZURE_OPENAI_ENDPOINT",
+                  "value": "[parameters('azureOpenAIEndpoint')]"
+                },
+                {
+                  "name": "AZURE_OPENAI_API_KEY",
+                  "secureValue": "[parameters('azureOpenAIApiKey')]"
+                },
+                {
+                  "name": "AZURE_OPENAI_API_VERSION",
+                  "value": "[parameters('azureOpenAIApiVersion')]"
+                },
+                {
+                  "name": "AZURE_OPENAI_CHAT_DEPLOYMENT",
+                  "value": "[parameters('azureOpenAIChatDeployment')]"
+                },
+                {
+                  "name": "AZURE_OPENAI_EMBEDDING_DEPLOYMENT",
+                  "value": "[parameters('azureOpenAIEmbeddingDeployment')]"
                 },
                 {
                   "name": "OPENAI_API_KEY",
