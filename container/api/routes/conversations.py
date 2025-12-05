@@ -68,6 +68,7 @@ class DocumentResponse(BaseModel):
     chunk_count: int
     uploaded_at: str
     uploaded_by: Optional[int] = None
+    processing_status: Optional[str] = None  # DocumentJob status: pending/processing/completed/failed
 
 
 # ==================== Conversation Endpoints ==================== #

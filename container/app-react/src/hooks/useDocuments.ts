@@ -46,7 +46,7 @@ export function useDocuments(conversationId?: number | string) {
     onSuccess: (_: void, deletedId: string) => {
       // Remove from cache
       queryClient.setQueryData(['documents', conversationId], (old: ConversationDocument[] = []) =>
-        old.filter((doc) => doc.id !== deletedId)
+        old.filter((doc) => doc.id !== Number(deletedId))
       );
     },
   });

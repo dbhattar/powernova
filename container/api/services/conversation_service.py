@@ -6,7 +6,7 @@ from sqlalchemy import desc
 from typing import List, Optional, Dict, Any
 from datetime import datetime
 
-from models import Conversation, Message, ConversationDocument, Document, User
+from models import Conversation, Message, ConversationDocument, Document, User, DocumentJob
 from models.conversation import MessageRole
 import os
 
@@ -422,6 +422,16 @@ class ConversationService:
         result = []
         for conv_doc in conv_docs:
             doc = conv_doc.document
+            
+            # Get processing status from DocumentJob if it exists
+            doc_job = self.db.query(DocumentJob).filter(
+                DocumentJob.document_id == doc.id
+            ).first()
+            
+            processing_status = None
+            if doc_job:
+                processing_status = doc_job.status.value.lower()
+            
             result.append({
                 "id": doc.id,
                 "title": doc.title,
@@ -432,7 +442,8 @@ class ConversationService:
                 "status": doc.status.value,
                 "chunk_count": doc.chunk_count,
                 "uploaded_at": conv_doc.created_at.isoformat(),
-                "uploaded_by": conv_doc.uploaded_by
+                "uploaded_by": conv_doc.uploaded_by,
+                "processing_status": processing_status
             })
         
         return result

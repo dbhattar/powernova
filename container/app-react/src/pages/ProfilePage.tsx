@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useProfile } from '../hooks/useProfile';
 import { Header } from '../components/Header';
 import { Upload, X, Loader2, User, Lock, Check, AlertCircle, FolderOpen, FileText, MessageSquare, Book } from 'lucide-react';
+import { ProcessingStatus } from '../components/ui/ProcessingStatus';
 import type { UserDocument } from '@/types';
 
 interface EditProfileModalProps {
@@ -278,11 +279,45 @@ export default function ProfilePage() {
     uploadDocument,
     currentScope,
     setCurrentScope,
+    refetchDocuments,
   } = useProfile();
 
   const [showEditModal, setShowEditModal] = useState(false);
   const [showPasswordModal, setShowPasswordModal] = useState(false);
   const [uploadProgress, setUploadProgress] = useState(0);
+  
+  // Use ref to track documents without triggering re-renders
+  const documentsRef = useRef<UserDocument[]>([]);
+  
+  // Sync ref with documents
+  useEffect(() => {
+    if (documents) {
+      documentsRef.current = documents;
+    }
+  }, [documents]);
+  
+  // Auto-refresh when documents are processing
+  useEffect(() => {
+    const hasProcessingDocs = documentsRef.current.some(
+      (doc) => doc.processing_status === 'pending' || doc.processing_status === 'processing'
+    );
+    
+    if (!hasProcessingDocs) {
+      return; // No processing documents, no need to poll
+    }
+    
+    const interval = setInterval(() => {
+      const stillProcessing = documentsRef.current.some(
+        (doc) => doc.processing_status === 'pending' || doc.processing_status === 'processing'
+      );
+      
+      if (stillProcessing) {
+        refetchDocuments();
+      }
+    }, 5000); // Check every 5 seconds
+    
+    return () => clearInterval(interval);
+  }, []); // Empty deps - use ref to avoid re-creating interval
 
   const handleEditProfile = async (username: string) => {
     await updateProfile.mutateAsync({ username });
@@ -530,6 +565,9 @@ export default function ProfilePage() {
                           <div className="flex items-center gap-2 mb-1">
                             <FileText className="w-4 h-4 text-purple-600 flex-shrink-0" />
                             <h4 className="font-medium text-gray-900 truncate">{doc.title}</h4>
+                            {doc.processing_status && (
+                              <ProcessingStatus status={doc.processing_status} size="sm" />
+                            )}
                           </div>
                           <div className="flex flex-wrap items-center gap-3 text-sm text-gray-600">
                             <span className="flex items-center gap-1">

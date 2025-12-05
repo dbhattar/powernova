@@ -55,19 +55,32 @@ class DocumentJobProcessor:
             Number of jobs processed
         """
         try:
-            # Query for pending jobs (FIFO order, oldest first)
-            pending_jobs = db.query(DocumentJob).filter(
+            # Query for pending jobs with prioritization:
+            # 1. User-uploaded documents (uploaded_by IS NOT NULL) - highest priority
+            # 2. Crawled documents (uploaded_by IS NULL) - lower priority
+            # Within each category, process oldest first (FIFO)
+            pending_jobs = db.query(DocumentJob).join(
+                Document, DocumentJob.document_id == Document.id
+            ).filter(
                 and_(
                     DocumentJob.status == DocumentJobStatus.PENDING,
                     DocumentJob.retry_count < self.max_retries
                 )
-            ).order_by(DocumentJob.created_at.asc()).limit(batch_size).all()
+            ).order_by(
+                # Prioritize user uploads: NULL values sort last in PostgreSQL with NULLS LAST
+                Document.uploaded_by.desc().nullslast(),
+                DocumentJob.created_at.asc()
+            ).limit(batch_size).all()
             
             if not pending_jobs:
                 logger.debug("No pending document jobs found")
                 return 0
             
-            logger.info(f"Found {len(pending_jobs)} pending document jobs")
+            # Count user vs crawled documents for logging
+            user_docs = sum(1 for job in pending_jobs if job.document.uploaded_by is not None)
+            crawled_docs = len(pending_jobs) - user_docs
+            
+            logger.info(f"Found {len(pending_jobs)} pending document jobs ({user_docs} user-uploaded, {crawled_docs} crawled)")
             
             processed = 0
             for job in pending_jobs:
@@ -101,12 +114,14 @@ class DocumentJobProcessor:
             job.retry_count += 1
             db.commit()
             
-            logger.info(f"Processing document job {job.id} for document {job.document_id} (attempt {job.retry_count})")
-            
             # Get the document
             document = db.query(Document).filter(Document.id == job.document_id).first()
             if not document:
                 raise ValueError(f"Document {job.document_id} not found")
+            
+            # Log with priority indicator
+            doc_type = "USER-UPLOADED" if document.uploaded_by else "CRAWLED"
+            logger.info(f"Processing {doc_type} document job {job.id} for document {job.document_id} (attempt {job.retry_count})")
             
             # Skip if document is not in completed status
             if document.status != DocumentStatus.COMPLETED:

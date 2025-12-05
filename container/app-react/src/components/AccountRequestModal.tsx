@@ -1,4 +1,5 @@
 import { useState, FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { Send, X, ArrowLeft, Check, AlertCircle } from 'lucide-react';
 
 interface AccountRequestModalProps {
@@ -83,9 +84,23 @@ export function AccountRequestModal({ isOpen, onClose, onBackToLogin }: AccountR
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto">
+  return createPortal(
+    <div 
+      className="fixed inset-0 flex items-center justify-center z-[9999] p-4"
+      style={{ 
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backdropFilter: 'blur(2px)'
+      }}
+      onClick={(e) => {
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div 
+        className="bg-white rounded-lg shadow-xl max-w-lg w-full max-h-[90vh] overflow-y-auto relative z-[10000]"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200 sticky top-0 bg-white rounded-t-lg">
           <div className="flex items-center gap-2">
@@ -260,6 +275,7 @@ export function AccountRequestModal({ isOpen, onClose, onBackToLogin }: AccountR
           </div>
         )}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

@@ -1,4 +1,5 @@
 import { useState, FormEvent } from 'react';
+import { createPortal } from 'react-dom';
 import { useAuth } from '@/hooks/useAuth';
 
 interface LoginModalProps {
@@ -58,9 +59,26 @@ export function LoginModal({ isOpen, onClose, onRequestAccount }: LoginModalProp
 
   if (!isOpen) return null;
 
-  return (
-    <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full">
+  console.log('🔥 LoginModal rendering with Portal to body');
+
+  return createPortal(
+    <div 
+      className="fixed inset-0 flex items-center justify-center z-[9999] p-4"
+      style={{ 
+        backgroundColor: 'rgba(0, 0, 0, 0.5)',
+        backdropFilter: 'blur(2px)'
+      }}
+      onClick={(e) => {
+        // Close modal when clicking the overlay (not the modal content)
+        if (e.target === e.currentTarget) {
+          onClose();
+        }
+      }}
+    >
+      <div 
+        className="bg-white rounded-lg shadow-xl max-w-md w-full relative z-[10000]"
+        onClick={(e) => e.stopPropagation()}
+      >
         {/* Header */}
         <div className="flex items-center justify-between px-6 py-4 border-b border-gray-200">
           <div className="flex items-center gap-2">
@@ -167,6 +185,7 @@ export function LoginModal({ isOpen, onClose, onRequestAccount }: LoginModalProp
           </p>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

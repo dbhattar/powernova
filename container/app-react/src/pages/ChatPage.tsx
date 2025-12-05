@@ -230,20 +230,6 @@ export function ChatPage() {
       {/* Header */}
       <Header variant="chat" onMenuClick={() => setSidebarOpen(true)} />
 
-      {/* Login Prompt Modal */}
-      <LoginModal 
-        isOpen={showLoginPrompt} 
-        onClose={() => setShowLoginPrompt(false)}
-        onRequestAccount={() => setShowAccountRequest(true)}
-      />
-
-      {/* Account Request Modal */}
-      <AccountRequestModal
-        isOpen={showAccountRequest}
-        onClose={() => setShowAccountRequest(false)}
-        onBackToLogin={() => setShowLoginPrompt(true)}
-      />
-
       {/* Main content */}
       <div className="flex-1 flex overflow-hidden">
         {/* Sidebar */}
@@ -298,6 +284,19 @@ export function ChatPage() {
           />
         </main>
       </div>
+
+      {/* Modals - Rendered last to ensure proper z-index stacking */}
+      <LoginModal 
+        isOpen={showLoginPrompt} 
+        onClose={() => setShowLoginPrompt(false)}
+        onRequestAccount={() => setShowAccountRequest(true)}
+      />
+
+      <AccountRequestModal
+        isOpen={showAccountRequest}
+        onClose={() => setShowAccountRequest(false)}
+        onBackToLogin={() => setShowLoginPrompt(true)}
+      />
     </div>
   );
 }

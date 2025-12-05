@@ -42,7 +42,7 @@ export function ChatSidebar({
   const isMobile = useIsMobile();
 
   return (
-    <div className="relative flex">
+    <>
       {/* Mobile overlay */}
       {isOpen && (
         <div
@@ -151,6 +151,6 @@ export function ChatSidebar({
           <ChevronRight className="w-4 h-4 text-gray-600" />
         )}
       </button>
-    </div>
+    </>
   );
 }

@@ -53,11 +53,17 @@ export interface Conversation {
 }
 
 export interface ConversationDocument {
-  id: string;
-  filename: string;
-  size: number;
-  uploaded_at: string;
-  conversation_id: string;
+  id: number;
+  title: string;
+  url: string;
+  document_type: string;
+  file_size?: number;
+  blob_url?: string;
+  status: string;
+  chunk_count?: number;
+  uploaded_at?: string;
+  uploaded_by?: number;
+  processing_status?: string;
 }
 
 export interface ChatRequest {
@@ -140,4 +146,5 @@ export interface UserDocument {
   created_at: string;
   conversation_id?: number;
   conversation_title?: string;
+  processing_status?: string;
 }

@@ -23,6 +23,7 @@ export function useProfile() {
     data: documents,
     isLoading: isLoadingDocuments,
     error: documentsError,
+    refetch: refetchDocuments,
   } = useQuery<UserDocument[]>({
     queryKey: ['userDocuments'],
     queryFn: () => api.users.getDocuments(),
@@ -74,5 +75,6 @@ export function useProfile() {
     uploadDocument,
     currentScope,
     setCurrentScope,
+    refetchDocuments,
   };
 }

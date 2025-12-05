@@ -13,7 +13,7 @@ from database import get_db
 from services.auth import get_current_user
 from services.azure_storage import AzureStorageService
 from services.embedding_processor import process_document_embedding
-from models import User, Document, DocumentType, DocumentStatus, DocumentScope, ConversationDocument
+from models import User, Document, DocumentType, DocumentStatus, DocumentScope, ConversationDocument, DocumentJob
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -65,6 +65,7 @@ class DocumentResponse(BaseModel):
     created_at: str
     conversation_id: Optional[int] = None  # If linked to a conversation
     conversation_title: Optional[str] = None  # Title of the conversation
+    processing_status: Optional[str] = None  # Job status: pending, processing, completed, failed
 
 
 # ============================================================================
@@ -258,6 +259,15 @@ async def get_user_documents(
                 conversation_id = conv_doc.conversation.id
                 conversation_title = conv_doc.conversation.title
         
+        # Get processing status from DocumentJob
+        doc_job = db.query(DocumentJob).filter(
+            DocumentJob.document_id == doc.id
+        ).first()
+        
+        processing_status = None
+        if doc_job:
+            processing_status = doc_job.status.value.lower()
+        
         result.append(DocumentResponse(
             id=doc.id,
             title=doc.title,
@@ -271,7 +281,8 @@ async def get_user_documents(
             embedding_generated=doc.embedding_generated,
             created_at=doc.created_at.isoformat(),
             conversation_id=conversation_id,
-            conversation_title=conversation_title
+            conversation_title=conversation_title,
+            processing_status=processing_status
         ))
     
     return result
