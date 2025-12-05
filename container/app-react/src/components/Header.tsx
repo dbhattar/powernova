@@ -1,14 +1,16 @@
 import { useState, FormEvent } from 'react';
 import { useAuth } from '@/hooks/useAuth';
 import { useNavigate, Link } from 'react-router-dom';
+import { Menu } from 'lucide-react';
 import { LoginModal } from './LoginModal';
 import { AccountRequestModal } from './AccountRequestModal';
 
 interface HeaderProps {
   variant: 'chat' | 'search' | 'profile';
+  onMenuClick?: () => void;
 }
 
-export function Header({ variant }: HeaderProps) {
+export function Header({ variant, onMenuClick }: HeaderProps) {
   const { user, isAuthenticated, logout } = useAuth();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
@@ -30,6 +32,17 @@ export function Header({ variant }: HeaderProps) {
       <div className="flex items-center justify-between px-4 py-3 relative">
         {/* Logo Section */}
         <div className="flex items-center gap-3 flex-shrink-0">
+          {/* Hamburger menu button - Only show on mobile when in chat variant */}
+          {variant === 'chat' && onMenuClick && (
+            <button
+              onClick={onMenuClick}
+              className="lg:hidden p-2 hover:bg-gray-100 rounded-lg transition-colors"
+              aria-label="Toggle sidebar"
+            >
+              <Menu className="w-5 h-5 text-gray-600" />
+            </button>
+          )}
+          
           <div className="flex items-center gap-3">
             <i className="fas fa-bolt text-2xl bg-gradient-to-br from-purple-600 to-indigo-600 bg-clip-text text-transparent"></i>
             {variant === 'chat' ? (
@@ -166,7 +179,7 @@ export function Header({ variant }: HeaderProps) {
 
           {/* User Menu Button / Login Button */}
           {isAuthenticated && user ? (
-            <div className="relative">
+            <div className={`relative ${variant === 'chat' ? 'hidden lg:block' : ''}`}>
               <button
                 onClick={() => setShowUserMenu(!showUserMenu)}
                 className="flex items-center gap-2 min-w-[40px] h-10 px-3 hover:bg-gray-100 rounded-lg transition-colors"
@@ -213,7 +226,7 @@ export function Header({ variant }: HeaderProps) {
             </div>
           ) : (
             <button
-              className="min-w-[40px] h-10 px-3 hover:bg-gray-100 rounded-lg transition-colors flex items-center justify-center"
+              className={`min-w-[40px] h-10 px-3 hover:bg-gray-100 rounded-lg transition-colors flex items-center justify-center ${variant === 'chat' ? 'hidden lg:flex' : ''}`}
               title="Login"
               onClick={() => setShowLoginModal(true)}
             >

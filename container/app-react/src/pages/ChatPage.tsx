@@ -3,6 +3,7 @@ import { useAuth } from '@/hooks/useAuth';
 import { useConversations, useConversation } from '@/hooks/useConversations';
 import { useChat } from '@/hooks/useChat';
 import { useDocuments } from '@/hooks/useDocuments';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import { Header } from '@/components/Header';
 import { LoginModal } from '@/components/LoginModal';
 import { AccountRequestModal } from '@/components/AccountRequestModal';
@@ -12,7 +13,8 @@ import { ChatInput } from '@/components/chat/ChatInput';
 import { AlertCircle } from 'lucide-react';
 
 export function ChatPage() {
-  const { isAuthenticated, isLoading: authLoading } = useAuth();
+  const { isAuthenticated, isLoading: authLoading, user, logout } = useAuth();
+  const isMobile = useIsMobile();
   // Sidebar closed by default on mobile, open on desktop
   const [sidebarOpen, setSidebarOpen] = useState(window.innerWidth >= 1024);
   const [activeConversationId, setActiveConversationId] = useState<number | undefined>();
@@ -71,12 +73,20 @@ export function ChatPage() {
     // Check if user is authenticated
     if (!isAuthenticated) {
       setShowLoginPrompt(true);
+      // Close sidebar on mobile when showing login prompt
+      if (isMobile) {
+        setSidebarOpen(false);
+      }
       return;
     }
 
     try {
       const newConv = await createConversation({});
       setActiveConversationId(newConv.id);
+      // Close sidebar on mobile after creating conversation
+      if (isMobile) {
+        setSidebarOpen(false);
+      }
     } catch (error) {
       console.error('Failed to create conversation:', error);
     }
@@ -150,7 +160,7 @@ export function ChatPage() {
   return (
     <div className="h-screen flex flex-col bg-gray-50">
       {/* Header */}
-      <Header variant="chat" />
+      <Header variant="chat" onMenuClick={() => setSidebarOpen(true)} />
 
       {/* Login Prompt Modal */}
       <LoginModal 
@@ -181,6 +191,10 @@ export function ChatPage() {
           onDeleteConversation={handleDeleteConversation}
           isLoading={conversationsLoading}
           isCreating={isCreating}
+          isAuthenticated={isAuthenticated}
+          user={user}
+          onLogout={logout}
+          onLogin={() => setShowLoginPrompt(true)}
         />
 
         {/* Chat area */}

@@ -1,4 +1,6 @@
-import { X, ChevronLeft, ChevronRight } from 'lucide-react';
+import { X, ChevronLeft, ChevronRight, User, LogOut } from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useIsMobile } from '@/hooks/useMediaQuery';
 import { ConversationList } from './ConversationList';
 import type { Conversation } from '@/types';
 
@@ -14,6 +16,10 @@ interface ChatSidebarProps {
   onDeleteConversation: (id: number) => void;
   isLoading?: boolean;
   isCreating?: boolean;
+  isAuthenticated?: boolean;
+  user?: { username: string; email: string } | null;
+  onLogout?: () => void;
+  onLogin?: () => void;
 }
 
 export function ChatSidebar({
@@ -28,7 +34,13 @@ export function ChatSidebar({
   onDeleteConversation,
   isLoading,
   isCreating,
+  isAuthenticated,
+  user,
+  onLogout,
+  onLogin,
 }: ChatSidebarProps) {
+  const isMobile = useIsMobile();
+
   return (
     <div className="relative flex">
       {/* Mobile overlay */}
@@ -67,7 +79,7 @@ export function ChatSidebar({
             onSelectConversation={(id) => {
               onSelectConversation(id);
               // Close sidebar on mobile after selecting
-              if (window.innerWidth < 1024) {
+              if (isMobile) {
                 onClose();
               }
             }}
@@ -77,6 +89,51 @@ export function ChatSidebar({
             isLoading={isLoading}
             isCreating={isCreating}
           />
+
+          {/* Auth section - Mobile only, at the bottom */}
+          <div className="lg:hidden border-t border-gray-200 bg-gray-50 mt-auto">
+            {isAuthenticated && user ? (
+              // Logged in: Show user menu
+              <div className="p-3">
+                <div className="px-3 py-2 mb-2">
+                  <p className="text-sm font-medium text-gray-900">{user.username}</p>
+                  <p className="text-xs text-gray-500 truncate">{user.email}</p>
+                </div>
+                <Link
+                  to="/profile"
+                  onClick={onClose}
+                  className="flex items-center gap-3 px-3 py-2 text-sm text-gray-700 hover:bg-gray-100 rounded-lg transition-colors"
+                >
+                  <User className="w-4 h-4" />
+                  <span>My Profile</span>
+                </Link>
+                <button
+                  onClick={() => {
+                    onLogout?.();
+                    onClose();
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2 text-sm text-red-600 hover:bg-red-50 rounded-lg transition-colors mt-1"
+                >
+                  <LogOut className="w-4 h-4" />
+                  <span>Logout</span>
+                </button>
+              </div>
+            ) : (
+              // Not logged in: Show login button
+              <div className="p-3">
+                <button
+                  onClick={() => {
+                    onLogin?.();
+                    onClose();
+                  }}
+                  className="w-full flex items-center justify-center gap-3 px-4 py-3 text-sm font-medium text-white bg-gradient-to-br from-purple-600 to-indigo-600 hover:from-purple-700 hover:to-indigo-700 rounded-lg transition-all shadow-sm"
+                >
+                  <User className="w-4 h-4" />
+                  <span>Login</span>
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       </aside>
 
