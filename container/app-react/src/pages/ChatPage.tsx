@@ -1,7 +1,9 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { useAuth } from '@/hooks/useAuth';
 import { useConversations, useConversation } from '@/hooks/useConversations';
 import { useChat } from '@/hooks/useChat';
+import { useFollowUpQuestions } from '@/hooks/useFollowUpQuestions';
 import { useDocuments } from '@/hooks/useDocuments';
 import { useIsMobile } from '@/hooks/useMediaQuery';
 import { Header } from '@/components/Header';
@@ -11,8 +13,10 @@ import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatMessages } from '@/components/chat/ChatMessages';
 import { ChatInput } from '@/components/chat/ChatInput';
 import { AlertCircle } from 'lucide-react';
+import type { Message } from '@/types';
 
 export function ChatPage() {
+  const queryClient = useQueryClient();
   const { isAuthenticated, isLoading: authLoading, user, logout } = useAuth();
   const isMobile = useIsMobile();
   // Sidebar closed by default on mobile, open on desktop
@@ -20,6 +24,7 @@ export function ChatPage() {
   const [activeConversationId, setActiveConversationId] = useState<number | undefined>();
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [showAccountRequest, setShowAccountRequest] = useState(false);
+  const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
 
   // Hooks
   const {
@@ -41,6 +46,7 @@ export function ChatPage() {
     sendMessage,
     isStreaming,
     streamingMessage,
+    sources,
     error: chatError,
   } = useChat({
     conversationId: activeConversationId,
@@ -54,8 +60,65 @@ export function ChatPage() {
     },
     onMessageComplete: () => {
       invalidateConversation();
+      // Generate follow-up questions after message completes
+      // Need to wait a bit for the messages to be refetched
+      setTimeout(() => {
+        // Refetch messages to get the latest
+        if (activeConversationId) {
+          queryClient.invalidateQueries({ 
+            queryKey: ['conversation', activeConversationId] 
+          }).then(() => {
+            // Now generate questions with the updated messages
+            const updatedMessages = queryClient.getQueryData(['conversation', activeConversationId]) as { messages: Message[] } | undefined;
+            if (updatedMessages?.messages && updatedMessages.messages.length > 0) {
+              generateQuestions(updatedMessages.messages, 3);
+            }
+          });
+        }
+      }, 300);
     },
   });
+
+  const {
+    questions: followUpQuestions,
+    isLoading: isLoadingQuestions,
+    generateQuestions,
+    clearQuestions,
+  } = useFollowUpQuestions();
+
+  // Create combined messages array with pending user message
+  const displayMessages = useMemo(() => {
+    const baseMessages = messages || [];
+    
+    if (pendingUserMessage) {
+      // Add optimistic user message
+      const optimisticMessage: Message = {
+        id: 'pending-user',
+        role: 'user',
+        content: pendingUserMessage,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      return [...baseMessages, optimisticMessage];
+    }
+    
+    return baseMessages;
+  }, [messages, pendingUserMessage]);
+  
+  // Clear pending message when messages update with the actual user message
+  useEffect(() => {
+    if (pendingUserMessage && messages && messages.length > 0) {
+      // Check if any message matches our pending message
+      // After streaming, we'll have both user and assistant messages
+      const hasMatchingMessage = messages.some(
+        msg => msg.role === 'user' && msg.content === pendingUserMessage
+      );
+      
+      if (hasMatchingMessage) {
+        setPendingUserMessage(null);
+      }
+    }
+  }, [messages, pendingUserMessage]);
 
   const {
     uploadDocument,
@@ -119,9 +182,14 @@ export function ChatPage() {
     }
 
     try {
+      // Clear follow-up questions when sending a new message
+      clearQuestions();
+      // Set pending message immediately for optimistic UI
+      setPendingUserMessage(message);
       await sendMessage(message);
     } catch (error) {
       console.error('Failed to send message:', error);
+      setPendingUserMessage(null); // Clear on error
     }
   };
 
@@ -211,9 +279,13 @@ export function ChatPage() {
 
           {/* Messages */}
           <ChatMessages
-            messages={messages}
+            messages={displayMessages}
             isLoading={messagesLoading}
             streamingMessage={streamingMessage}
+            sources={sources}
+            followUpQuestions={followUpQuestions}
+            isLoadingQuestions={isLoadingQuestions}
+            onQuestionClick={handleSendMessage}
           />
 
           {/* Input */}

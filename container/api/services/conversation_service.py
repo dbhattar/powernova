@@ -9,11 +9,15 @@ from datetime import datetime
 from models import Conversation, Message, ConversationDocument, Document, User
 from models.conversation import MessageRole
 import os
-from openai import AsyncOpenAI
+
+from services.azure_openai_client import get_async_openai_client, get_chat_model_name
 
 # Initialize OpenAI client for title generation
-openai_api_key = os.getenv("OPENAI_API_KEY")
-openai_client = AsyncOpenAI(api_key=openai_api_key) if openai_api_key else None
+try:
+    openai_client = get_async_openai_client()
+except ValueError as e:
+    print(f"WARNING: Failed to initialize OpenAI client for title generation: {e}")
+    openai_client = None
 
 
 class ConversationService:
@@ -270,10 +274,13 @@ class ConversationService:
         # Build context for title generation
         context = "\n".join([f"{msg.role.value}: {msg.content}" for msg in messages])
         
+        # Get the appropriate model name (deployment name for Azure, model name for OpenAI)
+        model_name = get_chat_model_name()
+        
         try:
             # Call OpenAI to generate title
             response = await openai_client.chat.completions.create(
-                model="gpt-4o-mini",
+                model=model_name,
                 messages=[
                     {
                         "role": "system",

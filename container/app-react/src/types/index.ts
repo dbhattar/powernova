@@ -66,11 +66,18 @@ export interface ChatRequest {
 }
 
 export interface ChatStreamEvent {
-  type: 'start' | 'token' | 'end' | 'error';
+  type: 'start' | 'token' | 'content' | 'sources' | 'end' | 'error';
   content?: string;
   conversation_id?: string;
   message_id?: string;
   error?: string;
+  done?: boolean;  // Indicates streaming is complete
+  finish_reason?: string;
+  sources?: Array<{
+    title: string;
+    url: string;
+    similarity: number;
+  }>;
 }
 
 export interface FollowUpQuestionsResponse {

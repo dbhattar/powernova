@@ -1,15 +1,50 @@
 import { useEffect, useRef } from 'react';
-import { Loader2 } from 'lucide-react';
+import { Loader2, Bot, ExternalLink } from 'lucide-react';
 import { ChatMessage } from './ChatMessage';
+import { FollowUpQuestions } from './FollowUpQuestions';
 import type { Message } from '@/types';
+
+interface Source {
+  title: string;
+  url: string;
+  similarity: number;
+}
+
+interface FollowUpQuestion {
+  text: string;
+  icon: string;
+}
+
+// Simple markdown-like formatting (same as ChatMessage)
+function formatMessageContent(content: string): string {
+  let formatted = content
+    .replace(/\n/g, '<br>')
+    .replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>')
+    .replace(/\*(.*?)\*/g, '<em>$1</em>')
+    .replace(/```([\s\S]*?)```/g, '<pre><code>$1</code></pre>')
+    .replace(/`([^`]+)`/g, '<code class="bg-gray-100 px-1 rounded">$1</code>');
+  return formatted;
+}
 
 interface ChatMessagesProps {
   messages: Message[];
   isLoading?: boolean;
   streamingMessage?: string;
+  sources?: Source[];
+  followUpQuestions?: FollowUpQuestion[];
+  isLoadingQuestions?: boolean;
+  onQuestionClick?: (question: string) => void;
 }
 
-export function ChatMessages({ messages, isLoading, streamingMessage }: ChatMessagesProps) {
+export function ChatMessages({ 
+  messages, 
+  isLoading, 
+  streamingMessage, 
+  sources,
+  followUpQuestions = [],
+  isLoadingQuestions = false,
+  onQuestionClick = () => {},
+}: ChatMessagesProps) {
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   // Auto-scroll to bottom when new messages arrive
@@ -59,6 +94,10 @@ export function ChatMessages({ messages, isLoading, streamingMessage }: ChatMess
     );
   }
 
+  // Check if the last message is from assistant
+  const lastMessage = messages[messages.length - 1];
+  const showSourcesAndQuestions = lastMessage && lastMessage.role === 'assistant' && !streamingMessage;
+
   return (
     <div className="flex-1 overflow-y-auto">
       <div className="max-w-4xl mx-auto">
@@ -72,19 +111,7 @@ export function ChatMessages({ messages, isLoading, streamingMessage }: ChatMess
           <div className="flex gap-4 p-4 bg-gray-50">
             <div className="flex-shrink-0">
               <div className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-500 to-cyan-600 flex items-center justify-center">
-                <svg
-                  className="w-5 h-5 text-white"
-                  fill="none"
-                  viewBox="0 0 24 24"
-                  stroke="currentColor"
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={2}
-                    d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
-                  />
-                </svg>
+                <Bot className="w-5 h-5 text-white" />
               </div>
             </div>
             <div className="flex-1 min-w-0">
@@ -93,9 +120,48 @@ export function ChatMessages({ messages, isLoading, streamingMessage }: ChatMess
                 <Loader2 className="w-3 h-3 text-purple-600 animate-spin" />
               </div>
               <div className="prose prose-sm max-w-none text-gray-800 break-words">
-                {streamingMessage}
+                <div
+                  dangerouslySetInnerHTML={{
+                    __html: formatMessageContent(streamingMessage),
+                  }}
+                />
                 <span className="inline-block w-2 h-4 bg-purple-600 ml-1 animate-pulse" />
               </div>
+            </div>
+          </div>
+        )}
+
+        {/* Sources and Follow-up Questions - shown after assistant's response completes */}
+        {showSourcesAndQuestions && (
+          <div className="px-4 pb-4 bg-gray-50">
+            <div className="ml-12">
+              {/* Sources */}
+              {sources && sources.length > 0 && (
+                <div className="mt-4 pt-4 border-t border-gray-200">
+                  <h4 className="text-sm font-semibold text-gray-700 mb-2">Sources:</h4>
+                  <div className="flex flex-col gap-2">
+                    {sources.map((source, idx) => (
+                      <a
+                        key={idx}
+                        href={source.url}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="flex items-center gap-2 text-sm text-blue-600 hover:text-blue-800 hover:underline"
+                      >
+                        <ExternalLink className="w-4 h-4 flex-shrink-0" />
+                        <span>{source.title}</span>
+                      </a>
+                    ))}
+                  </div>
+                </div>
+              )}
+              
+              {/* Follow-up Questions */}
+              <FollowUpQuestions
+                questions={followUpQuestions}
+                onQuestionClick={onQuestionClick}
+                isLoading={isLoadingQuestions}
+              />
             </div>
           </div>
         )}

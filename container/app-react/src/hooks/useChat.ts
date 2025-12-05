@@ -3,6 +3,12 @@ import { useQueryClient } from '@tanstack/react-query';
 import { API_URL } from '@/lib/config';
 import type { Message, ChatStreamEvent } from '@/types';
 
+interface Source {
+  title: string;
+  url: string;
+  similarity: number;
+}
+
 interface UseChatOptions {
   conversationId?: number | string;
   messages?: Message[];
@@ -16,6 +22,7 @@ export function useChat(options: UseChatOptions = {}) {
   
   const [isStreaming, setIsStreaming] = useState(false);
   const [streamingMessage, setStreamingMessage] = useState('');
+  const [sources, setSources] = useState<Source[]>([]);
   const [error, setError] = useState<Error | null>(null);
   
   const queryClient = useQueryClient();
@@ -39,6 +46,8 @@ export function useChat(options: UseChatOptions = {}) {
 
       setIsStreaming(true);
       setStreamingMessage('');
+      // Don't clear sources here - let them be updated by new SSE event
+      // This prevents flickering during the request
       setError(null);
 
       let currentConversationId = conversationId;
@@ -121,8 +130,15 @@ export function useChat(options: UseChatOptions = {}) {
             if (!line.trim()) continue;
             
             if (line.startsWith('data: ')) {
+              const data = line.slice(6).trim();
+              
+              // Skip the [DONE] message from OpenAI/Azure OpenAI
+              if (data === '[DONE]') {
+                continue;
+              }
+              
               try {
-                const event: ChatStreamEvent = JSON.parse(line.slice(6));
+                const event: ChatStreamEvent = JSON.parse(data);
                 
                 switch (event.type) {
                   case 'start':
@@ -135,10 +151,47 @@ export function useChat(options: UseChatOptions = {}) {
                     }
                     break;
                     
-                  case 'token':
+                  case 'content':  // Backend sends 'content' type for streaming tokens
+                  case 'token':    // Keep backward compatibility
                     if (event.content) {
                       accumulatedContent += event.content;
                       setStreamingMessage(accumulatedContent);
+                    }
+                    
+                    // Check if this is the final message with done flag
+                    if (event.done && currentConversationId) {
+                      // Create completed message object
+                      const completedMessage: Message = {
+                        id: currentMessageId || '0',
+                        role: 'assistant',
+                        content: accumulatedContent,
+                        created_at: new Date().toISOString(),
+                        updated_at: new Date().toISOString(),
+                      };
+                      
+                      // Invalidate queries to refetch with new messages
+                      // Wait for refetch to complete before clearing streaming message
+                      await queryClient.invalidateQueries({ 
+                        queryKey: ['conversation', currentConversationId] 
+                      });
+                      await queryClient.invalidateQueries({ 
+                        queryKey: ['conversations'] 
+                      });
+                      
+                      // Small delay to ensure new messages are rendered
+                      await new Promise(resolve => setTimeout(resolve, 200));
+                      
+                      // Call onMessageComplete callback AFTER queries are invalidated
+                      onMessageComplete?.(completedMessage);
+                    }
+                    break;
+                    
+                  case 'sources':
+                    // Store document sources - clear old sources and set new ones
+                    if (event.sources) {
+                      setSources(event.sources);
+                    } else {
+                      setSources([]);
                     }
                     break;
                     
@@ -156,12 +209,16 @@ export function useChat(options: UseChatOptions = {}) {
                       onMessageComplete?.(completedMessage);
                       
                       // Invalidate conversation to refresh messages
-                      queryClient.invalidateQueries({ 
+                      // Wait for the query to refetch before clearing streaming message
+                      await queryClient.invalidateQueries({ 
                         queryKey: ['conversation', currentConversationId] 
                       });
-                      queryClient.invalidateQueries({ 
+                      await queryClient.invalidateQueries({ 
                         queryKey: ['conversations'] 
                       });
+                      
+                      // Small delay to ensure UI updates before clearing
+                      await new Promise(resolve => setTimeout(resolve, 100));
                     }
                     break;
                     
@@ -208,6 +265,7 @@ export function useChat(options: UseChatOptions = {}) {
     cancelStream,
     isStreaming,
     streamingMessage,
+    sources,
     error,
   };
 }

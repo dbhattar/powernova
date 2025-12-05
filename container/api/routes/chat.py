@@ -1,5 +1,5 @@
 """
-Chat routes - Handle chat completions with OpenAI streaming
+Chat routes - Handle chat completions with OpenAI/Azure OpenAI streaming
 """
 from fastapi import APIRouter, HTTPException, Request, Depends
 from fastapi.responses import StreamingResponse
@@ -7,7 +7,6 @@ from pydantic import BaseModel, Field
 from typing import List, Optional, Dict, Any
 import json
 import os
-from openai import AsyncOpenAI
 import asyncio
 from sqlalchemy.orm import Session
 
@@ -15,17 +14,17 @@ from database import get_db
 from services.rag_service import get_rag_service
 from services.conversation_service import get_conversation_service
 from services.auth import get_current_user_optional
+from services.azure_openai_client import get_async_openai_client, get_chat_model_name
 from models import User
 
 router = APIRouter()
 
-# Initialize OpenAI client
-openai_api_key = os.getenv("OPENAI_API_KEY")
-if not openai_api_key:
-    print("WARNING: OPENAI_API_KEY not found in environment variables")
+# Initialize OpenAI client using helper utility
+try:
+    openai_client = get_async_openai_client()
+except ValueError as e:
+    print(f"WARNING: Failed to initialize OpenAI client: {e}")
     openai_client = None
-else:
-    openai_client = AsyncOpenAI(api_key=openai_api_key)
 
 # Pydantic models for request/response validation
 class Message(BaseModel):
@@ -191,9 +190,12 @@ Answer the user's question based on these documents first, then supplement with 
                 }
                 yield f"data: {json.dumps(sources_data)}\n\n"
             
+            # Get the appropriate model name (deployment name for Azure, model name for OpenAI)
+            model_name = get_chat_model_name()
+            
             # Create streaming chat completion
             stream = await openai_client.chat.completions.create(
-                model=request.model,
+                model=model_name,
                 messages=messages,
                 temperature=request.temperature,
                 max_tokens=request.max_tokens,

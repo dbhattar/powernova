@@ -1,11 +1,12 @@
 """
-Embedding service for generating vector embeddings using OpenAI
+Embedding service for generating vector embeddings using OpenAI/Azure OpenAI
 """
 import os
 import logging
 from typing import List, Optional
-from openai import OpenAI
 import time
+
+from services.azure_openai_client import get_openai_client, get_embedding_model_name
 
 logger = logging.getLogger(__name__)
 
@@ -20,7 +21,7 @@ except ImportError:
 
 class EmbeddingService:
     """
-    Generate embeddings using OpenAI's text-embedding models
+    Generate embeddings using OpenAI's or Azure OpenAI's text-embedding models
     
     Uses text-embedding-3-small by default:
     - 1536 dimensions
@@ -31,12 +32,12 @@ class EmbeddingService:
     
     def __init__(self):
         """Initialize embedding service"""
-        api_key = os.getenv("OPENAI_API_KEY")
-        if not api_key:
-            raise ValueError("OPENAI_API_KEY environment variable not set")
+        try:
+            self.client = get_openai_client()
+            self.model = get_embedding_model_name()
+        except ValueError as e:
+            raise ValueError(f"Failed to initialize embedding service: {e}")
         
-        self.client = OpenAI(api_key=api_key)
-        self.model = os.getenv("EMBEDDING_MODEL", "text-embedding-3-small")
         self.dimensions = int(os.getenv("EMBEDDING_DIMENSIONS", "1536"))
         self.max_tokens = 8191  # Maximum tokens for text-embedding-3-small
         
@@ -44,10 +45,12 @@ class EmbeddingService:
         self.tokenizer = None
         if TIKTOKEN_AVAILABLE:
             try:
-                self.tokenizer = tiktoken.encoding_for_model(self.model)
-                logger.info(f"Initialized tiktoken encoder for {self.model}")
+                # For Azure, we still use the base model name for tiktoken
+                base_model = os.getenv("OPENAI_EMBEDDING_MODEL", "text-embedding-3-small")
+                self.tokenizer = tiktoken.encoding_for_model(base_model)
+                logger.info(f"Initialized tiktoken encoder for {base_model}")
             except Exception as e:
-                logger.warning(f"Could not initialize tiktoken for {self.model}: {e}")
+                logger.warning(f"Could not initialize tiktoken for embedding model: {e}")
         
         logger.info(f"Initialized EmbeddingService with model={self.model}, dimensions={self.dimensions}, max_tokens={self.max_tokens}")
     
