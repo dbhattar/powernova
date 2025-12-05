@@ -150,16 +150,35 @@ app = FastAPI(
 from starlette.middleware.base import BaseHTTPMiddleware
 from starlette.responses import Response
 
+# CORS Configuration - Define early so it can be used by middleware
+ALLOWED_ORIGINS = [
+    "https://app.powernova.ai",                      # Production chat app (custom domain)
+    "https://www.powernova.ai",                      # Production landing page
+    "http://localhost:8081",                          # Local chat app
+    "http://localhost:8080",                          # Local landing page
+    "http://localhost:3000",                          # Local landing page
+] 
+
 class OptionsMiddleware(BaseHTTPMiddleware):
     async def dispatch(self, request, call_next):
         if request.method == "OPTIONS":
-            return Response(status_code=200, headers={
-                "Access-Control-Allow-Origin": request.headers.get("origin", "*"),
-                "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
-                "Access-Control-Allow-Headers": "*",
-                "Access-Control-Allow-Credentials": "true",
-                "Access-Control-Max-Age": "3600",
-            })
+            # Get the origin from the request
+            origin = request.headers.get("origin", "")
+            
+            # Check if origin is allowed
+            if origin in ALLOWED_ORIGINS:
+                return Response(status_code=200, headers={
+                    "Access-Control-Allow-Origin": origin,
+                    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, PATCH, OPTIONS",
+                    "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Admin-Key, Accept, Origin",
+                    "Access-Control-Allow-Credentials": "true",
+                    "Access-Control-Max-Age": "3600",
+                    "Access-Control-Expose-Headers": "*",
+                })
+            else:
+                # Origin not allowed - return 403
+                return Response(status_code=403, content="Origin not allowed")
+        
         return await call_next(request)
 
 class MaintenanceMiddleware(BaseHTTPMiddleware):
@@ -191,22 +210,13 @@ class MaintenanceMiddleware(BaseHTTPMiddleware):
 app.add_middleware(OptionsMiddleware)
 app.add_middleware(MaintenanceMiddleware)
 
-# CORS Configuration
-# Allow requests from frontend domains
-ALLOWED_ORIGINS = [
-    "https://app.powernova.ai",                      # Production chat app (custom domain)
-    "https://www.powernova.ai",                      # Production landing page
-    "http://localhost:8081",                          # Local chat app
-    "http://localhost:8080",                          # Local landing page
-    "http://localhost:3000",                          # Local landing page
-] 
-
+# Add CORS middleware with the allowed origins defined above
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["*"],
+    allow_headers=["*"],  # Allow all headers including custom ones like X-Admin-Key
     expose_headers=["*"],
     max_age=3600,  # Cache preflight requests for 1 hour
 )

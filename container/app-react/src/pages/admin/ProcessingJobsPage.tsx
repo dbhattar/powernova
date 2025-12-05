@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { StatsCard } from '@/components/admin/StatsCard';
 import { adminService } from '@/lib/adminApi';
@@ -22,6 +22,9 @@ export function ProcessingJobsPage() {
   const [isProcessing, setIsProcessing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState('');
+  
+  // Use ref to track latest jobs without causing re-renders
+  const jobsRef = useRef<DocumentJob[]>([]);
 
   const loadJobs = async () => {
     setIsLoading(true);
@@ -32,26 +35,38 @@ export function ProcessingJobsPage() {
         adminService.getDocumentJobs(),
         adminService.getDocumentJobStats(),
       ]);
-      setJobs(jobsData);
+      // Ensure jobsData is an array
+      const jobsList = Array.isArray(jobsData) ? jobsData : [];
+      setJobs(jobsList);
+      jobsRef.current = jobsList; // Update ref
       setStats(statsData);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load processing jobs');
+      setJobs([]); // Set to empty array on error
+      jobsRef.current = [];
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
+    // Initial load
     loadJobs();
-    // Auto-refresh every 10 seconds if there are processing jobs
+    
+    // Auto-refresh every 10 seconds if there are processing or pending jobs
     const interval = setInterval(() => {
-      if (jobs.some(job => job.status === 'processing' || job.status === 'pending')) {
+      // Use ref to check current jobs without adding to dependencies
+      const hasActiveJobs = jobsRef.current.some(
+        job => job.status === 'processing' || job.status === 'pending'
+      );
+      
+      if (hasActiveJobs) {
         loadJobs();
       }
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [jobs]);
+  }, []); // Empty dependency array - only run on mount
 
   const handleProcessJobs = async (batchSize = 10) => {
     setIsProcessing(true);

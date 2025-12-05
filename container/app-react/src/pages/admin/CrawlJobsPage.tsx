@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { AdminLayout } from '@/components/admin/AdminLayout';
 import { StatsCard } from '@/components/admin/StatsCard';
 import { CreateCrawlJobModal } from '@/components/admin/CreateCrawlJobModal';
@@ -23,6 +23,9 @@ export function CrawlJobsPage() {
   const [error, setError] = useState<string | null>(null);
   const [showCreateModal, setShowCreateModal] = useState(false);
   const [successMessage, setSuccessMessage] = useState('');
+  
+  // Use ref to track latest jobs without causing re-renders
+  const jobsRef = useRef<CrawlJob[]>([]);
 
   const loadJobs = async () => {
     setIsLoading(true);
@@ -31,24 +34,34 @@ export function CrawlJobsPage() {
     try {
       const data = await adminService.getCrawlJobs();
       setJobs(data);
+      jobsRef.current = data; // Keep ref in sync
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to load crawl jobs');
+      setJobs([]);
+      jobsRef.current = [];
     } finally {
       setIsLoading(false);
     }
   };
 
   useEffect(() => {
+    // Initial load
     loadJobs();
-    // Auto-refresh every 10 seconds if there are running jobs
+    
+    // Auto-refresh every 10 seconds if there are running or pending jobs
     const interval = setInterval(() => {
-      if (jobs.some(job => job.status === 'running' || job.status === 'pending')) {
+      // Use ref to check current jobs without adding to dependencies
+      const hasActiveJobs = jobsRef.current.some(
+        job => job.status === 'running' || job.status === 'pending'
+      );
+      
+      if (hasActiveJobs) {
         loadJobs();
       }
     }, 10000);
 
     return () => clearInterval(interval);
-  }, [jobs]);
+  }, []); // Empty dependency array - only run on mount
 
   const handleCreateJob = async (startUrl: string, maxDepth: number, maxPages: number) => {
     await adminService.createCrawlJob({ 

@@ -239,7 +239,8 @@ export const adminService = {
       });
     }
     const query = queryParams.toString();
-    return fetchAdminApi<DocumentJob[]>(`/document-jobs${query ? `?${query}` : ''}`);
+    const response = await fetchAdminApi<{ jobs: DocumentJob[]; total: number; skip: number; limit: number }>(`/document-jobs${query ? `?${query}` : ''}`);
+    return response.jobs || [];
   },
 
   async processDocumentJobs(batch_size = 10): Promise<{ processed: number }> {
