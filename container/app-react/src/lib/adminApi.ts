@@ -304,9 +304,10 @@ export const adminService = {
     });
   },
 
-  async resetUserPassword(id: number): Promise<{ password: string }> {
-    return fetchAdminApi<{ password: string }>(`/users/${id}/reset-password`, {
+  async resetUserPassword(id: number): Promise<{ user: AdminUser; temporary_password: string }> {
+    return fetchAdminApi<{ user: AdminUser; temporary_password: string }>(`/users/${id}/reset-password`, {
       method: 'POST',
+      body: JSON.stringify({}),
     });
   },
 

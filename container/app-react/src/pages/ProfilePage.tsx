@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useProfile } from '../hooks/useProfile';
+import { Link } from 'react-router-dom';
+import { useProfile } from '@/hooks/useProfile';
 import { Header } from '../components/Header';
-import { Upload, X, Loader2, User, Lock, Check, AlertCircle, FolderOpen, FileText, MessageSquare, Book } from 'lucide-react';
+import { Upload, X, Loader2, User, Lock, Check, AlertCircle, FolderOpen, FileText, MessageSquare, Book, MessageCircle } from 'lucide-react';
 import { ProcessingStatus } from '../components/ui/ProcessingStatus';
 import type { UserDocument } from '@/types';
 
@@ -593,6 +594,15 @@ export default function ProfilePage() {
                           )}
                         </div>
                         <div className="flex items-center gap-2">
+                          {doc.conversation_id && (
+                            <Link
+                              to={`/chat?conversation=${doc.conversation_id}`}
+                              className="p-2 text-purple-600 hover:bg-purple-100 rounded-lg transition-colors"
+                              title={`Go to conversation: ${doc.conversation_title || 'Untitled'}`}
+                            >
+                              <MessageCircle className="w-4 h-4" />
+                            </Link>
+                          )}
                           <span className={`px-2 py-1 text-xs font-medium rounded ${
                             doc.status === 'processed'
                               ? 'bg-green-100 text-green-800'

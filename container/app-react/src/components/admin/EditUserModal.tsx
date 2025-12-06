@@ -7,7 +7,7 @@ interface EditUserModalProps {
   user: AdminUser | null;
   onClose: () => void;
   onSubmit: (id: number, user: UserUpdate) => Promise<void>;
-  onResetPassword: (id: number) => Promise<{ password: string }>;
+  onResetPassword: (id: number) => Promise<{ user: AdminUser; temporary_password: string }>;
 }
 
 export function EditUserModal({ isOpen, user, onClose, onSubmit, onResetPassword }: EditUserModalProps) {
@@ -54,7 +54,7 @@ export function EditUserModal({ isOpen, user, onClose, onSubmit, onResetPassword
 
     try {
       const result = await onResetPassword(user.id);
-      setNewPassword(result.password);
+      setNewPassword(result.temporary_password);
       setShowResetPassword(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Failed to reset password');

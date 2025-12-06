@@ -1121,6 +1121,16 @@ class UserPasswordReset(BaseModel):
     new_password: Optional[str] = Field(None, min_length=8, max_length=100, description="New password (random if not provided)")
 
 
+class UserUpdate(BaseModel):
+    """Request model for updating user details"""
+    email: Optional[EmailStr] = Field(None, description="User email address")
+    username: Optional[str] = Field(None, min_length=3, max_length=100, description="Display name")
+    full_name: Optional[str] = Field(None, max_length=200, description="Full name")
+    is_active: Optional[bool] = Field(None, description="Active status")
+    is_superuser: Optional[bool] = Field(None, description="Admin privileges")
+    password: Optional[str] = Field(None, min_length=8, max_length=100, description="New password")
+
+
 @router.post("/users", response_model=UserCreateResponse, status_code=201)
 async def create_user(
     user_data: UserCreate,
@@ -1199,6 +1209,41 @@ async def get_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+    return user
+
+
+@router.patch("/users/{user_id}", response_model=UserResponse)
+async def update_user(
+    user_id: int,
+    user_update: UserUpdate,
+    db: Session = Depends(get_db),
+    _: bool = Depends(verify_admin_key)
+):
+    """
+    Update user details
+    
+    Admin endpoint to update user information including email, username,
+    active status, admin privileges, and password.
+    """
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+    
+    # Update only provided fields
+    update_data = user_update.model_dump(exclude_unset=True)
+    
+    # Handle password separately
+    if 'password' in update_data:
+        user.hashed_password = get_password_hash(update_data['password'])
+        del update_data['password']
+    
+    # Update other fields
+    for field, value in update_data.items():
+        setattr(user, field, value)
+    
+    db.commit()
+    db.refresh(user)
+    
     return user
 
 

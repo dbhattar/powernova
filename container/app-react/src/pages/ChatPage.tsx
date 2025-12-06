@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
+import { useSearchParams } from 'react-router-dom';
 import { useAuth } from '@/hooks/useAuth';
 import { useConversations, useConversation } from '@/hooks/useConversations';
 import { useChat } from '@/hooks/useChat';
@@ -12,11 +13,13 @@ import { AccountRequestModal } from '@/components/AccountRequestModal';
 import { ChatSidebar } from '@/components/chat/ChatSidebar';
 import { ChatMessages } from '@/components/chat/ChatMessages';
 import { ChatInput } from '@/components/chat/ChatInput';
-import { AlertCircle } from 'lucide-react';
+import { ConversationDocuments } from '@/components/chat/ConversationDocuments';
+import { AlertCircle, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import type { Message } from '@/types';
 
 export function ChatPage() {
   const queryClient = useQueryClient();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { isAuthenticated, isLoading: authLoading, user, logout } = useAuth();
   const isMobile = useIsMobile();
   // Sidebar closed by default on mobile, open on desktop
@@ -25,6 +28,7 @@ export function ChatPage() {
   const [showLoginPrompt, setShowLoginPrompt] = useState(false);
   const [showAccountRequest, setShowAccountRequest] = useState(false);
   const [pendingUserMessage, setPendingUserMessage] = useState<string | null>(null);
+  const [showDocuments, setShowDocuments] = useState(false);
 
   // Hooks
   const {
@@ -121,8 +125,12 @@ export function ChatPage() {
   }, [messages, pendingUserMessage]);
 
   const {
+    documents,
+    isLoading: isLoadingDocuments,
     uploadDocument,
+    deleteDocument,
     isUploading,
+    isDeleting,
   } = useDocuments(activeConversationId);
 
   // Auto-select first conversation if none selected
@@ -131,6 +139,23 @@ export function ChatPage() {
       setActiveConversationId(conversations[0].id);
     }
   }, [conversations, activeConversationId]);
+
+  // Handle conversation query parameter (for navigation from profile)
+  useEffect(() => {
+    const conversationId = searchParams.get('conversation');
+    if (conversationId) {
+      const id = Number(conversationId);
+      if (!isNaN(id)) {
+        setActiveConversationId(id);
+        // Clear the query parameter after setting the conversation
+        setSearchParams({});
+        // Open sidebar on mobile to show the conversation is selected
+        if (isMobile) {
+          setSidebarOpen(true);
+        }
+      }
+    }
+  }, [searchParams, setSearchParams, isMobile]);
 
   const handleCreateConversation = async () => {
     // Check if user is authenticated
@@ -273,6 +298,39 @@ export function ChatPage() {
             isLoadingQuestions={isLoadingQuestions}
             onQuestionClick={handleSendMessage}
           />
+
+          {/* Documents Panel */}
+          {activeConversationId && documents && documents.length > 0 && (
+            <div className="border-t border-gray-200">
+              {/* Toggle Button */}
+              <button
+                onClick={() => setShowDocuments(!showDocuments)}
+                className="w-full flex items-center justify-between px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 transition-colors"
+              >
+                <div className="flex items-center gap-2">
+                  <FileText className="w-4 h-4" />
+                  <span>Documents ({documents.length})</span>
+                </div>
+                {showDocuments ? (
+                  <ChevronUp className="w-4 h-4" />
+                ) : (
+                  <ChevronDown className="w-4 h-4" />
+                )}
+              </button>
+
+              {/* Documents List */}
+              {showDocuments && (
+                <div className="border-t border-gray-200">
+                  <ConversationDocuments
+                    documents={documents}
+                    isLoading={isLoadingDocuments}
+                    onDelete={deleteDocument}
+                    isDeleting={isDeleting}
+                  />
+                </div>
+              )}
+            </div>
+          )}
 
           {/* Input */}
           <ChatInput
