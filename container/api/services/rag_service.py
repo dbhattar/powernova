@@ -26,6 +26,65 @@ class RAGService:
         self.db = db
         self.embedding_service = get_embedding_service()
     
+    def get_conversation_documents_full(self, conversation_id: int) -> List[Dict]:
+        """
+        Get FULL content of all documents attached to a conversation.
+        No semantic search - returns complete documents.
+        
+        Args:
+            conversation_id: ID of the conversation
+            
+        Returns:
+            List of dicts with full document content and metadata
+        """
+        try:
+            sql = """
+                SELECT 
+                    d.id as document_id,
+                    d.title,
+                    d.url,
+                    d.content,
+                    d.document_type,
+                    d.document_scope,
+                    d.file_size,
+                    d.chunk_count,
+                    LENGTH(d.content) as content_length
+                FROM documents d
+                INNER JOIN conversation_documents cd ON d.id = cd.document_id
+                WHERE cd.conversation_id = :conversation_id
+                AND d.content IS NOT NULL
+                ORDER BY cd.created_at ASC
+            """
+            
+            result = self.db.execute(text(sql), {'conversation_id': conversation_id})
+            rows = result.fetchall()
+            
+            documents = []
+            for row in rows:
+                documents.append({
+                    'document_id': row.document_id,
+                    'title': row.title or 'Untitled',
+                    'url': row.url or '',
+                    'content_full': row.content or '',
+                    'document_type': str(row.document_type) if row.document_type else 'unknown',
+                    'document_scope': str(row.document_scope) if row.document_scope else 'conversation',
+                    'file_size': row.file_size,
+                    'chunk_count': row.chunk_count or 0,
+                    'content_length': row.content_length or 0,
+                    'similarity': 1.0,  # Full document, not a search result
+                    'source': 'conversation_full',
+                    'chunk_id': None,
+                    'chunk_index': None,
+                    'word_count': len(row.content.split()) if row.content else 0
+                })
+            
+            logger.info(f"Retrieved {len(documents)} full conversation documents for conversation_id={conversation_id}")
+            return documents
+            
+        except Exception as e:
+            logger.error(f"Error retrieving conversation documents: {e}", exc_info=True)
+            return []
+    
     def search_similar_documents(self, 
                                  query: str, 
                                  top_k: int = 5,
@@ -36,26 +95,35 @@ class RAGService:
         """
         Search for documents similar to the query using vector similarity on document chunks
         
-        Now searches document_chunks table for better precision with large documents.
-        Returns chunks along with parent document info.
+        **NEW STRATEGY**:
+        - If conversation has attached documents: Return FULL content of those documents (no semantic search)
+        - If no conversation documents: Fall back to semantic search across platform/user library documents
         
-        Searches across document hierarchy:
-        1. PLATFORM documents (crawled docs available to all users)
-        2. USER library documents (user's personal documents across all conversations)
-        3. CONVERSATION-specific documents (if conversation_id provided)
+        This provides more intuitive behavior - conversation documents are fully included,
+        while semantic search is only used when there are no specific documents attached.
         
         Args:
             query: Search query text
             top_k: Number of results to return
             similarity_threshold: Minimum similarity score (0-1)
             filters: Optional filters (e.g., {'document_type': 'html', 'crawl_job_id': 5})
-            conversation_id: If provided, includes documents linked to this conversation
-            user_id: If provided, includes user's personal library documents
+            conversation_id: If provided, checks for conversation documents first
+            user_id: If provided, includes user's personal library documents in fallback search
         
         Returns:
             List of dicts with chunk content, document info, and similarity scores
         """
         try:
+            # PRIORITY 1: Check for conversation-specific documents first
+            if conversation_id is not None:
+                conversation_docs = self.get_conversation_documents_full(conversation_id)
+                if conversation_docs:
+                    logger.info(f"Using {len(conversation_docs)} full conversation documents (no semantic search)")
+                    return conversation_docs
+                else:
+                    logger.info(f"No conversation documents found, falling back to semantic search")
+            
+            # PRIORITY 2: Fall back to semantic search if no conversation documents
             # Generate query embedding
             logger.info(f"Searching for: {query[:100]}...")
             query_embedding = self.embedding_service.generate_embedding(query)
@@ -167,55 +235,9 @@ class RAGService:
                     """
                     params['user_id'] = user_id
                 
-                # Add conversation-specific document chunks if conversation_id provided
-                if conversation_id is not None:
-                    sql += """
-                        UNION ALL
-                        -- NEW: Conversation-specific document chunks
-                        SELECT 
-                            dc.id as chunk_id,
-                            dc.chunk_index,
-                            dc.content as chunk_content,
-                            dc.word_count,
-                            d.id as document_id,
-                            d.title,
-                            d.url,
-                            d.document_type,
-                            d.crawl_job_id,
-                            d.document_scope,
-                            1 - (dc.embedding <=> CAST(:query_embedding AS vector)) AS similarity,
-                            'conversation' as source
-                        FROM document_chunks dc
-                        INNER JOIN documents d ON dc.document_id = d.id
-                        INNER JOIN conversation_documents cd ON d.id = cd.document_id
-                        WHERE dc.embedding IS NOT NULL
-                        AND cd.conversation_id = :conversation_id
-                        
-                        UNION ALL
-                        
-                        -- OLD: Conversation documents with old embeddings (backward compatibility)
-                        SELECT 
-                            NULL as chunk_id,
-                            0 as chunk_index,
-                            d.content as chunk_content,
-                            LENGTH(d.content) as word_count,
-                            d.id as document_id,
-                            d.title,
-                            d.url,
-                            d.document_type,
-                            d.crawl_job_id,
-                            d.document_scope,
-                            1 - (d.embedding <=> CAST(:query_embedding AS vector)) AS similarity,
-                            'conversation_legacy' as source
-                        FROM documents d
-                        INNER JOIN conversation_documents cd ON d.id = cd.document_id
-                        WHERE d.embedding IS NOT NULL
-                        AND cd.conversation_id = :conversation_id
-                        AND NOT EXISTS (
-                            SELECT 1 FROM document_chunks dc2 WHERE dc2.document_id = d.id
-                        )
-                    """
-                    params['conversation_id'] = conversation_id
+                # NOTE: We NO LONGER search conversation documents here
+                # They are handled separately by get_conversation_documents_full()
+                # This semantic search is only used as fallback when no conversation docs exist
                 
                 sql += """
                     )
