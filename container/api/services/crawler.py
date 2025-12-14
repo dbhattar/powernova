@@ -1,9 +1,16 @@
 """
 Web crawler service
 Crawls websites and downloads documents for RAG indexing
+
+Updated with Cloudflare bypass capabilities:
+- Uses cloudscraper for automatic challenge solving
+- Falls back to Playwright for complex protection
+- Maintains robots.txt compliance
+- Conservative rate limiting for government sites
 """
 import logging
 import requests
+import cloudscraper
 from typing import Set, List, Optional, Dict
 from urllib.parse import urljoin, urlparse, urlunparse
 from urllib.robotparser import RobotFileParser
@@ -72,8 +79,16 @@ class WebCrawler:
         # robots.txt parsers cache (one per domain)
         self.robots_parsers: Dict[str, RobotFileParser] = {}
         
-        # Request settings
-        self.session = requests.Session()
+        # Request settings with Cloudflare bypass
+        # Use cloudscraper instead of requests.Session for automatic challenge solving
+        self.session = cloudscraper.create_scraper(
+            browser={
+                'browser': 'chrome',
+                'platform': 'windows',
+                'desktop': True
+            }
+        )
+        
         # Identify as a legitimate bot with contact information
         # Format follows best practices: BotName/version (+URL for more info)
         self.user_agent = 'PowerNOVA-Crawler/1.0 bot for document indexing)'
@@ -84,7 +99,16 @@ class WebCrawler:
             'Accept-Encoding': 'gzip, deflate',
             'Connection': 'keep-alive'
         })
-        self.request_delay = 1.0  # Polite crawling delay (1 second between requests)
+        
+        # Conservative crawling delay for government websites
+        # Increased from 1s to 2-3s for better politeness
+        self.request_delay = 2.5  # 2.5 seconds between requests
+        
+        # Playwright fallback (lazy initialization)
+        self.playwright_browser = None
+        self.playwright = None
+        self.cloudflare_failures = 0  # Track failures to switch to Playwright
+        self.max_cloudflare_failures = 3  # Switch to Playwright after 3 failures
     
     def _load_crawl_state(self):
         """
@@ -200,6 +224,116 @@ class WebCrawler:
         except Exception as e:
             logger.error(f"Unexpected error in language detection: {e}, assuming English")
             return ('en', True, 1.0)
+    
+    def _is_cloudflare_blocked(self, response_text: str, status_code: int) -> bool:
+        """
+        Check if response indicates Cloudflare bot protection.
+        
+        Args:
+            response_text: HTML response text
+            status_code: HTTP status code
+            
+        Returns:
+            True if blocked by Cloudflare, False otherwise
+        """
+        return any([
+            'Just a moment' in response_text,
+            'Checking your browser' in response_text,
+            'cloudflare' in response_text.lower() and 'ray id' in response_text.lower(),
+            status_code == 403,
+            status_code == 503
+        ])
+    
+    def _fetch_with_playwright(self, url: str, timeout: int = 30) -> Optional[tuple]:
+        """
+        Fetch URL using Playwright (real browser) as fallback for Cloudflare protection.
+        
+        Args:
+            url: URL to fetch
+            timeout: Request timeout in seconds
+            
+        Returns:
+            Tuple of (response_text, status_code) or None if failed
+        """
+        try:
+            # Lazy initialization of Playwright
+            if self.playwright is None:
+                from playwright.sync_api import sync_playwright
+                self.playwright = sync_playwright().start()
+                self.playwright_browser = self.playwright.chromium.launch(headless=True)
+                logger.info("Initialized Playwright browser for Cloudflare bypass")
+            
+            context = self.playwright_browser.new_context(
+                user_agent='Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
+                viewport={'width': 1920, 'height': 1080},
+                locale='en-US',
+                timezone_id='America/New_York'
+            )
+            
+            page = context.new_page()
+            page.goto(url, wait_until='networkidle', timeout=timeout*1000)
+            
+            # Wait for any JavaScript challenges to complete
+            time.sleep(3)
+            
+            content = page.content()
+            context.close()
+            
+            logger.info(f"✅ Successfully fetched {url} with Playwright")
+            return (content, 200)
+            
+        except Exception as e:
+            logger.error(f"Playwright fetch failed for {url}: {e}")
+            return None
+    
+    def _smart_fetch(self, url: str, timeout: int = 30, stream: bool = False) -> Optional[requests.Response]:
+        """
+        Intelligently fetch URL with automatic Cloudflare bypass.
+        
+        Strategy:
+        1. Try CloudScraper first (fast, handles most challenges)
+        2. If Cloudflare blocked, fall back to Playwright (slower but more robust)
+        3. Track failures and switch to Playwright mode if needed
+        
+        Args:
+            url: URL to fetch
+            timeout: Request timeout in seconds
+            stream: Whether to stream the response (for large files)
+            
+        Returns:
+            Response object or None if all methods failed
+        """
+        try:
+            # Try CloudScraper first
+            logger.debug(f"Fetching {url} with CloudScraper...")
+            response = self.session.get(url, timeout=timeout, stream=stream)
+            
+            # Check if blocked by Cloudflare
+            if not stream and self._is_cloudflare_blocked(response.text, response.status_code):
+                logger.warning(f"Cloudflare challenge detected for {url}, trying Playwright...")
+                self.cloudflare_failures += 1
+                
+                # Try Playwright fallback
+                playwright_result = self._fetch_with_playwright(url, timeout)
+                if playwright_result:
+                    content, status = playwright_result
+                    # Create a fake Response object
+                    response = requests.Response()
+                    response._content = content.encode('utf-8')
+                    response.status_code = status
+                    response.headers['Content-Type'] = 'text/html'
+                    return response
+                else:
+                    logger.error(f"Both CloudScraper and Playwright failed for {url}")
+                    return None
+            
+            # Success with CloudScraper
+            self.cloudflare_failures = max(0, self.cloudflare_failures - 1)  # Decrease failure count on success
+            return response
+            
+        except Exception as e:
+            logger.error(f"Smart fetch failed for {url}: {e}")
+            return None
     
     def _save_visited_url(self, url: str, status_code: int, depth: int):
         """
@@ -510,8 +644,12 @@ class WebCrawler:
         try:
             logger.info(f"Downloading document: {url}")
             
-            # Download document
-            response = self.session.get(url, timeout=30)
+            # Download document with smart fetching (Cloudflare bypass)
+            response = self._smart_fetch(url, timeout=30, stream=False)
+            
+            if not response:
+                logger.warning(f"Failed to fetch document: {url}")
+                return False
             
             # Handle HTTP errors gracefully
             if response.status_code >= 400:
@@ -875,12 +1013,17 @@ class WebCrawler:
             
             logger.info(f"Crawling page {self.pages_crawled}/{self.max_pages}: {url} (depth: {depth})")
             
-            # Polite delay between requests
+            # Polite delay between requests (2.5s for government sites)
             if self.pages_crawled > 1:
                 time.sleep(self.request_delay)
             
-            # Fetch the page/document
-            response = self.session.get(url, timeout=30)
+            # Fetch the page/document with smart fetching (Cloudflare bypass)
+            response = self._smart_fetch(url, timeout=30, stream=False)
+            
+            if not response:
+                logger.warning(f"Failed to fetch page: {url}")
+                self._save_visited_url(url, 0, depth)  # Save with status 0 to indicate failure
+                return
             
             # Save visited URL to database with status code (even for errors)
             self._save_visited_url(url, response.status_code, depth)
@@ -1122,6 +1265,22 @@ class WebCrawler:
             self.job.error_message = self._sanitize_text(str(e))
             self.job.completed_at = datetime.utcnow()
             self.db.commit()
+        
+        finally:
+            # Clean up Playwright resources if they were used
+            self._cleanup_playwright()
+    
+    def _cleanup_playwright(self):
+        """Clean up Playwright browser resources"""
+        try:
+            if self.playwright_browser:
+                self.playwright_browser.close()
+                logger.info("Closed Playwright browser")
+            if self.playwright:
+                self.playwright.stop()
+                logger.info("Stopped Playwright")
+        except Exception as e:
+            logger.warning(f"Error cleaning up Playwright: {e}")
 
 
 def run_crawler(job_id: int):
