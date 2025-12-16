@@ -37,7 +37,7 @@ api/*.pyc
 api/.pytest_cache
 
 # Other apps/services not needed for this build
-website/
+# Note: website/ is needed for powernova-web build
 app/
 scripts/
 notebooks/
